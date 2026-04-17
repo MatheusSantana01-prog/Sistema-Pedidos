@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerar QR Codes - Sabor & Fogo</title>
+
+  <!-- CSS Modularizado -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/header.css">
+  <link rel="stylesheet" href="css/cards.css">
+  <link rel="stylesheet" href="css/qr-display.css">
+  <link rel="stylesheet" href="css/buttons.css">
+  <link rel="stylesheet" href="css/print-styles.css">
+  <link rel="stylesheet" href="css/utilities.css">
+
+  <!-- QRCode.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>🍔 Sabor & Fogo - QR Codes</h1>
+  <p class="subtitle">Mesas para impressão - Configure seu domínio em: <code id="domain-code">restaurante.local</code></p>
+  <div class="alert alert-warning">
+    ⚠️ <strong>Antes de imprimir:</strong> Verifique se o domínio está correto e acesse um dos links abaixo para testar.
+  </div>
+</div>
+
+<!-- Grid de Mesas -->
+<div class="mesas-grid" id="mesas-grid">
+  <!-- Cards serão renderizados aqui -->
+</div>
+
+<!-- Botão Print -->
+<div class="print-controls">
+  <button class="btn btn-print" onclick="window.print()">
+    🖨️ Imprimir QR Codes
+  </button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- JavaScript Modules -->
+<script type="module">
+  import { config } from './js/config.js';
+  import { state, updateState } from './js/state.js';
+  import { showToast } from './js/utils.js';
+  import { gerarQRCodes, renderGrid } from './js/qr-generator.js';
+  import { copiarParaClipboard } from './js/copy.js';
+  import { salvarLocalmente, carregarLocalmente } from './js/storage.js';
+
+  // Expor globalmente
+  window.app = {
+    config,
+    state,
+    updateState,
+    utils: { showToast },
+    qr: { gerarQRCodes, renderGrid, copiarParaClipboard },
+    storage: { salvarLocalmente, carregarLocalmente }
+  };
+
+  // Inicializar
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Carregar mesas do servidor
+    await gerarQRCodes();
+    renderGrid();
+  });
+
+  // Expor copy para onclick
+  window.copiarQR = function(mesaNum, url) {
+    copiarParaClipboard(url);
+    showToast(`Mesa ${mesaNum} copiada! 📋`);
+  };
+</script>
+
+</body>
+</html>
