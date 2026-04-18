@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Sabor & Fogo</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">SABOR <span>&</span> FOGO — <span>ADMIN</span></div>
+    <div class="login-title">Acessar painel</div>
+    <div class="login-sub">Entre com suas credenciais de funcionário</div>
+    <div class="login-erro" id="login-erro">Email ou senha incorretos</div>
+    <div class="form-row">
+      <label class="form-label">Email</label>
+      <input class="form-input" id="l-email" type="email" placeholder="admin@restaurante.com" value="admin@restaurante.com" oninput="document.getElementById('login-erro').classList.remove('show')">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Senha</label>
+      <input class="form-input" id="l-senha" type="password" placeholder="••••••••" value="admin123"
+             oninput="document.getElementById('login-erro').classList.remove('show')"
+             onkeydown="if(event.key==='Enter')fazerLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="fazerLogin()">
+      <span id="login-txt">Entrar</span>
+    </button>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted);text-align:center;">
+      Senha padrão: <code>admin123</code> — troque após o primeiro acesso
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app-screen" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="topbar">
+    <div class="topbar-brand"><div class="brand-dot"></div>SABOR &amp; FOGO — ADMIN</div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <span id="user-nome">—</span>
+        <span class="role-badge" id="user-role-badge">—</span>
+      </div>
+      <button class="btn-logout" onclick="logout()">Sair</button>
+    </div>
+  </div>
+  <div class="nav" id="nav">
+    <div class="nav-tab active" onclick="irPara('mesas', this)">🪑 Mesas <span class="nav-badge" id="badge-ocupadas">0</span></div>
+    <div class="nav-tab" onclick="irPara('pedidos', this)">📋 Pedidos <span class="nav-badge" id="badge-pendentes">0</span></div>
+    <div class="nav-tab" onclick="irPara('produtos', this)">🍔 Cardápio</div>
+    <div class="nav-tab role-gerente role-dono" onclick="irPara('estoque', this)">📦 Estoque</div>
+    <div class="nav-tab role-gerente role-dono" onclick="irPara('caixa', this)">💰 Caixa</div>
+    <div class="nav-tab role-dono" onclick="irPara('financeiro', this)">📊 Financeiro</div>
+    <div class="nav-tab role-dono" onclick="irPara('usuarios', this)">👥 Usuários</div>
+    <div class="nav-tab role-dono" onclick="irPara('auditoria', this)">🔍 Auditoria</div>
+  </div>
+  <div class="main">
+    <div class="page active" id="page-mesas">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Ocupadas</div><div class="stat-val accent" id="s-ocup">—</div></div>
+        <div class="stat-card"><div class="stat-label">Livres</div><div class="stat-val green" id="s-liv">—</div></div>
+        <div class="stat-card"><div class="stat-label">Em aberto</div><div class="stat-val amber" id="s-fat">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pedidos ativos</div><div class="stat-val blue" id="s-ped">—</div></div>
+      </div>
+      <div class="section-head">
+        <div class="section-title">Mapa de mesas</div>
+        <button class="btn btn-sm" onclick="carregarMesas()">↻ Atualizar</button>
+      </div>
+      <div class="mesas-grid" id="mesas-grid"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="page" id="page-pedidos">
+      <div class="section-head">
+        <div class="section-title">Pedidos</div>
+        <button class="btn btn-sm" onclick="carregarPedidos()">↻ Atualizar</button>
+      </div>
+      <div class="filtros">
+        <button class="filtro-pill active" onclick="filtrarPedidos('todos',this)">Todos</button>
+        <button class="filtro-pill" onclick="filtrarPedidos('pendente',this)">Aguardando</button>
+        <button class="filtro-pill" onclick="filtrarPedidos('confirmado',this)">Confirmado</button>
+        <button class="filtro-pill" onclick="filtrarPedidos('em_preparo',this)">Em preparo</button>
+        <button class="filtro-pill" onclick="filtrarPedidos('pronto',this)">Pronto</button>
+        <button class="filtro-pill" onclick="filtrarPedidos('entregue',this)">Entregue</button>
+        <button class="filtro-pill" onclick="filtrarPedidos('cancelado',this)">Cancelado</button>
+      </div>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>#</th><th>Mesa</th><th>Itens</th><th>Total</th><th>Status</th><th>Horário</th><th>Ações</th></tr></thead>
+          <tbody id="pedidos-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="page" id="page-produtos">
+      <div class="section-head">
+        <div class="section-title">Cardápio</div>
+        <div class="section-actions">
+          <button class="btn btn-sm btn-primary role-gerente role-dono" onclick="abrirModalProduto(null)">+ Produto</button>
+          <button class="btn btn-sm" onclick="carregarProdutos()">↻ Atualizar</button>
+        </div>
+      </div>
+      <div class="produtos-grid" id="produtos-grid"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="page" id="page-estoque">
+      <div class="section-head">
+        <div class="section-title">Estoque</div>
+        <div class="section-actions">
+          <button class="btn btn-sm btn-primary" onclick="abrirModalInsumo(null)">+ Insumo</button>
+          <button class="btn btn-sm" onclick="abrirModalFornecedor()">+ Fornecedor</button>
+          <button class="btn btn-sm" onclick="carregarEstoque()">↻</button>
+        </div>
+      </div>
+      <div class="alerta-card" id="alerta-estoque">⚠️ <strong>Atenção:</strong> <span id="alerta-txt"></span></div>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Insumo</th><th>Unidade</th><th>Atual</th><th>Mínimo</th><th>Custo unit.</th><th>Fornecedor</th><th>Ações</th></tr></thead>
+          <tbody id="estoque-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="page" id="page-caixa">
+      <div class="section-head">
+        <div class="section-title">Fechamento de caixa</div>
+        <button class="btn btn-sm btn-primary" onclick="fecharCaixaHoje()">Fechar caixa hoje</button>
+      </div>
+      <div id="caixa-preview" style="margin-bottom:24px;">
+        <div class="loading"><div class="spinner"></div> Calculando o dia...</div>
+      </div>
+      <div class="section-head" style="margin-top:24px;">
+        <div class="section-title">Histórico</div>
+      </div>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Data</th><th>Dinheiro</th><th>Pix</th><th>Crédito</th><th>Débito</th><th>Total líquido</th><th>Pedidos</th></tr></thead>
+          <tbody id="caixa-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="page" id="page-financeiro">
+      <div class="section-head">
+        <div class="section-title">Dashboard financeiro</div>
+        <div class="date-range">
+          <label>De</label>
+          <input class="form-input" id="fin-inicio" type="date" style="width:140px;">
+          <label>Até</label>
+          <input class="form-input" id="fin-fim" type="date" style="width:140px;">
+          <button class="btn btn-sm btn-primary" onclick="carregarFinanceiro()">Consultar</button>
+        </div>
+      </div>
+      <div id="financeiro-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="page" id="page-usuarios">
+      <div class="section-head">
+        <div class="section-title">Usuários do sistema</div>
+        <button class="btn btn-sm btn-primary" onclick="abrirModalUsuario(null)">+ Novo usuário</button>
+      </div>
+      <div class="tabela-wrap">
+        <div id="usuarios-lista"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+    <div class="page" id="page-auditoria">
+      <div class="section-head">
+        <div class="section-title">Log de auditoria</div>
+        <div class="section-actions">
+          <select class="form-input form-select" id="audit-acao" style="width:180px;">
+            <option value="">Todas as ações</option>
+            <option value="cancelar_pedido">Cancelamentos</option>
+            <option value="atualizar_produto">Edição de produtos</option>
+            <option value="fechar_conta_mesa">Fechamento de mesa</option>
+            <option value="criar_usuario">Criação de usuário</option>
+            <option value="desativar_usuario">Desativação de usuário</option>
+            <option value="fechar_caixa">Fechamento de caixa</option>
+          </select>
+          <button class="btn btn-sm" onclick="carregarAuditoria()">Buscar</button>
+        </div>
+      </div>
+      <div class="tabela-wrap" style="padding:0 16px;">
+        <div id="auditoria-lista"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-conta">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-conta-title">Conta — Mesa ?</div>
+      <button class="modal-close" onclick="fecharModal('modal-conta')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-conta-body"></div>
+    <div class="modal-footer" id="modal-conta-footer" style="display:none;">
+      <button class="btn" onclick="fecharModal('modal-conta')">Cancelar</button>
+      <button class="btn btn-success" id="btn-fechar-conta" onclick="confirmarFecharConta()" disabled>✓ Fechar conta</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-produto">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-produto-title">Produto</div>
+      <button class="modal-close" onclick="fecharModal('modal-produto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prod-id">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="prod-nome"></div>
+      <div class="form-row"><label class="form-label">Descrição</label><input class="form-input" id="prod-desc"></div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Preço (R$)</label><input class="form-input" id="prod-preco" type="number" step="0.01"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Custo (R$)</label><input class="form-input" id="prod-custo" type="number" step="0.01"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Categoria</label><select class="form-input form-select" id="prod-categoria"></select></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Preparo (min)</label><input class="form-input" id="prod-tempo" type="number" value="10"></div>
+      </div>
+      <div class="form-row"><label class="form-label">URL da foto</label><input class="form-input" id="prod-foto" placeholder="https://..."></div>
+      <div style="display:flex;gap:20px;margin-top:4px;">
+        <label class="form-check"><input type="checkbox" id="prod-disponivel" checked> Disponível</label>
+        <label class="form-check"><input type="checkbox" id="prod-destaque"> Destaque</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-produto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-insumo">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-insumo-title">Insumo</div>
+      <button class="modal-close" onclick="fecharModal('modal-insumo')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="insumo-id">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="insumo-nome"></div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Unidade</label>
+          <select class="form-input form-select" id="insumo-unidade">
+            <option value="un">Unidade (un)</option><option value="kg">Quilo (kg)</option>
+            <option value="g">Grama (g)</option><option value="l">Litro (l)</option>
+            <option value="ml">Mililitro (ml)</option></select></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Custo unit. (R$)</label><input class="form-input" id="insumo-custo" type="number" step="0.01"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Estoque atual</label><input class="form-input" id="insumo-atual" type="number" step="0.1"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Estoque mínimo</label><input class="form-input" id="insumo-minimo" type="number" step="0.1"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Fornecedor</label><select class="form-input form-select" id="insumo-fornecedor"><option value="">Nenhum</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-insumo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarInsumo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-moviment">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Registrar movimentação</div>
+      <button class="modal-close" onclick="fecharModal('modal-moviment')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mov-insumo-id">
+      <div id="mov-insumo-nome" style="font-weight:600;font-size:14px;margin-bottom:16px;color:var(--accent);"></div>
+      <div class="form-row"><label class="form-label">Tipo</label>
+        <select class="form-input form-select" id="mov-tipo">
+          <option value="entrada">Entrada (compra/reposição)</option>
+          <option value="saida">Saída (uso)</option>
+          <option value="ajuste">Ajuste (contagem)</option>
+          <option value="perda">Perda/descarte</option>
+        </select>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Quantidade</label><input class="form-input" id="mov-qty" type="number" step="0.1"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Custo total (R$)</label><input class="form-input" id="mov-custo" type="number" step="0.01" value="0"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Motivo / observação</label><input class="form-input" id="mov-motivo" placeholder="Opcional"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-moviment')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarMovimentacao()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-fornecedor">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Novo fornecedor</div>
+      <button class="modal-close" onclick="fecharModal('modal-fornecedor')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="forn-nome"></div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">CNPJ</label><input class="form-input" id="forn-cnpj" placeholder="00.000.000/0001-00"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Telefone</label><input class="form-input" id="forn-tel" placeholder="(11) 99999-9999"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="forn-email" type="email"></div>
+      <div class="form-row"><label class="form-label">Contato / responsável</label><input class="form-input" id="forn-contato"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-fornecedor')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFornecedor()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-usuario">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-usuario-title">Novo usuário</div>
+      <button class="modal-close" onclick="fecharModal('modal-usuario')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="u-id">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="u-nome"></div>
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="u-email" type="email"></div>
+      <div class="form-row" id="u-senha-row">
+        <label class="form-label">Senha inicial</label>
+        <input class="form-input" id="u-senha" type="password" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Perfil</label>
+        <select class="form-input form-select" id="u-perfil">
+          <option value="funcionario">Funcionário</option>
+          <option value="cozinha">Cozinha</option>
+          <option value="gerente">Gerente</option>
+          <option value="dono">Dono</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Observação</label><input class="form-input" id="u-obs" placeholder="Opcional"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/admin.js"></script>
+</body>
+</html>

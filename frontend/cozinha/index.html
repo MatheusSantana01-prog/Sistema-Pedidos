@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cozinha — KDS</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-brand">
+    <div class="live-dot"></div>
+    Cozinha — KDS
+  </div>
+  <div class="header-right">
+    <div class="header-stat">Fila: <strong id="stat-fila">0</strong></div>
+    <div class="header-stat">Prontos: <strong id="stat-prontos">0</strong></div>
+    <div class="header-clock" id="relogio"></div>
+  </div>
+</div>
+
+<!-- BOARD 4 COLUNAS -->
+<div class="board">
+  <div class="col">
+    <div class="col-head pendente">
+      <div class="col-label">Aguardando</div>
+      <div class="col-count pendente" id="cnt-pendente">0</div>
+    </div>
+    <div class="col-body" id="col-pendente">
+      <div class="col-empty"><div class="col-empty-icon">✓</div><div class="col-empty-txt">Tudo em dia</div></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col-head confirmado">
+      <div class="col-label">Confirmado</div>
+      <div class="col-count confirmado" id="cnt-confirmado">0</div>
+    </div>
+    <div class="col-body" id="col-confirmado">
+      <div class="col-empty"><div class="col-empty-icon">✓</div><div class="col-empty-txt">Tudo em dia</div></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col-head em_preparo">
+      <div class="col-label">Em preparo</div>
+      <div class="col-count em_preparo" id="cnt-em_preparo">0</div>
+    </div>
+    <div class="col-body" id="col-em_preparo">
+      <div class="col-empty"><div class="col-empty-icon">✓</div><div class="col-empty-txt">Nada no fogo</div></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="col-head pronto">
+      <div class="col-label">Pronto p/ entregar</div>
+      <div class="col-count pronto" id="cnt-pronto">0</div>
+    </div>
+    <div class="col-body" id="col-pronto">
+      <div class="col-empty"><div class="col-empty-icon">✓</div><div class="col-empty-txt">Nenhum aguardando</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICAÇÃO NOVO PEDIDO -->
+<div class="notif" id="notif">🔔 Novo pedido!</div>
+
+<!-- OFFLINE -->
+<div class="offline-bar" id="offline-bar">⚠ Sem conexão — tentando reconectar...</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

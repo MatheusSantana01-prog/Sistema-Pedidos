@@ -1,0 +1,34 @@
+# Ambiente Python
+backend/.env
+backend/__pycache__/
+backend/*.pyc
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (se usar no futuro)
+node_modules/
+npm-debug.log
+
+# Arquivos de ambiente — NUNCA subir chaves
+.env
+.env.local
+.env.production

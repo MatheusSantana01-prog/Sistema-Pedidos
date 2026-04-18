@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cardápio</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;0,900;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+</style>
+</head>
+<body>
+
+<!-- NOTIFICAÇÃO PRONTO -->
+<div class="notif-pronto" id="notif-pronto" onclick="notifClick()">
+  <div class="notif-pronto-icon">🔔</div>
+  <div class="notif-pronto-txt">
+    <h4>Seu pedido está pronto!</h4>
+    <p id="notif-msg">O garçom está a caminho</p>
+  </div>
+  <button class="notif-fechar" onclick="event.stopPropagation();fecharNotif()">✕</button>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-top">
+    <div class="brand">
+      <div class="brand-icon">🍔</div>
+      <div class="brand-name">Sabor &amp; Fogo</div>
+    </div>
+    <div class="mesa-tag">Mesa <span id="mesa-num">—</span></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-greeting">Olá! Bem-vindo 👋</div>
+    <div class="hero-title">O que vai<br><em>rolar hoje?</em></div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-val" id="stat-itens">0</div>
+        <div class="stat-label">No pedido</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="stat-tempo">—</div>
+        <div class="stat-label">Min. estimados</div>
+      </div>
+      <div class="stat clickable" onclick="abrirConta()">
+        <div class="stat-val" id="stat-consumido">R$0</div>
+        <div class="stat-label">Consumido 👆</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BUSCA -->
+<div class="search-wrap">
+  <div class="search-box">
+    <span>🔍</span>
+    <input type="text" id="search-input" placeholder="Buscar no cardápio..." oninput="buscar(this.value)">
+    <button class="search-clear" id="search-clear" onclick="limparBusca()">✕</button>
+  </div>
+</div>
+
+<!-- COMBO BANNER -->
+<div class="combo-banner" id="combo-banner" onclick="filtrarPorCombo()">
+  <div class="combo-icon">🎁</div>
+  <div class="combo-text"><h4>Economize com Combos!</h4><p>Lanche + bebida + porção com desconto</p></div>
+  <div class="combo-arrow">→</div>
+</div>
+
+<!-- CATEGORIAS -->
+<div class="cats-section">
+  <div class="cats-label">Categorias</div>
+  <div class="cats" id="cats"></div>
+</div>
+
+<!-- DESTAQUES -->
+<div class="destaques-section" id="dest-section" style="display:none;">
+  <div class="section-head"><h2>⭐ Destaques</h2></div>
+  <div class="destaques-scroll" id="destaques"></div>
+</div>
+
+<!-- LISTA PRODUTOS -->
+<div id="produtos-wrap" style="padding-bottom:110px;"></div>
+
+<!-- FAB CARRINHO -->
+<button class="cart-fab" id="cart-fab" onclick="abrirCarrinho()">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div class="fab-badge" id="fab-qty">0</div>
+    <span>Ver Pedido</span>
+  </div>
+  <div class="fab-price" id="fab-price">R$ 0,00</div>
+</button>
+
+<!-- FAB CONTA -->
+<button class="conta-fab" id="conta-fab" onclick="abrirConta()">
+  <div class="pulse-dot" id="pulse-dot"></div>
+  <span>Minha conta</span>
+</button>
+
+<!-- ═══ MODAL PRODUTO ═══ -->
+<div class="overlay" id="prod-overlay" onclick="if(event.target===this)fecharProd()">
+  <div class="prod-modal">
+    <div class="modal-handle"></div>
+    <div class="modal-hero" id="modal-img">🍔</div>
+    <div class="modal-body">
+      <div class="modal-nome" id="modal-nome"></div>
+      <div class="modal-desc" id="modal-desc"></div>
+      <div class="ing-box" id="ing-box" style="display:none;">
+        <div class="ing-box-title">🥗 Ingredientes</div>
+        <div class="ing-box-text" id="ing-desc-text"></div>
+        <div class="ing-hint">Toque para remover:</div>
+        <div class="ing-list" id="ing-list"></div>
+      </div>
+      <div class="modal-preco" id="modal-preco"></div>
+      <div style="margin-bottom:20px;">
+        <div class="field-label">Observações (opcional)</div>
+        <textarea class="obs-input" id="modal-obs" rows="2" placeholder="Ex: bem passado, sem sal..."></textarea>
+      </div>
+      <div class="qty-row">
+        <div class="field-label" style="margin:0">Quantidade</div>
+        <div class="qty-ctrl">
+          <button class="qty-btn" onclick="chQty(-1)">−</button>
+          <div class="qty-num" id="modal-qty">1</div>
+          <button class="qty-btn" onclick="chQty(1)">+</button>
+        </div>
+      </div>
+      <button class="add-btn-modal" onclick="addCart()">
+        <span>Adicionar ao pedido</span>
+        <span id="modal-sub">R$ 0,00</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL CARRINHO ═══ -->
+<div class="overlay" id="cart-overlay" onclick="if(event.target===this)fecharCarrinho()">
+  <div class="cart-modal">
+    <div class="modal-head">
+      <h2>Seu Pedido 🛒</h2>
+      <button class="close-btn" onclick="fecharCarrinho()">✕</button>
+    </div>
+    <div class="items-wrap" id="cart-items"></div>
+    <div class="cart-summary" id="cart-summary" style="display:none;">
+      <div class="sum-row"><span>Subtotal</span><span id="sum-sub">R$ 0,00</span></div>
+      <div class="sum-row total"><span>Total</span><span id="sum-total">R$ 0,00</span></div>
+    </div>
+    <div class="cart-obs-wrap" id="cart-obs-wrap" style="display:none;">
+      <div class="field-label">Observação geral (opcional)</div>
+      <textarea class="obs-input" id="obs-geral" rows="2" placeholder="Ex: alergia a amendoim..."></textarea>
+    </div>
+    <div class="cart-cta">
+      <div class="erro-rede" id="erro-rede" style="display:none;">
+        <span>⚠️ Falha ao enviar. Verifique a conexão.</span>
+        <button class="retry-btn" onclick="confirmar()">Tentar novamente</button>
+      </div>
+      <button class="confirmar-btn" id="confirmar-btn" onclick="confirmar()" disabled>
+        <span id="confirmar-txt">Confirmar Pedido</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL CONTA DA MESA ═══ -->
+<div class="overlay" id="conta-overlay" onclick="if(event.target===this)fecharConta()">
+  <div class="conta-modal">
+    <div class="conta-header">
+      <div>
+        <div class="conta-mesa-badge">Conta da mesa</div>
+        <div class="conta-title" id="conta-title">Mesa —</div>
+        <div class="conta-subtitle" id="conta-subtitle">Carregando...</div>
+      </div>
+      <button class="close-btn" onclick="fecharConta()">✕</button>
+    </div>
+    <div class="conta-body" id="conta-body">
+      <div style="padding:40px 0;text-align:center;color:var(--muted);">Carregando seus pedidos...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TELA SUCESSO ═══ -->
+<div class="sucesso-overlay" id="sucesso-overlay">
+  <div class="sucesso-card">
+    <div class="sucesso-icon">✅</div>
+    <h2>Pedido enviado!</h2>
+    <p>A cozinha recebeu. Você está na</p>
+    <div class="sucesso-mesa" id="sucesso-mesa">Mesa —</div>
+    <div class="sucesso-num" id="sucesso-num">Pedido #—</div>
+    <div class="avaliacao-wrap" id="aval-wrap" style="display:none;">
+      <p>Como foi sua experiência até agora?</p>
+      <div class="stars" id="stars"></div>
+    </div>
+    <div class="sucesso-actions">
+      <button class="btn-ver-conta" onclick="fecharSucesso();abrirConta()">Ver minha conta 🧾</button>
+      <button class="btn-continuar" onclick="fecharSucesso()">Continuar pedindo →</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
+
+</body>
+</html>

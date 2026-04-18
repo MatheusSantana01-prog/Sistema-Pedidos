@@ -1,0 +1,36 @@
+/* ════════════════════════════════════════════════════
+   RESET E BASE
+════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ════════════════════════════════════════════════════
+   LAYOUT GERAL
+════════════════════════════════════════════════════ */
+.main {
+  flex: 1;
+  overflow: auto;
+}
+
+.page {
+  display: none;
+  padding: 24px;
+}
+
+.page.active {
+  display: block;
+}
