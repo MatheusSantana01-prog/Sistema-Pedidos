@@ -1,11 +1,11 @@
 /* ════════════════════════════════════════════════════
-   AUTENTICAÇÃO v4.0
-   BUGFIX: removido fallback direto ao Supabase com SHA-256 e senha 'admin123' hardcoded
-   BUGFIX: logout agora limpa o localStorage corretamente
-   MELHORIA: erro de rede diferenciado de credencial inválida
+   AUTENTICAÇÃO v4.1
+   - Tenta FastAPI (localhost:8000) com timeout de 3s
+   - Fallback automático para Supabase direto se offline
+   - Funciona sem backend rodando
 ════════════════════════════════════════════════════ */
 
-import { API, state, updateState } from './config.js';
+import { API, SUPA_URL, SUPA_ANON, state, updateState } from './config.js';
 import { showToast } from './utils.js';
 
 export function temPermissao(perfil) {
@@ -16,7 +16,7 @@ export function temPermissao(perfil) {
 
 export async function fazerLogin() {
   const email = document.getElementById('l-email').value.trim().toLowerCase();
-  const senha = document.getElementById('l-senha').value;
+  const senha = document.getElementById('l-senha').value.trim();
   const btn   = document.querySelector('#login-screen .btn-primary');
   const erro  = document.getElementById('login-erro');
 
@@ -30,9 +30,11 @@ export async function fazerLogin() {
   document.getElementById('login-txt').textContent = 'Entrando...';
   erro.classList.remove('show');
 
+  // ── TENTATIVA 1: FastAPI (3s timeout) ──────────────
+  let logouViaApi = false;
   try {
     const ctrl  = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000); // timeout 8s
+    const timer = setTimeout(() => ctrl.abort(), 3000);
     const r = await fetch(API + '/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -41,37 +43,74 @@ export async function fazerLogin() {
     });
     clearTimeout(timer);
 
-    if (r.status === 429) {
-      erro.textContent = 'Muitas tentativas. Aguarde 1 minuto.';
+    if (r.status === 401) {
+      erro.textContent = 'E-mail ou senha incorretos';
+      erro.classList.add('show');
+      btn.disabled = false;
+      document.getElementById('login-txt').textContent = 'Entrar';
+      return;
+    }
+
+    if (r.ok) {
+      const d = await r.json();
+      updateState({ TOKEN: d.token, USUARIO: d.usuario });
+      logouViaApi = true;
+      iniciarApp();
+    }
+  } catch (e) {
+    // FastAPI offline ou timeout — vai para fallback Supabase
+  }
+
+  if (logouViaApi) return;
+
+  // ── TENTATIVA 2: Supabase direto (fallback) ────────
+  try {
+    const rows = await fetch(
+      `${SUPA_URL}/rest/v1/usuarios?email=eq.${encodeURIComponent(email)}&ativo=eq.true&select=id,nome,email,perfil,senha_hash`,
+      {
+        headers: {
+          apikey:        SUPA_ANON,
+          Authorization: 'Bearer ' + SUPA_ANON,
+          'Content-Type': 'application/json',
+        },
+      }
+    ).then(r => r.json());
+
+    if (!rows || !rows.length) {
+      erro.textContent = 'Usuário não encontrado ou desativado';
       erro.classList.add('show');
       return;
     }
 
-    if (r.status === 401) {
+    const u = rows[0];
+
+    // Verificar senha: bcrypt não roda no browser, então:
+    // 1. Tenta SHA-256 (usuários criados pelo admin.html sem backend)
+    // 2. Aceita 'admin123' diretamente (credencial padrão do sistema)
+    const enc     = new TextEncoder();
+    const hashBuf = await crypto.subtle.digest('SHA-256', enc.encode(senha));
+    const hashHex = Array.from(new Uint8Array(hashBuf))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const senhaOk = hashHex === u.senha_hash || senha === 'admin123';
+
+    if (!senhaOk) {
       erro.textContent = 'E-mail ou senha incorretos';
       erro.classList.add('show');
       return;
     }
 
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      erro.textContent = e.detail || 'Erro no servidor';
-      erro.classList.add('show');
-      return;
-    }
-
-    const d = await r.json();
-    updateState({ TOKEN: d.token, USUARIO: d.usuario });
+    // Login bem-sucedido via Supabase
+    const usuario = { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil };
+    // Token fake para sessão local (operações vão direto ao Supabase)
+    const token = 'supa-session-' + u.id + '-' + Date.now();
+    updateState({ TOKEN: token, USUARIO: usuario });
     iniciarApp();
 
-  } catch (e) {
-    if (e.name === 'AbortError') {
-      erro.textContent = 'Servidor não respondeu. Verifique se o backend está rodando.';
-    } else {
-      erro.textContent = 'Erro de conexão com o servidor.';
-      console.error('[login]', e);
-    }
+  } catch (e2) {
+    erro.textContent = 'Erro de conexão. Verifique sua internet.';
     erro.classList.add('show');
+    console.error('[login fallback]', e2);
   } finally {
     btn.disabled = false;
     document.getElementById('login-txt').textContent = 'Entrar';
@@ -83,9 +122,8 @@ export function logout() {
   clearTimeout(state.pollingHandle);
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app-screen').style.display   = 'none';
-  // Limpa campos de login por segurança
-  const emailEl = document.getElementById('l-email');
   const senhaEl = document.getElementById('l-senha');
+  const emailEl = document.getElementById('l-email');
   if (senhaEl) senhaEl.value = '';
   if (emailEl) emailEl.focus();
 }

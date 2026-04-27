@@ -38,6 +38,13 @@ cp .env.example .env
 # Editar .env com sua SUPABASE_SERVICE_KEY
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+### ou faça assim
+
+´´´bash
+cd "C:\Users\Kcchb\OneDrive\Desktop\restaurante\Restaurante"
+cd backend
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+´´´
 
 ### 2. Frontend
 

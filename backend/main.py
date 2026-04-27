@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from passlib.context import CryptContext
+import bcrypt as _bcrypt  # bcrypt direto — passlib tem bug com bcrypt>=4.1
 from pydantic import BaseModel, field_validator, model_validator
 from supabase import Client, create_client
 import jwt as pyjwt
@@ -72,7 +72,15 @@ CORS_ORIGINS = (
 )
 
 sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Funções bcrypt sem passlib
+def _hash_senha(senha: str) -> str:
+    return _bcrypt.hashpw(senha.encode(), _bcrypt.gensalt(12)).decode()
+
+def _verificar_senha(senha: str, hash_armazenado: str) -> bool:
+    try:
+        return _bcrypt.checkpw(senha.encode(), hash_armazenado.encode())
+    except Exception:
+        return False
 
 app = FastAPI(
     title="Restaurante API",
@@ -415,11 +423,7 @@ def login(body: LoginInput, req: Request):
         raise HTTPException(401, "Credenciais invalidas")
 
     u = resp.data
-    ok = False
-    try:
-        ok = pwd_ctx.verify(body.senha, u.get("senha_hash", ""))
-    except Exception:
-        pass
+    ok = _verificar_senha(body.senha, u.get("senha_hash", ""))
 
     if not ok:
         logger.warning("Falha de login para %s (IP: %s)", body.email, ip)
@@ -440,10 +444,10 @@ def trocar_senha(body: TrocarSenha, u: dict = Depends(verificar_token)):
     dados = _row(usr)
     if not dados.get("ativo"):
         raise HTTPException(403, "Conta desativada")
-    if not pwd_ctx.verify(body.senha_atual, dados["senha_hash"]):
+    if not _verificar_senha(body.senha_atual, dados["senha_hash"]):
         raise HTTPException(401, "Senha atual incorreta")
     sb.table("usuarios").update(
-        {"senha_hash": pwd_ctx.hash(body.senha_nova), "updated_at": utcnow_iso()}
+        {"senha_hash": _hash_senha(body.senha_nova), "updated_at": utcnow_iso()}
     ).eq("id", u["sub"]).execute()
     return {"mensagem": "Senha alterada com sucesso"}
 
@@ -750,7 +754,7 @@ def criar_user(body: CriarUsuario, req: Request, u: dict = Depends(authorize(["d
         raise HTTPException(400, "Email ja cadastrado")
     r = sb.table("usuarios").insert({
         "nome": body.nome, "email": body.email,
-        "senha_hash": pwd_ctx.hash(body.senha), "perfil": body.perfil,
+        "senha_hash": _hash_senha(body.senha), "perfil": body.perfil,
         "criado_por": u["sub"], "observacao": body.observacao, "ativo": True,
     }).select("id,nome,email,perfil").execute()
     f = _row(r)
