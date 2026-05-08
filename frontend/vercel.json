@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".",
   "rewrites": [
+    { "source": "/", "destination": "/super-admin/index.html" },
     { "source": "/r/:slug/admin", "destination": "/r/admin/index.html" },
     { "source": "/r/:slug/admin/", "destination": "/r/admin/index.html" },
     { "source": "/r/:slug/cozinha", "destination": "/r/cozinha/index.html" },
