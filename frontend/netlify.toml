@@ -2,6 +2,13 @@
   publish = "."
 
 [[redirects]]
+  from = "/api/*"
+  to   = "https://sistema-pedidos-zk2w.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+
+[[redirects]]
   from = "/r/:slug/admin"
   to   = "/r/admin/index.html"
   status = 200

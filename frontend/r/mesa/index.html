@@ -4,118 +4,97 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cardápio</title>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;0,900;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --color-primary:   #ff4d1c;
   --color-secondary: #1a1a1a;
   --color-accent:    #ff6b3d;
-  --color-bg:        #0f0f0f;
-  --color-text:      #f0ede8;
-  --panel:    #1a1a1a;
-  --surface2: #222;
-  --border:   #2a2a2a;
-  --muted:    #777;
+  --color-bg:        #0a0a0a;
+  --color-text:      #f2f0eb;
+  --panel:    #111;
+  --border:   #1e1e1e;
+  --muted:    #666;
   --green:    #22c55e;
-  --gold:     #f5c842;
   --red:      #ef4444;
 }
-* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body { background:var(--color-bg); color:var(--color-text); font-family:'Plus Jakarta Sans',sans-serif; min-height:100vh; max-width:520px; margin:0 auto; position:relative; overflow-x:hidden; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--color-bg); color:var(--color-text); font-family:'Inter',sans-serif; min-height:100vh; max-width:480px; margin:0 auto; position:relative; }
 
-/* HERO */
-.hero { background:linear-gradient(160deg,#1a0a05 0%,var(--color-bg) 62%); padding:0 20px; position:relative; overflow:hidden; }
-.hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 60% -10%,rgba(255,77,28,.2),transparent 70%); pointer-events:none; }
-.hero-top { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:16px 0 20px; position:relative; z-index:1; }
-.brand { display:flex; align-items:center; gap:10px; min-width:0; }
-.brand-icon { width:42px; height:42px; border-radius:14px; background:var(--color-primary); display:flex; align-items:center; justify-content:center; font-size:21px; flex-shrink:0; overflow:hidden; }
-.brand-icon img { width:100%; height:100%; object-fit:cover; }
-.brand-name { font-family:'Fraunces',serif; font-size:20px; font-weight:900; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mesa-tag { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); padding:7px 14px; border-radius:999px; font-size:12px; color:rgba(255,255,255,.68); font-weight:600; flex-shrink:0; }
-.mesa-tag span { color:var(--gold); font-weight:800; }
-.hero-content { padding:8px 0 28px; position:relative; z-index:1; }
-.hero-greeting { font-size:13px; color:var(--muted); margin-bottom:6px; }
-.hero-title { font-family:'Fraunces',serif; font-size:34px; font-weight:900; line-height:1.05; margin-bottom:16px; }
-.hero-title em { font-style:italic; color:var(--color-primary); }
-.hero-stats { display:flex; gap:12px; }
-.stat { background:rgba(255,255,255,.055); border:1px solid var(--border); border-radius:14px; padding:10px 12px; flex:1; min-width:0; }
-.stat.clickable { cursor:pointer; }
-.stat-val { font-family:'Fraunces',serif; font-size:18px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.stat-label { font-size:10px; color:var(--muted); margin-top:2px; }
+/* HEADER */
+.header { background:var(--panel); padding:16px 20px 12px; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+.header-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.header-logo { width:40px; height:40px; border-radius:8px; background:var(--border); object-fit:cover; flex-shrink:0; }
+.header-nome { font-size:16px; font-weight:700; }
+.header-mesa { font-size:12px; color:var(--muted); }
 
 /* BUSCA */
-.search-wrap { padding:16px 20px 0; background:transparent; }
-.search-box { display:flex; align-items:center; gap:10px; background:var(--panel); border:1.5px solid var(--border); border-radius:16px; padding:0 14px; transition:border-color .2s; }
-.search-box:focus-within { border-color:var(--color-primary); }
-.search-box input { flex:1; background:none; border:none; outline:none; padding:13px 0; font-family:'Plus Jakarta Sans',sans-serif; font-size:14px; color:var(--color-text); }
+.search-wrap { padding:0 20px 12px; background:var(--panel); }
+.search-box { display:flex; align-items:center; gap:8px; background:var(--color-bg); border:1px solid var(--border); border-radius:10px; padding:0 12px; }
+.search-box input { flex:1; background:none; border:none; outline:none; padding:10px 0; font-size:14px; color:var(--color-text); }
 .search-box input::placeholder { color:var(--muted); }
 .search-clear { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; display:none; }
 .search-clear.show { display:block; }
 
 /* CATEGORIAS */
-.cats-label { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; font-weight:700; }
-.cats-wrap { padding:16px 20px 8px; overflow-x:auto; scrollbar-width:none; background:transparent; border-bottom:none; }
+.cats-wrap { padding:12px 20px; overflow-x:auto; scrollbar-width:none; background:var(--panel); border-bottom:1px solid var(--border); }
 .cats-wrap::-webkit-scrollbar { display:none; }
 .cats { display:flex; gap:8px; }
-.cat-pill { padding:8px 16px; border-radius:999px; border:1.5px solid var(--border); background:transparent; color:var(--muted); font-family:'Plus Jakarta Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:all .2s; }
-.cat-pill.active { background:var(--color-primary); border-color:var(--color-primary); color:#fff; box-shadow:0 4px 16px rgba(255,77,28,.28); }
+.cat-pill { padding:6px 14px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; transition:all .15s; }
+.cat-pill.active { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
 
 /* DESTAQUES */
-.dest-wrap { padding:18px 20px 4px; }
-.dest-label { font-family:'Fraunces',serif; font-size:21px; font-weight:800; margin-bottom:12px; }
-.dest-grid { display:flex; gap:12px; overflow-x:auto; scrollbar-width:none; padding-bottom:4px; }
-.dest-grid::-webkit-scrollbar { display:none; }
-.dest-card { flex:0 0 180px; background:var(--panel); border:1px solid var(--border); border-radius:20px; overflow:hidden; cursor:pointer; transition:transform .15s; position:relative; }
+.dest-wrap { padding:16px 20px 0; }
+.dest-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:10px; }
+.dest-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.dest-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; cursor:pointer; transition:transform .15s; }
 .dest-card:active { transform:scale(.98); }
-.dest-card::before { content:'Destaque'; position:absolute; top:10px; left:10px; z-index:2; background:var(--gold); color:#000; font-size:10px; font-weight:800; padding:3px 8px; border-radius:999px; }
-.dest-card img { width:100%; height:110px; object-fit:cover; }
-.dest-card-img-placeholder { width:100%; height:110px; background:linear-gradient(135deg,#2a1a10,#1a1010); display:flex; align-items:center; justify-content:center; font-size:42px; }
-.dest-card-body { padding:12px; }
-.dest-card-nome { font-size:13px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.dest-card-preco { font-family:'Fraunces',serif; font-size:15px; color:var(--color-primary); font-weight:800; margin-top:4px; }
+.dest-card img { width:100%; height:100px; object-fit:cover; }
+.dest-card-img-placeholder { width:100%; height:100px; background:var(--border); display:flex; align-items:center; justify-content:center; font-size:32px; }
+.dest-card-body { padding:10px; }
+.dest-card-nome { font-size:13px; font-weight:600; }
+.dest-card-preco { font-size:12px; color:var(--color-primary); font-weight:700; margin-top:2px; }
 
 /* PRODUTOS */
-.produtos-wrap { padding:8px 20px 110px; }
+.produtos-wrap { padding:16px 20px; }
 .cat-section { margin-bottom:24px; }
-.cat-section-title { font-family:'Fraunces',serif; font-size:22px; font-weight:800; margin-bottom:14px; display:flex; align-items:center; gap:8px; color:var(--color-text); }
-.produto-card { display:flex; gap:0; padding:0; border:1px solid var(--border); border-radius:20px; background:var(--panel); cursor:pointer; align-items:stretch; overflow:hidden; margin-bottom:10px; transition:transform .15s,border-color .15s; }
-.produto-card:active { transform:scale(.99); }
-.produto-card:hover { border-color:rgba(255,255,255,.16); }
-.produto-img { width:104px; min-height:112px; background:var(--border); object-fit:cover; flex-shrink:0; }
-.produto-img-placeholder { width:104px; min-height:112px; background:linear-gradient(135deg,#1e1208,#120c08); display:flex; align-items:center; justify-content:center; font-size:40px; flex-shrink:0; }
-.produto-info { flex:1; min-width:0; padding:14px 12px; }
-.produto-nome { font-size:15px; font-weight:800; margin-bottom:4px; line-height:1.2; }
+.cat-section-title { font-size:14px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:6px; color:var(--color-text); }
+.produto-card { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); cursor:pointer; align-items:flex-start; }
+.produto-card:last-child { border-bottom:none; }
+.produto-img { width:70px; height:70px; border-radius:8px; background:var(--border); object-fit:cover; flex-shrink:0; }
+.produto-img-placeholder { width:70px; height:70px; border-radius:8px; background:var(--border); display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; }
+.produto-info { flex:1; min-width:0; }
+.produto-nome { font-size:14px; font-weight:600; margin-bottom:3px; }
 .produto-desc { font-size:12px; color:var(--muted); line-height:1.4; margin-bottom:6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.produto-preco { font-family:'Fraunces',serif; font-size:18px; font-weight:800; color:var(--color-primary); }
+.produto-preco { font-size:15px; font-weight:700; color:var(--color-primary); }
 .produto-ind  { font-size:11px; color:var(--muted); font-style:italic; }
-.produto-add  { width:34px; height:34px; border-radius:50%; background:var(--color-primary); border:none; color:#fff; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; align-self:center; margin-right:12px; transition:transform .1s; box-shadow:0 4px 12px rgba(255,77,28,.38); }
+.produto-add  { width:32px; height:32px; border-radius:50%; background:var(--color-primary); border:none; color:#fff; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; align-self:center; transition:transform .1s; }
 .produto-add:active { transform:scale(.9); }
 .produto-add:disabled { background:var(--border); cursor:not-allowed; }
 
 /* CARRINHO FAB */
-.cart-fab { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--color-primary); color:#fff; padding:14px 22px; border-radius:999px; font-family:'Plus Jakarta Sans',sans-serif; font-size:14px; font-weight:800; border:none; cursor:pointer; z-index:200; display:none; align-items:center; justify-content:space-between; gap:14px; box-shadow:0 8px 32px rgba(255,77,28,.48); transition:all .3s; white-space:nowrap; min-width:270px; }
+.cart-fab { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--color-primary); color:#fff; padding:14px 24px; border-radius:999px; font-size:15px; font-weight:700; border:none; cursor:pointer; z-index:200; display:none; align-items:center; gap:10px; box-shadow:0 8px 32px rgba(255,77,28,.4); transition:all .3s; white-space:nowrap; }
 .cart-fab.show { display:flex; }
-.cart-count { background:rgba(255,255,255,.24); color:#fff; border-radius:50%; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; margin-left:8px; }
-.cart-total-fab { font-family:'Fraunces',serif; font-size:16px; font-weight:800; }
+.cart-count { background:#fff; color:var(--color-primary); border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
 
 /* MODAL */
 .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:300; display:none; align-items:flex-end; }
 .modal-bg.show { display:flex; }
-.modal { background:var(--panel); border-radius:28px 28px 0 0; width:100%; max-height:92vh; overflow-y:auto; padding:20px 20px 32px; }
+.modal { background:var(--panel); border-radius:20px 20px 0 0; width:100%; max-height:92vh; overflow-y:auto; padding:24px 20px 32px; }
 .modal-drag { width:40px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 20px; }
-.modal-title { font-family:'Fraunces',serif; font-size:28px; font-weight:900; margin-bottom:6px; line-height:1.1; }
+.modal-title { font-size:18px; font-weight:700; margin-bottom:4px; }
 .modal-desc  { font-size:13px; color:var(--muted); line-height:1.5; margin-bottom:16px; }
-.modal-preco { font-family:'Fraunces',serif; font-size:28px; font-weight:800; color:var(--color-primary); margin-bottom:20px; }
+.modal-preco { font-size:20px; font-weight:700; color:var(--color-primary); margin-bottom:20px; }
 .modal-section-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:10px; }
 .mod-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:14px; }
 .mod-item:last-child { border-bottom:none; }
 .mod-check { width:20px; height:20px; border-radius:4px; border:2px solid var(--border); background:transparent; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .15s; }
 .mod-check.checked { background:var(--color-primary); border-color:var(--color-primary); }
-.obs-input { width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:14px; padding:12px 14px; color:var(--color-text); font-size:14px; font-family:'Plus Jakarta Sans',sans-serif; resize:none; outline:none; margin-top:12px; }
+.obs-input { width:100%; background:var(--color-bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--color-text); font-size:14px; font-family:'Inter',sans-serif; resize:none; outline:none; margin-top:12px; }
 .qty-control { display:flex; align-items:center; gap:16px; margin:20px 0; }
 .qty-btn { width:36px; height:36px; border-radius:50%; border:1px solid var(--border); background:transparent; color:var(--color-text); font-size:20px; cursor:pointer; }
 .qty-num { font-size:20px; font-weight:700; min-width:24px; text-align:center; }
-.btn-add-cart { width:100%; padding:17px 18px; background:var(--color-primary); border:none; border-radius:16px; color:#fff; font-size:16px; font-weight:800; cursor:pointer; margin-top:8px; box-shadow:0 8px 24px rgba(255,77,28,.36); }
+.btn-add-cart { width:100%; padding:15px; background:var(--color-primary); border:none; border-radius:12px; color:#fff; font-size:16px; font-weight:700; cursor:pointer; margin-top:8px; }
 
 /* CONTA */
 .conta-wrap { padding:20px; }
@@ -150,45 +129,25 @@ body { background:var(--color-bg); color:var(--color-text); font-family:'Plus Ja
 <body>
 
 <div id="app" style="display:none;">
-  <div class="hero">
-    <div class="hero-top">
-      <div class="brand">
-        <div class="brand-icon" id="brand-icon">🍽</div>
-        <div class="brand-name restaurant-name"></div>
-      </div>
-      <div class="mesa-tag">Mesa <span id="mesa-num">—</span></div>
-    </div>
-    <div class="hero-content">
-      <div class="hero-greeting">Ola! Bem-vindo.</div>
-      <div class="hero-title">O que vai<br><em>pedir hoje?</em></div>
-      <div class="hero-stats">
-        <div class="stat">
-          <div class="stat-val" id="stat-itens">0</div>
-          <div class="stat-label">No pedido</div>
-        </div>
-        <div class="stat">
-          <div class="stat-val" id="stat-tempo">—</div>
-          <div class="stat-label">Min. estimados</div>
-        </div>
-        <div class="stat clickable" onclick="verConta()">
-          <div class="stat-val" id="stat-consumido">R$0</div>
-          <div class="stat-label">Consumido</div>
-        </div>
+  <div class="header">
+    <div class="header-top">
+      <img class="header-logo restaurant-logo" src="" alt="" style="display:none;">
+      <div>
+        <div class="header-nome restaurant-name"></div>
+        <div class="header-mesa" id="header-mesa">Mesa —</div>
       </div>
     </div>
-  </div>
-
-  <div class="search-wrap">
-    <div class="search-box">
-      <span style="color:var(--muted);font-size:16px;">🔍</span>
-      <input type="text" id="search-input" placeholder="Buscar no cardapio..."
-             oninput="buscar(this.value)">
-      <button class="search-clear" id="search-clear" onclick="limparBusca()">✕</button>
+    <div class="search-wrap" style="padding:0 0 0;">
+      <div class="search-box">
+        <span style="color:var(--muted);font-size:16px;">🔍</span>
+        <input type="text" id="search-input" placeholder="Buscar no cardápio..."
+               oninput="buscar(this.value)">
+        <button class="search-clear" id="search-clear" onclick="limparBusca()">✕</button>
+      </div>
     </div>
   </div>
 
   <div class="cats-wrap">
-    <div class="cats-label">Categorias</div>
     <div class="cats" id="cats"></div>
   </div>
 
@@ -199,8 +158,8 @@ body { background:var(--color-bg); color:var(--color-text); font-family:'Plus Ja
 
 <!-- FAB CARRINHO -->
 <button class="cart-fab" id="cart-fab" onclick="abrirCarrinho()">
-  <span>Ver pedido <span class="cart-count" id="cart-count">0</span></span>
-  <span class="cart-total-fab" id="cart-total-fab">R$ 0,00</span>
+  🛒 Ver carrinho
+  <span class="cart-count" id="cart-count">0</span>
 </button>
 
 <!-- MODAL PRODUTO -->
@@ -267,6 +226,7 @@ body { background:var(--color-bg); color:var(--color-text); font-family:'Plus Ja
 <script src="/shared/tenant.js"></script>
 <script src="/shared/auth.js"></script>
 <script>
+
 let RESTAURANT   = null;
 let MESA         = null;
 let SESSAO_ID    = null;
@@ -297,15 +257,15 @@ async function init() {
     const slug = getCurrentRestaurantSlug();
     // Validar mesa via API
     const resp = await apiPublic('GET', `/api/public/restaurants/${slug}/tables/${token}`);
-    MESA = resp.mesa;
-    document.getElementById('mesa-num').textContent = MESA.numero;
-    if (RESTAURANT.logo_url) {
-      document.getElementById('brand-icon').innerHTML = `<img src="${RESTAURANT.logo_url}" alt="">`;
-    }
+    MESA = Array.isArray(resp.mesa) ? resp.mesa[0] : resp.mesa;
+    if (!MESA?.id) throw new Error('Mesa inválida');
+    document.getElementById('header-mesa').textContent = `Mesa ${MESA.numero || ''}`;
 
     // Abrir/recuperar sessão
     const sessResp = await apiPublic('POST', `/api/public/restaurants/${slug}/tables/${token}/sessions`);
-    SESSAO_ID = sessResp.sessao?.id;
+    const sessaoData = Array.isArray(sessResp.sessao) ? sessResp.sessao[0] : sessResp.sessao;
+    SESSAO_ID = sessaoData?.id;
+    if (!SESSAO_ID) throw new Error('Sessão da mesa não foi criada');
 
     document.getElementById('app').style.display = 'block';
     carregarCardapio();
@@ -325,8 +285,17 @@ async function carregarCardapio() {
   try {
     const slug = getCurrentRestaurantSlug();
     const { cardapio } = await apiPublic('GET', `/api/public/restaurants/${slug}/menu`);
-    categorias = (cardapio || []).filter(c => c.produtos?.length);
-    todosProdutos = categorias.flatMap(c => c.produtos || []);
+    categorias = (cardapio || [])
+      .map(c => ({ ...c, nome: c.nome || 'Categoria', icone: c.icone || '', produtos: c.produtos || [] }))
+      .filter(c => c.produtos.length);
+    todosProdutos = categorias.flatMap(c => c.produtos || []).map(p => ({
+      ...p,
+      nome: p.nome || 'Produto',
+      descricao: p.descricao || '',
+      preco: Number(p.preco || 0),
+      foto_url: p.foto_url || '',
+      ings: p.ings || []
+    }));
     renderCats();
     renderDestaques();
     renderProdutos(categorias);
@@ -359,7 +328,9 @@ function renderDestaques() {
     <div class="dest-grid">
       ${dest.slice(0,4).map(p => `
         <div class="dest-card" onclick="abrirProduto('${p.id}')">
-          <img src="${imgSrc(p)}" alt="${p.nome}" loading="lazy" onerror="this.outerHTML='<div class=&quot;dest-card-img-placeholder&quot;>${emoji(p.nome)}</div>'">
+          ${p.foto_url
+            ? `<img src="${p.foto_url}" alt="${p.nome}" loading="lazy">`
+            : `<div class="dest-card-img-placeholder">${emoji(p.nome)}</div>`}
           <div class="dest-card-body">
             <div class="dest-card-nome">${p.nome}</div>
             <div class="dest-card-preco">R$ ${fmt(p.preco)}</div>
@@ -377,7 +348,9 @@ function renderProdutos(cats) {
       <div class="cat-section-title">${c.icone||''} ${c.nome}</div>
       ${(c.produtos||[]).map(p => `
         <div class="produto-card" onclick="${p.disponivel!==false?`abrirProduto('${p.id}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
-          <img class="produto-img" src="${imgSrc(p)}" alt="${p.nome}" loading="lazy" onerror="this.outerHTML='<div class=&quot;produto-img-placeholder&quot;>${emoji(p.nome)}</div>'">
+          ${p.foto_url
+            ? `<img class="produto-img" src="${p.foto_url}" alt="${p.nome}" loading="lazy">`
+            : `<div class="produto-img-placeholder">${emoji(p.nome)}</div>`}
           <div class="produto-info">
             <div class="produto-nome">${p.nome}</div>
             ${p.descricao?`<div class="produto-desc">${p.descricao}</div>`:''}
@@ -398,7 +371,7 @@ function buscar(q) {
   }
   const t = q.toLowerCase();
   const res = todosProdutos.filter(p => p.disponivel!==false &&
-    (p.nome.toLowerCase().includes(t) || (p.descricao||'').toLowerCase().includes(t)));
+    ((p.nome||'').toLowerCase().includes(t) || (p.descricao||'').toLowerCase().includes(t)));
   renderProdutos([{ id:'s', nome:`Resultados (${res.length})`, icone:'🔍', produtos: res }]);
   document.getElementById('produtos-wrap').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -424,7 +397,11 @@ function abrirProduto(id) {
   document.getElementById('modal-obs').value = '';
 
   const imgEl = document.getElementById('modal-produto-img');
-  imgEl.innerHTML = `<img src="${imgSrc(prodAtual)}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=&quot;font-size:64px;&quot;>${emoji(prodAtual.nome)}</span>'">`;
+  if (prodAtual.foto_url) {
+    imgEl.innerHTML = `<img src="${prodAtual.foto_url}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;">`;
+  } else {
+    imgEl.innerHTML = `<span style="font-size:64px;">${emoji(prodAtual.nome)}</span>`;
+  }
 
   const ings = prodAtual.ings || [];
   document.getElementById('modal-ings').innerHTML = ings.length ? `
@@ -482,16 +459,8 @@ function adicionarRapido(id) {
 
 function atualizarFAB() {
   const total = carrinho.reduce((a, i) => a + i.quantidade, 0);
-  const valor = carrinho.reduce((a, i) => a + i.subtotal, 0);
-  const tempo = carrinho.reduce((a, i) => {
-    const p = todosProdutos.find(x => x.id === i.produto_id);
-    return Math.max(a, p?.tempo_preparo_minutos || 0);
-  }, 0);
   const fab   = document.getElementById('cart-fab');
   document.getElementById('cart-count').textContent = total;
-  document.getElementById('cart-total-fab').textContent = 'R$ ' + fmt(valor);
-  document.getElementById('stat-itens').textContent = total;
-  document.getElementById('stat-tempo').textContent = total ? '~' + (tempo || 10) : '—';
   fab.classList.toggle('show', total > 0);
 }
 
@@ -563,7 +532,6 @@ async function verConta() {
     const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
     const pedidos = data.pedidos || [];
     const total   = pedidos.reduce((a, p) => a + Number(p.total), 0);
-    document.getElementById('stat-consumido').textContent = 'R$' + fmt(total);
 
     if (data.sessao_status === 'fechada') {
       document.getElementById('conta-conteudo').innerHTML = `
@@ -602,9 +570,6 @@ function iniciarPollingConta() {
     try {
       const slug = getCurrentRestaurantSlug();
       const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
-      const pedidos = data.pedidos || [];
-      const total = pedidos.reduce((a, p) => a + Number(p.total), 0);
-      document.getElementById('stat-consumido').textContent = 'R$' + fmt(total);
       if (data.sessao_status === 'fechada') {
         clearTimeout(pollingConta);
         mostrarContaFechada();
@@ -625,20 +590,6 @@ function mostrarContaFechada() {
 
 /* ── UTILS ───────────────────────────────────────────── */
 function fmt(n) { return Number(n).toFixed(2).replace('.', ','); }
-
-function imgSrc(p) {
-  if (p?.foto_url) return p.foto_url;
-  const n = (p?.nome || '').toLowerCase();
-  if (n.includes('pizza')) return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&h=420&fit=crop';
-  if (n.includes('burguer') || n.includes('burger') || n.includes('smash') || n.includes('hambur')) return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&h=420&fit=crop';
-  if (n.includes('frango') || n.includes('chicken')) return 'https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=600&h=420&fit=crop';
-  if (n.includes('batata') || n.includes('frita')) return 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&h=420&fit=crop';
-  if (n.includes('suco') || n.includes('refri') || n.includes('coca')) return 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=600&h=420&fit=crop';
-  if (n.includes('shake') || n.includes('milk')) return 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=600&h=420&fit=crop';
-  if (n.includes('sobr') || n.includes('brownie') || n.includes('tiramisu')) return 'https://images.unsplash.com/photo-1564355808539-22fda35bed7e?w=600&h=420&fit=crop';
-  if (n.includes('combo')) return 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=600&h=420&fit=crop';
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=420&fit=crop';
-}
 
 function emoji(nome) {
   const n = (nome||'').toLowerCase();

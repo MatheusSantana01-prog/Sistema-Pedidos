@@ -4,7 +4,7 @@
  * O JWT retornado contém restaurant_id e role — nunca confia só no frontend.
  */
 
-const AUTH_API_URL = window.SAAS_CONFIG.API_URL;
+const AUTH_API_URL = window.SAAS_CONFIG.API_URL || "";
 
 const ROLE_LEVEL = {
   super_admin: 99, owner: 5, manager: 4,

@@ -6,7 +6,7 @@
  * Também suporta subdomínio futuro: slug.meusaas.com.br
  */
 
-const TENANT_API_URL = window.SAAS_CONFIG.API_URL;
+const TENANT_API_URL = window.SAAS_CONFIG.API_URL || "";
 
 /**
  * Extrai o slug do restaurante a partir da URL atual.
@@ -40,7 +40,8 @@ async function fetchRestaurantConfig(slug) {
   if (!slug) throw new Error('Slug não informado');
   const resp = await fetch(`${TENANT_API_URL}/api/public/restaurants/${slug}`);
   if (!resp.ok) throw new Error(`Restaurante '${slug}' não encontrado`);
-  return resp.json();
+  const data = await resp.json();
+  return Array.isArray(data) ? data[0] : data;
 }
 
 /**

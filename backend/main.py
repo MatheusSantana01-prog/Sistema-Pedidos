@@ -32,7 +32,6 @@ JWT_SECRET       = os.getenv("JWT_SECRET", "")
 JWT_EXP_H        = int(os.getenv("JWT_EXP_HOURS", "12"))
 APP_ENV          = os.getenv("APP_ENV", "development")
 CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
-CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 FRONTEND_URL     = os.getenv("PUBLIC_FRONTEND_URL", "*")
 
 if not JWT_SECRET:
@@ -68,7 +67,6 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_origin_regex=CORS_ORIGIN_REGEX or None,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     allow_credentials=True,
@@ -153,6 +151,12 @@ def _row(r) -> dict:
 
 def _rows(r) -> list:
     return r.data or []
+
+def _first(data):
+    """Normaliza retorno do Supabase/RPC que pode vir como dict ou lista."""
+    if isinstance(data, list):
+        return data[0] if data else None
+    return data
 
 def utcnow() -> str:
     return datetime.utcnow().isoformat()
@@ -314,9 +318,10 @@ def health():
 def get_restaurant_public(slug: str):
     """Retorna configurações públicas do restaurante (tema, nome, logo)."""
     resp = sb.rpc("get_restaurant_by_slug", {"p_slug": slug}).execute()
-    if not resp.data:
+    data = _first(resp.data)
+    if not data:
         raise HTTPException(404, f"Restaurante '{slug}' não encontrado ou inativo")
-    return resp.data
+    return data
 
 
 @app.get("/api/public/restaurants/{slug}/menu", tags=["público"])
@@ -329,7 +334,7 @@ def get_menu_public(slug: str):
     rid = rest.data["id"]
 
     cardapio = sb.rpc("get_cardapio", {"p_restaurant_id": rid}).execute()
-    return {"cardapio": cardapio.data}
+    return {"cardapio": cardapio.data or []}
 
 
 @app.get("/api/public/restaurants/{slug}/tables/{table_token}", tags=["público"])
@@ -341,9 +346,10 @@ def get_table_public(slug: str, table_token: str):
     rid = rest.data["id"]
 
     mesa = sb.rpc("get_mesa_by_token", {"p_token": table_token, "p_restaurant_id": rid}).execute()
-    if not mesa.data:
+    mesa_data = _first(mesa.data)
+    if not mesa_data:
         raise HTTPException(404, "Mesa não encontrada")
-    return {"mesa": mesa.data, "restaurant": rest.data}
+    return {"mesa": mesa_data, "restaurant": rest.data}
 
 
 @app.post("/api/public/restaurants/{slug}/tables/{table_token}/sessions", tags=["público"])
@@ -362,7 +368,10 @@ def criar_sessao_public(slug: str, table_token: str):
         "p_mesa_id": mesa.data["id"],
         "p_restaurant_id": rid
     }).execute()
-    return {"sessao": sessao.data}
+    sessao_data = _first(sessao.data)
+    if not sessao_data:
+        raise HTTPException(500, "Erro ao abrir sessão da mesa")
+    return {"sessao": sessao_data}
 
 
 @app.post("/api/public/restaurants/{slug}/orders", tags=["público"])
@@ -377,9 +386,10 @@ def criar_pedido_public(slug: str, body: dict):
     body["restaurant_id"] = rid
 
     resp = sb.rpc("criar_pedido", {"payload": body}).execute()
-    if not resp.data:
+    data = _first(resp.data)
+    if not data:
         raise HTTPException(500, "Erro ao criar pedido")
-    return resp.data
+    return {"pedido": data}
 
 
 @app.get("/api/public/restaurants/{slug}/sessions/{sessao_id}/bill", tags=["público"])
