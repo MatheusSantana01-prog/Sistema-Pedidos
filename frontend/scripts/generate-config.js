@@ -3,7 +3,7 @@ const path = require('path');
 
 const configPath = path.join(__dirname, '..', 'shared', 'config.js');
 const defaultApiUrl = process.env.VERCEL
-  ? 'https://sistema-pedidos-zk2w.onrender.com'
+  ? ''
   : 'http://localhost:8000';
 
 const config = {

@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".",
   "rewrites": [
+    { "source": "/api/:path*", "destination": "https://sistema-pedidos-zk2w.onrender.com/api/:path*" },
     { "source": "/", "destination": "/super-admin/index.html" },
     { "source": "/r/:slug/admin", "destination": "/r/admin/index.html" },
     { "source": "/r/:slug/admin/", "destination": "/r/admin/index.html" },
