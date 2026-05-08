@@ -537,7 +537,7 @@ def fila_cozinha(u: dict = Depends(authorize(["kitchen", "manager", "owner"]))):
         "mesas(numero),"
         "pedido_itens(nome_produto,quantidade,observacao,"
         "  pedido_item_ingredientes(acao,nome_ingrediente))"
-    ).eq("restaurant_id", rid).in_("status", ["pendente", "confirmado", "em_preparo"]).order("created_at").execute()
+    ).eq("restaurant_id", rid).in_("status", ["pendente", "confirmado", "em_preparo", "pronto"]).order("created_at").execute()
     return {"pedidos": _rows(resp)}
 
 

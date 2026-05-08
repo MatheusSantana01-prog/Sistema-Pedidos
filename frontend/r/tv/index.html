@@ -202,13 +202,16 @@ function tickRelogio() {
 async function carregar() {
   try {
     const { pedidos } = await apiCall('GET', '/api/kitchen/queue?limite=50');
-    // A TV mostra em_preparo, pronto e últimos entregues
-    const preparando = (pedidos||[]).filter(p => ['confirmado','em_preparo'].includes(p.status));
+    // A TV mostra pedido novo, em preparo, pronto e últimos entregues.
+    const preparando = (pedidos||[]).filter(p => ['pendente','confirmado','em_preparo'].includes(p.status));
     const pronto     = (pedidos||[]).filter(p => p.status === 'pronto');
 
-    // Buscar últimos entregues separado
-    const entregues_resp = await apiCall('GET', '/api/admin/orders?status_filtro=entregue&limite=10');
-    const entregues = entregues_resp.pedidos || [];
+    // Últimos entregues exigem perfil de caixa/manager/owner; TV não deve quebrar se logar como cozinha.
+    let entregues = [];
+    try {
+      const entregues_resp = await apiCall('GET', '/api/admin/orders?status_filtro=entregue&limite=10');
+      entregues = entregues_resp.pedidos || [];
+    } catch (_) {}
 
     document.getElementById('cnt-preparando').textContent = preparando.length;
     document.getElementById('cnt-pronto').textContent     = pronto.length;
