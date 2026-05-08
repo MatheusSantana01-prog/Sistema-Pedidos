@@ -4,7 +4,7 @@
  * O JWT retornado contém restaurant_id e role — nunca confia só no frontend.
  */
 
-const { API_URL } = window.SAAS_CONFIG;
+const AUTH_API_URL = window.SAAS_CONFIG.API_URL;
 
 const ROLE_LEVEL = {
   super_admin: 99, owner: 5, manager: 4,
@@ -29,7 +29,7 @@ function isSuperAdmin() { return _usuario?.is_super_admin === true; }
 
 // ── Login ───────────────────────────────────────────────────────
 async function login(email, senha, restaurantSlug = null) {
-  const resp = await fetch(`${API_URL}/api/auth/login`, {
+  const resp = await fetch(`${AUTH_API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.trim().toLowerCase(), senha: senha.trim(), restaurant_slug: restaurantSlug }),
@@ -71,7 +71,7 @@ function logout() {
 async function apiCall(method, path, body = null, opts = {}) {
   if (!_token) throw new Error('Não autenticado');
 
-  const resp = await fetch(`${API_URL}${path}`, {
+  const resp = await fetch(`${AUTH_API_URL}${path}`, {
     method,
     headers: {
       'Content-Type':  'application/json',
@@ -96,7 +96,7 @@ async function apiCall(method, path, body = null, opts = {}) {
 
 // ── Chamada pública (sem auth) ──────────────────────────────────
 async function apiPublic(method, path, body = null) {
-  const resp = await fetch(`${API_URL}${path}`, {
+  const resp = await fetch(`${AUTH_API_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },
     ...(body ? { body: JSON.stringify(body) } : {}),
