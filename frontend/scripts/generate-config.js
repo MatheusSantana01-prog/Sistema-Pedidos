@@ -2,9 +2,12 @@ const fs = require('fs');
 const path = require('path');
 
 const configPath = path.join(__dirname, '..', 'shared', 'config.js');
+const defaultApiUrl = process.env.VERCEL
+  ? 'https://sistema-pedidos-zk2w.onrender.com'
+  : 'http://localhost:8000';
 
 const config = {
-  API_URL: process.env.API_URL || 'http://localhost:8000',
+  API_URL: process.env.API_URL || defaultApiUrl,
   SUPABASE_URL: process.env.SUPABASE_URL || 'https://lhrfemeunswviwzdpppp.supabase.co',
   SUPABASE_ANON:
     process.env.SUPABASE_ANON ||

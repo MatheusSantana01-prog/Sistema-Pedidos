@@ -32,6 +32,7 @@ JWT_SECRET       = os.getenv("JWT_SECRET", "")
 JWT_EXP_H        = int(os.getenv("JWT_EXP_HOURS", "12"))
 APP_ENV          = os.getenv("APP_ENV", "development")
 CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 FRONTEND_URL     = os.getenv("PUBLIC_FRONTEND_URL", "*")
 
 if not JWT_SECRET:
@@ -67,6 +68,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX or None,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     allow_credentials=True,
