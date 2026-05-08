@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: restaurante-saas-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 2
+    plan: free
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXP_HOURS
+        value: "12"
+      - key: APP_ENV
+        value: production
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PUBLIC_FRONTEND_URL
+        sync: false

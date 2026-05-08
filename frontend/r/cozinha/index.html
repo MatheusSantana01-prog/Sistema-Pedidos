@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cozinha — KDS</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --color-primary: #ff4d1c;
+  --color-bg:      #0d0d0d;
+  --panel:   #141414;
+  --border:  #1f1f1f;
+  --border2: #2d2d2d;
+  --text:    #f2f0eb;
+  --muted:   #555;
+  --green:   #2dbe6c;
+  --amber:   #f5a623;
+  --red:     #ef4444;
+  --blue:    #3b9eff;
+  --mono: 'DM Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--color-bg); color:var(--text); font-family:var(--sans); height:100vh; overflow:hidden; display:flex; flex-direction:column; user-select:none; }
+
+/* LOGIN */
+.login-wrap { display:flex; align-items:center; justify-content:center; height:100vh; }
+.login-card { background:var(--panel); border:1px solid var(--border2); border-radius:12px; padding:32px; width:320px; }
+.login-title { font-size:18px; font-weight:700; margin-bottom:4px; }
+.login-rest  { font-size:13px; color:var(--color-primary); margin-bottom:20px; font-family:var(--mono); }
+.form-input  { width:100%; background:var(--color-bg); border:1px solid var(--border2); border-radius:6px; padding:9px 12px; color:var(--text); font-size:13px; outline:none; margin-bottom:12px; }
+.form-input:focus { border-color:var(--color-primary); }
+.btn-login { width:100%; padding:11px; background:var(--color-primary); border:none; border-radius:6px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
+.login-erro { color:var(--red); font-size:12px; margin-bottom:10px; display:none; }
+.login-erro.show { display:block; }
+
+/* HEADER */
+.header { display:flex; align-items:center; justify-content:space-between; padding:0 28px; height:56px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; }
+.header-brand { font-family:var(--mono); font-size:13px; font-weight:500; letter-spacing:2px; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:10px; }
+.live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:livepulse 2s ease-in-out infinite; }
+@keyframes livepulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(45,190,108,.4);}50%{opacity:.7;box-shadow:0 0 0 6px rgba(45,190,108,0);} }
+.header-right { display:flex; align-items:center; gap:24px; }
+.header-clock { font-family:var(--mono); font-size:20px; font-weight:500; letter-spacing:2px; transform:translateZ(0); min-width:90px; text-align:right; }
+.header-stat { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+.header-stat strong { color:var(--text); font-weight:700; }
+
+/* BOARD */
+.board { flex:1; display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); overflow:hidden; }
+.col { background:var(--color-bg); display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+.col-head { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:2px solid var(--border); flex-shrink:0; }
+.col-head.pendente   { border-color:var(--muted); }
+.col-head.confirmado { border-color:var(--green); }
+.col-head.em_preparo { border-color:var(--amber); }
+.col-head.pronto     { border-color:var(--blue); }
+.col-label { font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+.col-count { font-family:var(--mono); font-size:13px; font-weight:500; padding:2px 8px; border-radius:4px; }
+.col-count.pendente   { color:var(--muted);  background:rgba(136,136,136,.1); }
+.col-count.confirmado { color:var(--green);  background:rgba(45,190,108,.1); }
+.col-count.em_preparo { color:var(--amber);  background:rgba(245,166,35,.1); }
+.col-count.pronto     { color:var(--blue);   background:rgba(59,158,255,.1); }
+.col-body { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; padding:12px; display:flex; flex-direction:column; gap:10px; scrollbar-width:thin; scrollbar-color:var(--border2) transparent; }
+
+/* CARD */
+.card { background:var(--panel); border:1px solid var(--border2); border-radius:10px; overflow:hidden; }
+.card:hover { border-color:#3a3a3a; }
+.card-head { display:flex; align-items:center; justify-content:space-between; padding:12px 14px 10px; border-bottom:1px solid var(--border); }
+.card-mesa { font-family:var(--mono); font-size:20px; font-weight:500; }
+.card-meta { text-align:right; }
+.card-num  { font-family:var(--mono); font-size:11px; color:var(--muted); display:block; }
+.card-tempo { font-family:var(--mono); font-size:13px; font-weight:500; margin-top:2px; display:block; }
+.card-tempo.ok     { color:var(--green); }
+.card-tempo.warn   { color:var(--amber); }
+.card-tempo.urgent { color:var(--red); animation:blinkTempo .8s ease-in-out infinite; }
+@keyframes blinkTempo { 0%,100%{opacity:1}50%{opacity:.4} }
+.card-itens { padding:10px 14px; }
+.item-row { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
+.item-row:last-child { border-bottom:none; }
+.item-qty  { font-family:var(--mono); font-size:15px; font-weight:500; min-width:22px; flex-shrink:0; line-height:1.4; }
+.item-info { flex:1; min-width:0; }
+.item-nome { font-size:14px; font-weight:700; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.item-mods { font-size:11px; color:var(--red); margin-top:2px; }
+.item-obs  { font-size:11px; color:var(--muted); margin-top:1px; font-style:italic; }
+.card-obs  { margin:0 14px 12px; padding:7px 10px; background:rgba(245,166,35,.07); border:1px solid rgba(245,166,35,.2); border-radius:6px; font-size:12px; color:var(--amber); }
+.card-actions { padding:10px 12px; border-top:1px solid var(--border); display:flex; gap:6px; flex-shrink:0; }
+.btn-acao { flex:1; padding:10px 8px; border-radius:7px; border:none; font-family:var(--sans); font-size:13px; font-weight:700; cursor:pointer; transition:all .15s; }
+.btn-acao:active { transform:scale(.97); }
+.btn-acao:disabled { opacity:.4; cursor:not-allowed; }
+.btn-confirmar { background:var(--green); color:#fff; }
+.btn-preparo   { background:var(--amber); color:#000; }
+.btn-pronto    { background:var(--blue);  color:#fff; }
+.btn-entregar  { background:var(--muted); color:var(--text); }
+
+/* VAZIO */
+.col-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:var(--border2); gap:8px; padding:20px; text-align:center; }
+.col-empty-icon { font-size:32px; opacity:.3; }
+.col-empty-txt  { font-size:12px; font-family:var(--mono); letter-spacing:1px; opacity:.4; }
+
+/* NOTIF / OFFLINE */
+.notif { position:fixed; top:70px; right:24px; background:var(--green); color:#fff; padding:14px 20px; border-radius:10px; font-size:15px; font-weight:700; z-index:999; transform:translateY(-20px); opacity:0; transition:all .3s cubic-bezier(.4,0,.2,1); pointer-events:none; }
+.notif.show { transform:none; opacity:1; }
+.offline-bar { position:fixed; bottom:0; left:0; right:0; background:#7a1a1a; color:#fca5a5; text-align:center; font-size:13px; font-family:var(--mono); padding:8px; transform:translateY(100%); transition:transform .3s; }
+.offline-bar.show { transform:none; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-title">Tela da Cozinha</div>
+    <div class="login-rest restaurant-name"></div>
+    <div class="login-erro" id="login-erro">Credenciais inválidas</div>
+    <input class="form-input" id="l-email" type="email" placeholder="cozinha@email.com" value="">
+    <input class="form-input" id="l-senha" type="password" placeholder="Senha" onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn-login" onclick="fazerLogin()">Entrar na cozinha</button>
+  </div>
+</div>
+
+<!-- KDS -->
+<div id="kds-screen" style="display:none;flex-direction:column;height:100vh;">
+  <div class="header">
+    <div class="header-brand">
+      <div class="live-dot"></div>
+      <span class="restaurant-name"></span> — KDS
+    </div>
+    <div class="header-right">
+      <div class="header-stat">Fila: <strong id="stat-fila">0</strong></div>
+      <div class="header-stat">Prontos: <strong id="stat-prontos">0</strong></div>
+      <div class="header-clock" id="relogio">--:--</div>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="col">
+      <div class="col-head pendente">
+        <div class="col-label">Aguardando</div>
+        <div class="col-count pendente" id="cnt-pendente">0</div>
+      </div>
+      <div class="col-body" id="col-pendente"></div>
+    </div>
+    <div class="col">
+      <div class="col-head confirmado">
+        <div class="col-label">Confirmado</div>
+        <div class="col-count confirmado" id="cnt-confirmado">0</div>
+      </div>
+      <div class="col-body" id="col-confirmado"></div>
+    </div>
+    <div class="col">
+      <div class="col-head em_preparo">
+        <div class="col-label">Em preparo</div>
+        <div class="col-count em_preparo" id="cnt-em_preparo">0</div>
+      </div>
+      <div class="col-body" id="col-em_preparo"></div>
+    </div>
+    <div class="col">
+      <div class="col-head pronto">
+        <div class="col-label">Pronto p/ entregar</div>
+        <div class="col-count pronto" id="cnt-pronto">0</div>
+      </div>
+      <div class="col-body" id="col-pronto"></div>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif">🔔</div>
+<div class="offline-bar" id="offline-bar">⚠ Sem conexão — tentando reconectar...</div>
+
+<script src="../../shared/config.js"></script>
+<script src="../../shared/tenant.js"></script>
+<script src="../../shared/auth.js"></script>
+<script>
+const { API_URL } = window.SAAS_CONFIG;
+let estadoAnt  = {};
+let tentativas = 0;
+let polling    = null;
+let RESTAURANT = null;
+
+async function init() {
+  RESTAURANT = await initTenant();
+  if (!RESTAURANT) return;
+  if (isLoggedIn()) iniciarKDS();
+}
+
+async function fazerLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const senha = document.getElementById('l-senha').value.trim();
+  const erro  = document.getElementById('login-erro');
+  erro.classList.remove('show');
+  try {
+    const slug = getCurrentRestaurantSlug();
+    await login(email, senha, slug);
+    iniciarKDS();
+  } catch (e) {
+    erro.textContent = e.message;
+    erro.classList.add('show');
+  }
+}
+
+function iniciarKDS() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('kds-screen').style.display   = 'flex';
+  tickRelogio();
+  carregar();
+  function agendar() {
+    polling = setTimeout(() => {
+      if (document.visibilityState !== 'hidden') carregar().finally(agendar);
+      else agendar();
+    }, window.SAAS_CONFIG.POLL_COZINHA);
+  }
+  agendar();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { clearTimeout(polling); carregar().finally(agendar); }
+  });
+}
+
+function tickRelogio() {
+  const el = document.getElementById('relogio');
+  const t  = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if (el && el.textContent !== t) el.textContent = t;
+  setTimeout(tickRelogio, 1000 - (Date.now() % 1000));
+}
+
+async function carregar() {
+  try {
+    const data = await apiCall('GET', '/api/kitchen/queue');
+    setOnline();
+    detectarNovos(data.pedidos || []);
+    renderBoard(data.pedidos || []);
+    estadoAnt = Object.fromEntries((data.pedidos||[]).map(p => [p.id, p.status]));
+  } catch (e) {
+    tentativas++;
+    if (tentativas >= 2) setOffline();
+  }
+}
+
+function detectarNovos(pedidos) {
+  pedidos.forEach(p => {
+    const ant = estadoAnt[p.id];
+    if (!ant || (ant !== p.status && ['pendente','confirmado'].includes(p.status))) {
+      const notif = document.getElementById('notif');
+      notif.textContent = `🔔 ${mesaLabel(p)} — Pedido #${p.numero}`;
+      notif.classList.add('show');
+      clearTimeout(notif._t);
+      notif._t = setTimeout(() => notif.classList.remove('show'), 4000);
+      if (navigator.vibrate) navigator.vibrate([200,100,200]);
+    }
+  });
+}
+
+function renderBoard(pedidos) {
+  const cols = {pendente:[],confirmado:[],em_preparo:[],pronto:[]};
+  pedidos.forEach(p => { if (cols[p.status]) cols[p.status].push(p); });
+  const fila = cols.pendente.length + cols.confirmado.length + cols.em_preparo.length;
+  document.getElementById('stat-fila').textContent    = fila;
+  document.getElementById('stat-prontos').textContent = cols.pronto.length;
+  Object.entries(cols).forEach(([status, lista]) => {
+    document.getElementById('cnt-' + status).textContent = lista.length;
+    diffColuna(document.getElementById('col-' + status), lista, status);
+  });
+  atualizarTimers(pedidos);
+}
+
+function diffColuna(col, lista, status) {
+  const esperados = new Set(lista.map(p => 'card-' + p.id));
+  Array.from(col.querySelectorAll('.card')).forEach(el => {
+    if (!esperados.has(el.id)) {
+      el.style.transition = 'opacity .2s, transform .2s';
+      el.style.opacity = '0'; el.style.transform = 'scale(.95)';
+      setTimeout(() => el.remove(), 200);
+    }
+  });
+  if (!lista.length) {
+    setTimeout(() => { if (!col.querySelector('.card')) col.innerHTML = vazioHtml(status); }, 220);
+    return;
+  }
+  const vazio = col.querySelector('.col-empty');
+  if (vazio) vazio.remove();
+  lista.forEach(p => {
+    if (!document.getElementById('card-' + p.id)) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = cardHtml(p, status);
+      const card = tmp.firstElementChild;
+      card.style.opacity = '0'; card.style.transform = 'translateY(10px)';
+      col.appendChild(card);
+      requestAnimationFrame(() => {
+        card.style.transition = 'opacity .25s, transform .25s';
+        card.style.opacity = '1'; card.style.transform = 'none';
+      });
+    }
+  });
+}
+
+function atualizarTimers(pedidos) {
+  pedidos.forEach(p => {
+    const card = document.getElementById('card-' + p.id);
+    if (!card) return;
+    const el = card.querySelector('.card-tempo');
+    if (!el) return;
+    const mins = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000);
+    const cls  = mins < 10 ? 'ok' : mins < 20 ? 'warn' : 'urgent';
+    const txt  = mins < 60 ? mins + 'min' : Math.floor(mins/60)+'h'+(mins%60>0?(mins%60)+'m':'');
+    el.textContent = txt;
+    if (!el.classList.contains(cls)) el.className = 'card-tempo ' + cls;
+  });
+}
+
+function mesaLabel(p) {
+  if (p.mesas?.numero) return 'Mesa ' + p.mesas.numero;
+  if (p.sessao_cliente) return p.sessao_cliente.replace('mesa_','Mesa ');
+  return 'Mesa ?';
+}
+
+function cardHtml(p, status) {
+  const mins = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 60000);
+  const tempoCls = mins < 10 ? 'ok' : mins < 20 ? 'warn' : 'urgent';
+  const tempoTxt = mins < 60 ? mins+'min' : Math.floor(mins/60)+'h'+(mins%60>0?(mins%60)+'m':'');
+  const itensHtml = (p.pedido_itens||[]).map(it => {
+    const rem = (it.pedido_item_ingredientes||[]).filter(i=>i.acao==='remover').map(i=>i.nome_ingrediente);
+    return `<div class="item-row">
+      <div class="item-qty">${it.quantidade}×</div>
+      <div class="item-info">
+        <div class="item-nome">${it.nome_produto}</div>
+        ${rem.length?`<div class="item-mods">✕ Sem: ${rem.join(', ')}</div>`:''}
+        ${it.observacao?`<div class="item-obs">📝 ${it.observacao}</div>`:''}
+      </div></div>`;
+  }).join('');
+  const ACOES = {
+    pendente:   {label:'Confirmar →',    cls:'btn-confirmar',next:'confirmado'},
+    confirmado: {label:'▶ Iniciar',       cls:'btn-preparo',  next:'em_preparo'},
+    em_preparo: {label:'✓ Pronto',        cls:'btn-pronto',   next:'pronto'},
+    pronto:     {label:'✓ Entregue',      cls:'btn-entregar', next:'entregue'},
+  };
+  const a = ACOES[status];
+  const btn = a ? `<button class="btn-acao ${a.cls}" onclick="avancar('${p.id}','${a.next}',this)">${a.label}</button>` : '';
+  return `<div class="card" id="card-${p.id}">
+    <div class="card-head">
+      <div class="card-mesa">${mesaLabel(p)}</div>
+      <div class="card-meta">
+        <span class="card-num">#${p.numero}</span>
+        <span class="card-tempo ${tempoCls}">${tempoTxt}</span>
+      </div>
+    </div>
+    <div class="card-itens">${itensHtml}</div>
+    ${p.observacao_geral?`<div class="card-obs">⚠️ ${p.observacao_geral}</div>`:''}
+    <div class="card-actions">${btn}</div>
+  </div>`;
+}
+
+function vazioHtml(status) {
+  const M = {pendente:{icon:'✓',txt:'Tudo em dia'},confirmado:{icon:'✓',txt:'Nenhum esperando'},em_preparo:{icon:'🔥',txt:'Nada no fogo'},pronto:{icon:'🛎',txt:'Nenhum aguardando'}}[status]||{icon:'✓',txt:''};
+  return `<div class="col-empty"><div class="col-empty-icon">${M.icon}</div><div class="col-empty-txt">${M.txt}</div></div>`;
+}
+
+async function avancar(pedidoId, novoStatus, btn) {
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    await apiCall('PATCH', `/api/kitchen/orders/${pedidoId}/status`, { status: novoStatus });
+    const card = document.getElementById('card-' + pedidoId);
+    if (card) { card.style.transition='opacity .2s,transform .2s'; card.style.opacity='0'; card.style.transform='scale(.95)'; delete estadoAnt[pedidoId]; }
+    await new Promise(r => setTimeout(r, 220));
+    await carregar();
+  } catch(e) {
+    btn.style.background = '#ef4444';
+    btn.textContent = '⚠ Erro';
+    setTimeout(() => { btn.disabled=false; btn.style.background=''; btn.textContent='Tentar novamente'; }, 3000);
+  }
+}
+
+function setOnline() {
+  tentativas = 0;
+  document.getElementById('offline-bar').classList.remove('show');
+  const dot = document.querySelector('.live-dot');
+  if (dot) dot.style.background = '#2dbe6c';
+}
+
+function setOffline() {
+  document.getElementById('offline-bar').classList.add('show');
+  const dot = document.querySelector('.live-dot');
+  if (dot) dot.style.background = '#ef4444';
+}
+
+init();
+</script>
+</body>
+</html>

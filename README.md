@@ -1,88 +1,88 @@
-# 🍔 Sistema de Pedidos — Restaurante
+# SaaS Restaurante — Sistema Multi-Tenant
 
-Sistema completo de pedidos via QR Code para restaurantes, com painel administrativo, KDS para cozinha e cardápio digital para clientes.
-
-## 📁 Estrutura
-
+## Estrutura
 ```
-restaurante/
-├── backend/
-│   ├── main.py              ← API FastAPI (RBAC completo)
+saas/
+├── backend/          FastAPI — API única para todos os restaurantes
+│   ├── main.py
 │   ├── requirements.txt
-│   └── .env.example         ← Copiar para .env e preencher
-├── frontend/
-│   ├── admin/               ← Painel administrativo (PC)
-│   │   ├── index.html
-│   │   ├── css/
-│   │   └── js/
-│   ├── cliente/             ← Cardápio QR Code (celular)
-│   │   ├── index.html
-│   │   ├── css/
-│   │   └── js/
-│   └── cozinha/             ← KDS para TV da cozinha
-│       ├── index.html
-│       ├── css/
-│       └── js/
-└── docs/
-    └── README.md
+│   ├── .env.example
+│   ├── Dockerfile
+│   ├── Procfile
+│   └── render.yaml
+└── frontend/         HTML/CSS/JS — hospedado em Vercel/Netlify
+    ├── shared/       config.js, auth.js, tenant.js
+    ├── r/
+    │   ├── admin/    Painel admin por restaurante
+    │   ├── cozinha/  KDS por restaurante
+    │   ├── caixa/    Tela de caixa por restaurante
+    │   ├── tv/       TV de status por restaurante
+    │   └── mesa/     Cardápio do cliente via QR Code
+    ├── super-admin/  Painel da plataforma (dono do SaaS)
+    ├── vercel.json
+    └── netlify.toml
 ```
 
-## 🚀 Como rodar
+## URLs por restaurante
+```
+/r/{slug}/admin      → Painel administrativo
+/r/{slug}/cozinha    → KDS da cozinha
+/r/{slug}/caixa      → Tela do caixa
+/r/{slug}/tv         → TV de status
+/r/{slug}/mesa/{token} → Cardápio do cliente
+/super-admin         → Painel da plataforma
+```
 
-### 1. Backend (FastAPI)
+## Roles
+| Role        | Acesso                                      |
+|-------------|---------------------------------------------|
+| super_admin | Toda a plataforma                           |
+| owner       | Restaurante completo + configurações        |
+| manager     | Pedidos, cardápio, estoque, caixa           |
+| cashier     | Mesas e fechamento de contas                |
+| waiter      | Ver mesas e pedidos                         |
+| kitchen     | Fila KDS + avançar status                   |
+| tv          | Somente leitura — status dos pedidos        |
 
+## Deploy rápido
+
+### Backend (Render)
+1. Fork/push o código
+2. Render → New Web Service → selecionar repo
+3. Build: `pip install -r requirements.txt`
+4. Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+5. Adicionar variáveis de ambiente do `.env.example`
+
+### Frontend (Netlify)
+1. Arrastar a pasta `frontend/` para netlify.com/drop
+2. Pronto — as rotas já estão configuradas no `netlify.toml`
+
+### Configurar API_URL
+Em `frontend/shared/config.js` trocar:
+```js
+API_URL: 'http://localhost:8000'
+// → para:
+API_URL: 'https://sua-api.onrender.com'
+```
+
+## Criar novo restaurante
 ```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env
-# Editar .env com sua SUPABASE_SERVICE_KEY
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-### ou faça assim
-
-´´´bash
-cd "C:\Users\Kcchb\OneDrive\Desktop\restaurante\Restaurante"
-cd backend
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-´´´
-
-### 2. Frontend
-
-Abrir os arquivos diretamente no navegador ou servir com qualquer servidor estático:
-
-```bash
-# Opção simples com Python
-cd frontend
-python -m http.server 3000
+# Via API (autenticado como super_admin)
+POST /api/super-admin/restaurants
+{
+  "name": "Pizzaria Bella Massa",
+  "slug": "pizzaria-bella-massa",
+  "email": "contato@bellamassa.com.br",
+  "plan": "pro",
+  "primary_color": "#e63946"
+}
 ```
 
-- `frontend/cliente/index.html?mesa=TOKEN` → Cardápio do cliente (celular)
-- `frontend/cozinha/index.html` → KDS (TV da cozinha, F11 tela cheia)
-- `frontend/admin/index.html` → Painel admin (PC)
-
-## 🔐 Perfis de acesso
-
-| Perfil | Pode fazer |
-|--------|-----------|
-| `dono` | Tudo + dashboard financeiro, auditoria, gestão de usuários |
-| `gerente` | Mesas, pedidos, cardápio, estoque, fechamento de caixa |
-| `funcionario` | Ver mesas, fechar conta |
-| `cozinha` | Fila KDS, avançar status de pedidos |
-
-**Credenciais padrão** (trocar após primeiro acesso):
-- `admin@restaurante.com` / `admin123`
-- `gerente@restaurante.com` / `admin123`
-- `cozinha@restaurante.com` / `admin123`
-
-## 🛠️ Tecnologias
-
-- **Backend:** Python + FastAPI + Supabase
-- **Banco:** PostgreSQL (Supabase) com RLS, RBAC e triggers de auditoria
-- **Frontend:** HTML, CSS e JavaScript puro (sem framework)
-- **Auth:** JWT com bcrypt
-
-## 📋 Banco de dados
-
-Projeto Supabase: `lhrfemeunswviwzdpppp` (região: sa-east-1)
-
-Principais tabelas: `usuarios`, `mesas`, `sessao_mesa`, `pedidos`, `pedido_itens`, `produtos`, `categorias`, `audit_log`, `insumos`, `fechamento_caixa`
+## Credenciais demo (senha: admin123)
+| E-mail                        | Role    | Restaurante         |
+|-------------------------------|---------|---------------------|
+| admin@restaurante.com         | owner   | Sabor & Fogo        |
+| owner@bellamassa.com.br       | owner   | Pizzaria Bella Massa|
+| cozinha@bellamassa.com.br     | kitchen | Pizzaria Bella Massa|
+| owner@hamburgueriatop.com.br  | owner   | Hamburgueria Top    |
+| caixa@hamburgueriatop.com.br  | cashier | Hamburgueria Top    |

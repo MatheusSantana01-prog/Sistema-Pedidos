@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Admin — SaaS Restaurante</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#050505;--panel:#0e0e0e;--border:#1a1a1a;--border2:#252525;--text:#e8e6e0;--muted:#444;--primary:#7c3aed;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+.login-card{background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:36px;width:360px;}
+.login-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.15);border:1px solid var(--primary);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;color:var(--primary);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px;}
+.login-title{font-size:20px;font-weight:600;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
+.form-input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px;}
+.form-input:focus{border-color:var(--primary);}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--panel);color:var(--text);transition:all .15s;}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn-primary:hover{filter:brightness(1.1);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-danger{background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);}
+.login-erro{color:var(--red);font-size:12px;margin-bottom:10px;display:none;}
+.login-erro.show{display:block;}
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:50px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+.topbar-brand{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:8px;}
+.sa-dot{width:8px;height:8px;border-radius:50%;background:var(--primary);}
+.btn-logout{background:none;border:1px solid var(--border2);border-radius:4px;color:var(--muted);padding:4px 10px;font-size:11px;cursor:pointer;}
+.btn-logout:hover{color:var(--red);border-color:var(--red);}
+/* NAV */
+.nav{display:flex;padding:0 24px;border-bottom:1px solid var(--border);background:var(--panel);}
+.nav-tab{padding:12px 16px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.nav-tab:hover{color:var(--text);}
+.nav-tab.active{color:var(--text);border-bottom-color:var(--primary);}
+/* MAIN */
+.main{flex:1;padding:24px;overflow:auto;}
+.page{display:none;}
+.page.active{display:block;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.section-title{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;}
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;}
+.stat-label{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px;}
+.stat-val{font-family:var(--mono);font-size:24px;font-weight:600;}
+.stat-val.purple{color:var(--primary);}
+.stat-val.green{color:var(--green);}
+.stat-val.amber{color:var(--amber);}
+/* RESTAURANTES */
+.rest-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px;margin-bottom:12px;display:flex;align-items:center;gap:16px;}
+.rest-color{width:36px;height:36px;border-radius:8px;flex-shrink:0;}
+.rest-info{flex:1;min-width:0;}
+.rest-nome{font-weight:600;font-size:15px;}
+.rest-slug{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;}
+.rest-badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:.5px;}
+.badge-active{background:rgba(34,197,94,.1);color:var(--green);}
+.badge-inactive{background:rgba(239,68,68,.1);color:var(--red);}
+.badge-plan{background:rgba(124,58,237,.1);color:var(--primary);}
+.rest-actions{display:flex;gap:6px;}
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+.modal-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--panel);}
+.modal-title{font-family:var(--mono);font-size:13px;font-weight:600;}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;}
+.modal-body{padding:22px;}
+.modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.form-row{margin-bottom:14px;}
+.form-label{font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:5px;}
+/* LOADING */
+.loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:32px;justify-content:center;}
+.spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel);border:1px solid var(--border2);padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:all .3s;pointer-events:none;color:var(--text);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--green);}
+.toast.error{border-color:var(--red);}
+.tabela-wrap{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;overflow-x:auto;}
+.tabela{width:100%;border-collapse:collapse;min-width:400px;}
+.tabela th{font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:500;letter-spacing:.5px;text-transform:uppercase;padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);}
+.tabela td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border);}
+.tabela tr:last-child td{border-bottom:none;}
+.tabela tr:hover td{background:rgba(255,255,255,.01);}
+.tabela-empty{padding:32px;text-align:center;color:var(--muted);font-size:13px;}
+.mono{font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-badge">⚡ Super Admin</div>
+    <div class="login-title">Painel da Plataforma</div>
+    <div class="login-sub">Acesso restrito — administradores da plataforma</div>
+    <div class="login-erro" id="login-erro">Credenciais inválidas ou sem acesso</div>
+    <input class="form-input" id="l-email" type="email" placeholder="admin@plataforma.com"
+           oninput="document.getElementById('login-erro').classList.remove('show')">
+    <input class="form-input" id="l-senha" type="password" placeholder="••••••••"
+           oninput="document.getElementById('login-erro').classList.remove('show')"
+           onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;" onclick="fazerLogin()">
+      <span id="login-txt">Entrar</span>
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="topbar">
+    <div class="topbar-brand"><div class="sa-dot"></div>SaaS Restaurante — Super Admin</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="user-email" style="font-size:12px;color:var(--muted);"></span>
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-tab active" onclick="irPara('restaurantes',this)">🏪 Restaurantes</div>
+    <div class="nav-tab" onclick="irPara('usuarios',this)">👥 Usuários</div>
+    <div class="nav-tab" onclick="irPara('metricas',this)">📊 Métricas</div>
+    <div class="nav-tab" onclick="irPara('validacao',this)">✅ Validação</div>
+  </div>
+  <div class="main">
+
+    <!-- RESTAURANTES -->
+    <div class="page active" id="page-restaurantes">
+      <div class="section-head">
+        <div class="section-title">Restaurantes da plataforma</div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoRest()">+ Novo restaurante</button>
+      </div>
+      <div id="restaurantes-lista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- USUÁRIOS -->
+    <div class="page" id="page-usuarios">
+      <div class="section-head">
+        <div class="section-title">Todos os usuários</div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo usuário</button>
+      </div>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Restaurante</th><th>Role</th><th>Ativo</th></tr></thead>
+          <tbody id="usuarios-tbody"><tr><td colspan="5" class="tabela-empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MÉTRICAS -->
+    <div class="page" id="page-metricas">
+      <div class="section-head"><div class="section-title">Métricas da plataforma</div></div>
+      <div id="metricas-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- VALIDAÇÃO -->
+    <div class="page" id="page-validacao">
+      <div class="section-head">
+        <div class="section-title">Validação de isolamento</div>
+        <button class="btn btn-sm" onclick="executarValidacao()">↻ Executar</button>
+      </div>
+      <div id="validacao-content"><div class="tabela-empty">Clique em "Executar" para rodar os checks.</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL NOVO RESTAURANTE -->
+<div class="modal-bg" id="modal-rest">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Novo restaurante</div>
+      <button class="modal-close" onclick="fecharModal('modal-rest')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Nome do restaurante</label><input class="form-input" id="r-nome" placeholder="Ex: Pizzaria Bella Massa"></div>
+      <div class="form-row"><label class="form-label">Slug (URL única)</label><input class="form-input" id="r-slug" placeholder="Ex: pizzaria-bella-massa" oninput="gerarSlug()"></div>
+      <div class="form-row"><label class="form-label">E-mail de contato</label><input class="form-input" id="r-email" type="email" placeholder="contato@restaurante.com"></div>
+      <div class="form-row"><label class="form-label">Plano</label>
+        <select class="form-input" id="r-plano">
+          <option value="starter">Starter</option>
+          <option value="pro">Pro</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div class="form-row" style="flex:1;margin:0"><label class="form-label">Cor primária</label>
+          <input type="color" id="r-cor" value="#ff4d1c" style="width:100%;height:38px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;"></div>
+      </div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;">Dono (opcional)</div>
+        <div class="form-row"><label class="form-label">Nome do dono</label><input class="form-input" id="r-owner-nome" placeholder="João Silva"></div>
+        <div class="form-row"><label class="form-label">E-mail do dono</label><input class="form-input" id="r-owner-email" type="email" placeholder="dono@restaurante.com"></div>
+        <div class="form-row"><label class="form-label">Senha do dono</label><input class="form-input" id="r-owner-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-rest')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarRestaurante()">Criar restaurante</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO USUÁRIO -->
+<div class="modal-bg" id="modal-usuario">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Adicionar usuário ao restaurante</div>
+      <button class="modal-close" onclick="fecharModal('modal-usuario')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Restaurante</label><select class="form-input" id="u-restaurant"></select></div>
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="u-nome" placeholder="Nome completo"></div>
+      <div class="form-row"><label class="form-label">E-mail</label><input class="form-input" id="u-email" type="email"></div>
+      <div class="form-row"><label class="form-label">Senha</label><input class="form-input" id="u-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-row"><label class="form-label">Role</label>
+        <select class="form-input" id="u-role">
+          <option value="owner">Owner (Dono)</option>
+          <option value="manager">Manager (Gerente)</option>
+          <option value="cashier">Cashier (Caixa)</option>
+          <option value="waiter">Waiter (Garçom)</option>
+          <option value="kitchen">Kitchen (Cozinha)</option>
+          <option value="tv">TV (Somente leitura)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarUsuario()">Criar usuário</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../shared/config.js"></script>
+<script src="../shared/auth.js"></script>
+<script>
+const { API_URL } = window.SAAS_CONFIG;
+let RESTAURANTES = [];
+
+/* ── LOGIN ──────────────────────────────────────────── */
+async function fazerLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const senha = document.getElementById('l-senha').value.trim();
+  const btn   = document.querySelector('.btn-primary');
+  const erro  = document.getElementById('login-erro');
+  btn.disabled = true;
+  document.getElementById('login-txt').textContent = 'Entrando...';
+  try {
+    const data = await login(email, senha);
+    if (!data.usuario?.is_super_admin) {
+      throw new Error('Sem acesso de super admin');
+    }
+    iniciarApp(data.usuario);
+  } catch(e) {
+    erro.textContent = e.message;
+    erro.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('login-txt').textContent = 'Entrar';
+  }
+}
+
+function fazerLogout() {
+  logout();
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function iniciarApp(u) {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+  document.getElementById('user-email').textContent = u.email;
+  carregarRestaurantes();
+}
+
+if (isLoggedIn() && getUsuario()?.is_super_admin) {
+  iniciarApp(getUsuario());
+}
+
+/* ── NAV ────────────────────────────────────────────── */
+function irPara(pagina, tabEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + pagina).classList.add('active');
+  tabEl.classList.add('active');
+  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, metricas: carregarMetricas, validacao: () => {} };
+  if (loaders[pagina]) loaders[pagina]();
+}
+
+/* ── RESTAURANTES ───────────────────────────────────── */
+async function carregarRestaurantes() {
+  document.getElementById('restaurantes-lista').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const { restaurants } = await apiCall('GET', '/api/super-admin/restaurants');
+    RESTAURANTES = restaurants || [];
+
+    // Popular select do modal de usuário
+    const sel = document.getElementById('u-restaurant');
+    if (sel) {
+      sel.innerHTML = RESTAURANTES.map(r => `<option value="${r.id}">${r.name} (${r.slug})</option>`).join('');
+    }
+
+    document.getElementById('restaurantes-lista').innerHTML = !RESTAURANTES.length
+      ? '<div style="padding:32px;text-align:center;color:var(--muted)">Nenhum restaurante</div>'
+      : RESTAURANTES.map(r => `
+        <div class="rest-card">
+          <div class="rest-color" style="background:${r.primary_color||'#ff4d1c'}"></div>
+          <div class="rest-info">
+            <div class="rest-nome">${r.name}</div>
+            <div class="rest-slug">/r/${r.slug}</div>
+            <div class="rest-badges">
+              <span class="badge ${r.is_active ? 'badge-active' : 'badge-inactive'}">${r.is_active ? '● Ativo' : '● Inativo'}</span>
+              <span class="badge badge-plan">${r.plan}</span>
+              <span class="badge" style="background:rgba(255,255,255,.05);color:var(--muted)">${new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
+            </div>
+          </div>
+          <div class="rest-actions">
+            <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${r.name}')">QR Codes</button>
+            <button class="btn btn-sm ${r.is_active?'btn-danger':''}" onclick="toggleAtivo('${r.id}',${r.is_active})">
+              ${r.is_active ? 'Desativar' : 'Ativar'}
+            </button>
+          </div>
+        </div>`).join('');
+  } catch(e) {
+    document.getElementById('restaurantes-lista').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro: ' + e.message + '</div>';
+  }
+}
+
+async function toggleAtivo(id, atual) {
+  if (!confirm(`${atual ? 'Desativar' : 'Ativar'} este restaurante?`)) return;
+  try {
+    await apiCall('PATCH', `/api/super-admin/restaurants/${id}/status`, { is_active: !atual });
+    showToast(atual ? 'Restaurante desativado' : 'Restaurante ativado', 'success');
+    carregarRestaurantes();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function verQRCodes(restId, nome) {
+  try {
+    // Chamar RPC via Supabase direto (anon key)
+    const resp = await fetch(
+      `${window.SAAS_CONFIG.SUPABASE_URL}/rest/v1/rpc/get_qrcode_info`,
+      { method:'POST', headers:{'apikey':window.SAAS_CONFIG.SUPABASE_ANON,'Content-Type':'application/json'}, body:JSON.stringify({p_restaurant_id:restId}) }
+    );
+    const mesas = await resp.json();
+    const html = (mesas||[]).map(m =>
+      `<div style="margin-bottom:8px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">Mesa ${m.mesa_numero}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">Token: ${m.public_token}</div>
+        <div style="font-size:12px;margin-top:4px;color:var(--green);">${m.url_slug}</div>
+      </div>`
+    ).join('');
+    alert(`QR Codes — ${nome}\n\nAcesse cada URL:\n${(mesas||[]).map(m=>m.url_slug).join('\n')}`);
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+function abrirModalNovoRest() {
+  ['r-nome','r-slug','r-email','r-owner-nome','r-owner-email','r-owner-senha'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('modal-rest').classList.add('show');
+}
+
+function gerarSlug() {
+  const nome = document.getElementById('r-nome').value;
+  const slug = nome.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim().replace(/\s+/g, '-');
+  document.getElementById('r-slug').value = slug;
+}
+
+document.getElementById('r-nome')?.addEventListener('input', gerarSlug);
+
+async function criarRestaurante() {
+  const nome  = document.getElementById('r-nome').value.trim();
+  const slug  = document.getElementById('r-slug').value.trim();
+  const email = document.getElementById('r-email').value.trim() || null;
+  const plano = document.getElementById('r-plano').value;
+  const cor   = document.getElementById('r-cor').value;
+  const ownerNome  = document.getElementById('r-owner-nome').value.trim() || null;
+  const ownerEmail = document.getElementById('r-owner-email').value.trim() || null;
+  const ownerSenha = document.getElementById('r-owner-senha').value || null;
+
+  if (!nome || !slug) return showToast('Nome e slug obrigatórios', 'error');
+  if (!slug.match(/^[a-z0-9-]+$/)) return showToast('Slug só pode ter letras minúsculas, números e hífens', 'error');
+
+  try {
+    const payload = { name: nome, slug, email, plan: plano, primary_color: cor };
+    const { restaurant } = await apiCall('POST', '/api/super-admin/restaurants', payload);
+
+    // Criar owner via super-admin endpoint se fornecido
+    if (ownerEmail && ownerSenha) {
+      await apiCall('POST', `/api/super-admin/restaurants/${restaurant.id}/users`, {
+        nome: ownerNome || ownerEmail,
+        email: ownerEmail,
+        senha: ownerSenha,
+        role: 'owner',
+      });
+    }
+
+    showToast(`Restaurante "${nome}" criado!`, 'success');
+    fecharModal('modal-rest');
+    carregarRestaurantes();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+/* ── USUÁRIOS ───────────────────────────────────────── */
+async function carregarUsuarios() {
+  document.getElementById('usuarios-tbody').innerHTML = '<tr><td colspan="5" class="tabela-empty">Carregando...</td></tr>';
+  try {
+    // Buscar todos os memberships
+    const resp = await fetch(
+      `${window.SAAS_CONFIG.SUPABASE_URL}/rest/v1/restaurant_memberships?select=role,is_active,usuarios(id,nome,email,ativo),restaurants(name,slug)&order=created_at.desc&limit=100`,
+      { headers:{ apikey: window.SAAS_CONFIG.SUPABASE_ANON, Authorization: 'Bearer ' + getToken() } }
+    );
+    const memberships = await resp.json();
+    document.getElementById('usuarios-tbody').innerHTML = !memberships.length
+      ? '<tr><td colspan="5" class="tabela-empty">Nenhum usuário</td></tr>'
+      : memberships.map(m => `<tr>
+          <td>${m.usuarios?.nome||'—'}</td>
+          <td class="mono" style="font-size:12px">${m.usuarios?.email||'—'}</td>
+          <td style="font-size:12px;color:var(--muted)">${m.restaurants?.name||'—'}</td>
+          <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(124,58,237,.1);color:var(--primary)">${m.role}</span></td>
+          <td><span style="font-size:10px;color:${m.is_active?'var(--green)':'var(--red)'}">${m.is_active?'✓ Ativo':'✗ Inativo'}</span></td>
+        </tr>`).join('');
+  } catch(e) {
+    document.getElementById('usuarios-tbody').innerHTML = '<tr><td colspan="5" class="tabela-empty">Erro: ' + e.message + '</td></tr>';
+  }
+}
+
+function abrirModalNovoUsuario() {
+  document.getElementById('modal-usuario').classList.add('show');
+}
+
+async function criarUsuario() {
+  const restId = document.getElementById('u-restaurant').value;
+  const nome   = document.getElementById('u-nome').value.trim();
+  const email  = document.getElementById('u-email').value.trim();
+  const senha  = document.getElementById('u-senha').value;
+  const role   = document.getElementById('u-role').value;
+  if (!nome || !email || !senha) return showToast('Preencha todos os campos', 'error');
+  try {
+    await apiCall('POST', `/api/super-admin/restaurants/${restId}/users`, { nome, email, senha, role });
+    showToast('Usuário criado com sucesso', 'success');
+    fecharModal('modal-usuario');
+    carregarUsuarios();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+/* ── MÉTRICAS ───────────────────────────────────────── */
+async function carregarMetricas() {
+  document.getElementById('metricas-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const m = await apiCall('GET', '/api/super-admin/metrics');
+    document.getElementById('metricas-content').innerHTML = `
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Total restaurantes</div><div class="stat-val purple">${m.total_restaurants}</div></div>
+        <div class="stat-card"><div class="stat-label">Restaurantes ativos</div><div class="stat-val green">${m.active_restaurants}</div></div>
+        <div class="stat-card"><div class="stat-label">Total usuários</div><div class="stat-val amber">${m.total_users}</div></div>
+        <div class="stat-card"><div class="stat-label">Total pedidos</div><div class="stat-val">${m.total_orders}</div></div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('metricas-content').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro: ' + e.message + '</div>';
+  }
+}
+
+/* ── VALIDAÇÃO ──────────────────────────────────────── */
+async function executarValidacao() {
+  document.getElementById('validacao-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const resp = await fetch(
+      `${window.SAAS_CONFIG.SUPABASE_URL}/rest/v1/rpc/validate_tenant_isolation`,
+      { method:'POST', headers:{ apikey: window.SAAS_CONFIG.SUPABASE_ANON, 'Content-Type':'application/json' }, body:'{}' }
+    );
+    const checks = await resp.json();
+    document.getElementById('validacao-content').innerHTML = `
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Check</th><th>Status</th><th>Detalhe</th></tr></thead>
+          <tbody>
+            ${checks.map(c => `<tr>
+              <td class="mono" style="font-size:12px">${c.check_name}</td>
+              <td><span style="font-weight:700;color:${c.status==='OK'?'var(--green)':c.status==='INFO'?'var(--amber)':'var(--red)'}">${c.status}</span></td>
+              <td style="font-size:12px;color:var(--muted)">${c.detail}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+/* ── UTILS ──────────────────────────────────────────── */
+function fecharModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-bg').forEach(b =>
+  b.addEventListener('click', e => { if(e.target===b) b.classList.remove('show'); }));
+
+function showToast(msg, tipo='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (tipo?' '+tipo:'') + ' show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>

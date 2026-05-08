@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/r/:slug/admin", "destination": "/r/admin/index.html" },
+    { "source": "/r/:slug/admin/", "destination": "/r/admin/index.html" },
+    { "source": "/r/:slug/cozinha", "destination": "/r/cozinha/index.html" },
+    { "source": "/r/:slug/caixa",   "destination": "/r/caixa/index.html" },
+    { "source": "/r/:slug/tv",      "destination": "/r/tv/index.html" },
+    { "source": "/r/:slug/mesa/:token", "destination": "/r/mesa/index.html" },
+    { "source": "/super-admin",     "destination": "/super-admin/index.html" }
+  ]
+}

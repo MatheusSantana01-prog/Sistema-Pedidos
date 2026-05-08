@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caixa</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--color-primary:#ff4d1c;--color-bg:#0a0a0a;--panel:#111;--border:#1e1e1e;--border2:#2a2a2a;--text:#f2f0eb;--muted:#555;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--color-bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;}
+.login-card{background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:32px;width:340px;}
+.login-title{font-size:18px;font-weight:600;margin-bottom:4px;}
+.login-rest{font-size:13px;color:var(--color-primary);margin-bottom:20px;font-family:var(--mono);}
+.form-input{width:100%;background:var(--color-bg);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;margin-bottom:12px;}
+.form-input:focus{border-color:var(--color-primary);}
+.btn{padding:9px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--panel);color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--color-primary);border-color:var(--color-primary);color:#fff;}
+.btn-success{background:rgba(34,197,94,.1);border-color:var(--green);color:var(--green);}
+.btn-success:hover{background:var(--green);color:#fff;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.login-erro{color:var(--red);font-size:12px;margin-bottom:10px;display:none;}
+.login-erro.show{display:block;}
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:50px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+.topbar-brand{font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:8px;color:var(--muted);}
+.brand-dot{width:7px;height:7px;border-radius:50%;background:var(--color-primary);}
+.btn-logout{background:none;border:1px solid var(--border2);border-radius:4px;color:var(--muted);padding:4px 10px;font-size:11px;cursor:pointer;}
+/* MAIN GRID */
+.caixa-grid{display:grid;grid-template-columns:1fr 340px;gap:0;flex:1;overflow:hidden;}
+/* MESAS */
+.mesas-panel{padding:20px;overflow-y:auto;border-right:1px solid var(--border);}
+.panel-title{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;}
+.mesas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.mesa-btn{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:all .15s;text-align:left;position:relative;overflow:hidden;}
+.mesa-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--border2);}
+.mesa-btn.ocupada::before{background:var(--color-primary);}
+.mesa-btn.livre::before{background:var(--green);}
+.mesa-btn:hover{border-color:var(--border2);}
+.mesa-btn.selecionada{border-color:var(--color-primary)!important;background:rgba(255,77,28,.05);}
+.mesa-num{font-family:var(--mono);font-size:22px;font-weight:600;margin-bottom:4px;}
+.mesa-status{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.mesa-status.ocupada{color:var(--color-primary);}
+.mesa-status.livre{color:var(--green);}
+.mesa-total{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:6px;color:var(--amber);}
+/* CONTA PANEL */
+.conta-panel{display:flex;flex-direction:column;background:var(--panel);}
+.conta-header{padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.conta-mesa-num{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--color-primary);}
+.conta-body{flex:1;overflow-y:auto;padding:16px 20px;}
+.conta-vazia{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--muted);gap:8px;font-size:13px;}
+.pedido-bloco{background:var(--color-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden;}
+.pedido-head{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);}
+.pedido-num{font-family:var(--mono);font-size:12px;font-weight:600;}
+.pedido-status{font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;text-transform:uppercase;}
+.pedido-status.pendente{background:rgba(85,85,85,.2);color:var(--muted);}
+.pedido-status.confirmado,.pedido-status.em_preparo{background:rgba(245,158,11,.1);color:var(--amber);}
+.pedido-status.pronto,.pedido-status.entregue{background:rgba(34,197,94,.1);color:var(--green);}
+.pedido-item{display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.pedido-item:last-child{border-bottom:none;}
+.pedido-item-preco{font-family:var(--mono);color:var(--muted);white-space:nowrap;margin-left:8px;}
+/* TOTAL BAR */
+.conta-footer{flex-shrink:0;border-top:1px solid var(--border);padding:16px 20px;}
+.total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.total-label{font-size:14px;color:var(--muted);}
+.total-val{font-family:var(--mono);font-size:24px;font-weight:600;}
+.pgto-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.pgto-opt{padding:10px;border:1px solid var(--border2);border-radius:6px;background:transparent;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s;}
+.pgto-opt:hover,.pgto-opt.sel{border-color:var(--green);background:rgba(34,197,94,.1);color:var(--green);}
+.btn-fechar{width:100%;padding:13px;background:var(--green);border:none;border-radius:8px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;}
+.btn-fechar:disabled{opacity:.4;cursor:not-allowed;}
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel);border:1px solid var(--border2);padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:all .3s;pointer-events:none;color:var(--text);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:var(--green);}
+.toast.error{border-color:var(--red);}
+.loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:24px;justify-content:center;}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--color-primary);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-title">Caixa</div>
+    <div class="login-rest restaurant-name"></div>
+    <div class="login-erro" id="login-erro">Credenciais inválidas</div>
+    <input class="form-input" id="l-email" type="email" placeholder="caixa@email.com">
+    <input class="form-input" id="l-senha" type="password" placeholder="Senha"
+           onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="fazerLogin()">Entrar</button>
+  </div>
+</div>
+
+<div id="app-screen" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-dot"></div>
+      <span class="restaurant-name"></span> — Caixa
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn btn-sm" onclick="carregarMesas()">↻</button>
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+
+  <div class="caixa-grid">
+    <!-- MESAS -->
+    <div class="mesas-panel">
+      <div class="panel-title">Mesas</div>
+      <div class="mesas-grid" id="mesas-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- CONTA -->
+    <div class="conta-panel">
+      <div class="conta-header">
+        <div class="conta-mesa-num" id="conta-mesa-num">—</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="conta-mesa-info">Selecione uma mesa</div>
+      </div>
+      <div class="conta-body" id="conta-body">
+        <div class="conta-vazia">
+          <div style="font-size:32px">🧾</div>
+          <span>Selecione uma mesa ocupada</span>
+        </div>
+      </div>
+      <div class="conta-footer" id="conta-footer" style="display:none;">
+        <div class="total-row">
+          <span class="total-label">Total</span>
+          <span class="total-val" id="conta-total">R$ 0,00</span>
+        </div>
+        <div class="pgto-grid">
+          <button class="pgto-opt" onclick="selPgto(this,'dinheiro')">💵 Dinheiro</button>
+          <button class="pgto-opt" onclick="selPgto(this,'pix')">📲 Pix</button>
+          <button class="pgto-opt" onclick="selPgto(this,'cartao_credito')">💳 Crédito</button>
+          <button class="pgto-opt" onclick="selPgto(this,'cartao_debito')">💳 Débito</button>
+        </div>
+        <button class="btn-fechar" id="btn-fechar" onclick="fecharConta()" disabled>
+          ✓ Fechar conta
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../../shared/config.js"></script>
+<script src="../../shared/tenant.js"></script>
+<script src="../../shared/auth.js"></script>
+<script>
+const { API_URL } = window.SAAS_CONFIG;
+let RESTAURANT = null;
+let mesaSelecionada = null;
+let sessaoSelecionada = null;
+let pgtoSelecionado = null;
+let polling = null;
+
+async function init() {
+  RESTAURANT = await initTenant();
+  if (!RESTAURANT) return;
+  if (isLoggedIn()) iniciarApp();
+}
+
+async function fazerLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const senha = document.getElementById('l-senha').value.trim();
+  const erro  = document.getElementById('login-erro');
+  erro.classList.remove('show');
+  try {
+    await login(email, senha, getCurrentRestaurantSlug());
+    iniciarApp();
+  } catch(e) {
+    erro.textContent = e.message;
+    erro.classList.add('show');
+  }
+}
+
+function fazerLogout() {
+  logout();
+  clearTimeout(polling);
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function iniciarApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+  carregarMesas();
+  function agendar() { polling = setTimeout(() => { carregarMesas(); agendar(); }, 10000); }
+  agendar();
+}
+
+async function carregarMesas() {
+  try {
+    const { mesas } = await apiCall('GET', '/api/admin/tables');
+    document.getElementById('mesas-grid').innerHTML = mesas.map(m => {
+      const sess  = m.sessao_ativa;
+      const total = Number(sess?.total_consumido || 0);
+      const isSel = mesaSelecionada?.id === m.id;
+      return `<button class="mesa-btn ${m.status} ${isSel?'selecionada':''}"
+        onclick="selecionarMesa('${m.id}','${sess?.id||''}',${m.numero},${total},'${m.status}')">
+        <div class="mesa-num">${m.numero}</div>
+        <div class="mesa-status ${m.status}">${m.status === 'ocupada' ? '● Ocupada' : '● Livre'}</div>
+        ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div>` : ''}
+      </button>`;
+    }).join('');
+
+    // Se tinha mesa selecionada, recarregar a conta dela
+    if (mesaSelecionada && sessaoSelecionada) {
+      carregarConta(mesaSelecionada.numero, sessaoSelecionada);
+    }
+  } catch(e) {
+    document.getElementById('mesas-grid').innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">Erro ao carregar mesas.</div>';
+  }
+}
+
+function selecionarMesa(mesaId, sessaoId, numero, total, status) {
+  if (status !== 'ocupada' || !sessaoId) {
+    showToast('Mesa livre — nenhuma conta aberta', '');
+    return;
+  }
+  mesaSelecionada   = { id: mesaId, numero };
+  sessaoSelecionada = sessaoId;
+  pgtoSelecionado   = null;
+  document.querySelectorAll('.pgto-opt').forEach(b => b.classList.remove('sel'));
+  document.getElementById('btn-fechar').disabled = true;
+  document.getElementById('conta-mesa-num').textContent = `Mesa ${numero}`;
+  document.getElementById('conta-mesa-info').textContent = `R$ ${fmt(total)} em aberto`;
+  document.getElementById('conta-footer').style.display = 'block';
+  carregarConta(numero, sessaoId);
+  // Atualizar visual das mesas
+  document.querySelectorAll('.mesa-btn').forEach(b => b.classList.remove('selecionada'));
+  event.currentTarget.classList.add('selecionada');
+}
+
+async function carregarConta(numero, sessaoId) {
+  document.getElementById('conta-body').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${sessaoId}/bill`);
+    const pedidos = data.pedidos || [];
+    const total   = pedidos.reduce((a, p) => a + Number(p.total || 0), 0);
+
+    document.getElementById('conta-total').textContent = 'R$ ' + fmt(total);
+    document.getElementById('conta-mesa-info').textContent = `${pedidos.length} pedido(s) · R$ ${fmt(total)}`;
+
+    if (!pedidos.length) {
+      document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><span>Nenhum pedido ainda</span></div>';
+      return;
+    }
+
+    document.getElementById('conta-body').innerHTML = pedidos.map(p => `
+      <div class="pedido-bloco">
+        <div class="pedido-head">
+          <span class="pedido-num">#${p.numero}</span>
+          <span class="pedido-status ${p.status}">${{pendente:'Aguardando',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue'}[p.status]||p.status}</span>
+        </div>
+        ${(p.itens||[]).map(it => `
+          <div class="pedido-item">
+            <span>${it.quantidade}× ${it.nome_produto}</span>
+            <span class="pedido-item-preco">R$ ${fmt(it.subtotal)}</span>
+          </div>`).join('')}
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><span>Erro ao carregar conta</span></div>';
+  }
+}
+
+function selPgto(btn, pgto) {
+  document.querySelectorAll('.pgto-opt').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  pgtoSelecionado = pgto;
+  document.getElementById('btn-fechar').disabled = false;
+}
+
+async function fecharConta() {
+  if (!pgtoSelecionado || !mesaSelecionada) return;
+  const btn = document.getElementById('btn-fechar');
+  btn.disabled = true;
+  btn.textContent = 'Fechando...';
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaSelecionada.id}/close`,
+      { forma_pagamento: pgtoSelecionado });
+    showToast(`Mesa ${mesaSelecionada.numero} fechada!`, 'success');
+    // Resetar
+    mesaSelecionada = null; sessaoSelecionada = null; pgtoSelecionado = null;
+    document.getElementById('conta-mesa-num').textContent = '—';
+    document.getElementById('conta-mesa-info').textContent = 'Selecione uma mesa';
+    document.getElementById('conta-footer').style.display = 'none';
+    document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><div style="font-size:32px">🧾</div><span>Selecione uma mesa ocupada</span></div>';
+    carregarMesas();
+  } catch(e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '✓ Fechar conta';
+  }
+}
+
+function fmt(n) { return Number(n).toFixed(2).replace('.', ','); }
+
+function showToast(msg, tipo='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (tipo?' '+tipo:'') + ' show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+init();
+</script>
+</body>
+</html>
