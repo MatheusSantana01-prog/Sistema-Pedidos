@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cardápio</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/r/mesa/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<div id="app" style="display:none;">
+  <div class="header">
+    <div class="header-top">
+      <img class="header-logo restaurant-logo" src="" alt="" style="display:none;">
+      <div>
+        <div class="header-nome restaurant-name"></div>
+        <div class="header-mesa" id="header-mesa">Mesa —</div>
+      </div>
+    </div>
+    <div class="search-wrap" style="padding:0 0 0;">
+      <div class="search-box">
+        <span style="color:var(--muted);font-size:16px;">🔍</span>
+        <input type="text" id="search-input" placeholder="Buscar no cardápio..."
+               oninput="buscar(this.value)">
+        <button class="search-clear" id="search-clear" onclick="limparBusca()">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="cats-wrap">
+    <div class="cats" id="cats"></div>
+  </div>
+
+  <div id="destaques-wrap"></div>
+
+  <div class="produtos-wrap" id="produtos-wrap"></div>
+</div>
+
+<!-- FAB CARRINHO -->
+<button class="cart-fab" id="cart-fab" onclick="abrirCarrinho()">
+  🛒 Ver carrinho
+  <span class="cart-count" id="cart-count">0</span>
+</button>
+
+<!-- MODAL PRODUTO -->
+<div class="modal-bg" id="modal-produto">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <div id="modal-produto-img" style="width:100%;height:180px;border-radius:12px;background:var(--border);margin-bottom:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:64px;"></div>
+    <div class="modal-title" id="modal-nome"></div>
+    <div class="modal-desc"  id="modal-desc"></div>
+    <div class="modal-preco" id="modal-preco"></div>
+    <div id="modal-ings"></div>
+    <div style="margin-top:12px;">
+      <div class="modal-section-title">Observações (opcional)</div>
+      <textarea class="obs-input" id="modal-obs" rows="2" placeholder="Ex: bem passado, sem sal..."></textarea>
+    </div>
+    <div class="qty-control">
+      <button class="qty-btn" onclick="mudarQty(-1)">−</button>
+      <div class="qty-num" id="modal-qty">1</div>
+      <button class="qty-btn" onclick="mudarQty(1)">+</button>
+    </div>
+    <button class="btn-add-cart" onclick="adicionarAoCarrinho()">Adicionar · R$ <span id="modal-total">0,00</span></button>
+  </div>
+</div>
+
+<!-- MODAL CARRINHO / CONFIRMAR -->
+<div class="modal-bg" id="modal-carrinho">
+  <div class="confirm-modal">
+    <div class="modal-drag"></div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:16px;">🛒 Seu pedido</div>
+    <div id="carrinho-itens"></div>
+    <div class="carrinho-total">
+      <span>Total</span>
+      <span id="carrinho-total-val">R$ 0,00</span>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div class="modal-section-title">Observação geral (opcional)</div>
+      <textarea class="obs-input" id="obs-geral" rows="2" placeholder="Ex: alergia a amendoim..."></textarea>
+    </div>
+    <button class="btn-enviar" onclick="enviarPedido()">✓ Enviar pedido</button>
+    <button style="width:100%;padding:12px;background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;margin-top:8px;" onclick="fecharModal('modal-carrinho')">Continuar comprando</button>
+  </div>
+</div>
+
+<!-- MODAL CONTA -->
+<div class="modal-bg" id="modal-conta">
+  <div class="modal">
+    <div class="modal-drag"></div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:16px;">🧾 Minha conta</div>
+    <div id="conta-conteudo"><div style="padding:32px;text-align:center;color:var(--muted)">Carregando...</div></div>
+  </div>
+</div>
+
+<!-- SUCESSO -->
+<div class="sucesso-overlay" id="sucesso-overlay">
+  <div class="sucesso-icon">✅</div>
+  <div class="sucesso-title">Pedido enviado!</div>
+  <div class="sucesso-sub">Seu pedido foi recebido. Acompanhe o status aqui.</div>
+  <button style="padding:12px 28px;background:var(--color-primary);border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;" onclick="fecharSucesso()">Ver cardápio</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/shared/config.js"></script>
+<script src="/shared/tenant.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/r/mesa/app.js"></script>
+</body>
+</html>
+
+
+
+

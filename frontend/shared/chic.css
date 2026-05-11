@@ -1,0 +1,165 @@
+:root {
+  --panel: #151311;
+  --panel-soft: #1d1915;
+  --border: rgba(232, 218, 196, .12);
+  --border2: rgba(232, 218, 196, .22);
+  --muted: #a99c8d;
+  --color-bg: #0f0d0b;
+  --color-text: #f4efe7;
+  --color-primary: #c89b5f;
+  --color-accent: #d7b16e;
+  --green: #63b37a;
+  --red: #d7685d;
+  --amber: #d8a84f;
+  --blue: #6f9ed6;
+}
+
+html {
+  background: var(--color-bg);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(200, 155, 95, .08), transparent 28rem),
+    linear-gradient(180deg, #15110e 0%, var(--color-bg) 34rem);
+  letter-spacing: 0;
+}
+
+.login-card,
+.stat-card,
+.section,
+.modal,
+.mesa-card,
+.mesa-btn,
+.pedido-bloco,
+.card,
+.produto-card,
+.dest-card,
+.coluna,
+.conta-panel,
+.painel,
+.tv-card {
+  background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01)), var(--panel);
+  border-color: var(--border);
+  box-shadow: 0 18px 46px rgba(0,0,0,.24);
+}
+
+.topbar,
+.nav,
+.header,
+.sidebar,
+.board-header,
+.cash-header {
+  background: rgba(21, 19, 17, .94);
+  border-color: var(--border);
+  backdrop-filter: blur(14px);
+}
+
+.restaurant-name,
+.login-nome-rest,
+.header-nome,
+.topbar-brand,
+.section-title,
+.page-title,
+.stat-val,
+.conta-mesa-num,
+.mesa-num,
+.card-mesa {
+  color: var(--color-text);
+}
+
+.brand-dot,
+.mesa-card.ocupada::before,
+.mesa-btn.ocupada::before {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+}
+
+.btn,
+.btn-login,
+.btn-enviar,
+.btn-add-cart,
+.pgto-btn,
+.pgto-opt,
+.cat-pill,
+.produto-add,
+.qty-btn,
+.search-box,
+.form-input,
+select,
+input,
+textarea {
+  border-radius: 8px;
+  border-color: var(--border2);
+}
+
+.btn-primary,
+.btn-success,
+.btn-login,
+.btn-enviar,
+.btn-add-cart,
+.produto-add {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: transparent;
+  color: #17120d;
+  font-weight: 700;
+}
+
+.btn-primary:hover:not(:disabled),
+.btn-success:hover:not(:disabled),
+.btn-login:hover:not(:disabled),
+.btn-enviar:hover:not(:disabled),
+.btn-add-cart:hover:not(:disabled) {
+  filter: brightness(1.05) saturate(1.04);
+  transform: translateY(-1px);
+}
+
+.form-input:focus,
+.search-box:focus-within,
+.pgto-btn.active,
+.pgto-opt.active,
+.cat-pill.active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(200, 155, 95, .13);
+}
+
+.status-pill,
+.pedido-status,
+.role-badge,
+.mesa-status-badge {
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  color: var(--muted);
+  background: rgba(255,255,255,.025);
+}
+
+tbody tr:hover {
+  background: rgba(200, 155, 95, .045);
+}
+
+.modal-backdrop,
+.overlay {
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 16px;
+  }
+
+  .topbar,
+  .nav {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .login-card {
+    padding: 28px;
+  }
+}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caixa</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/r/caixa/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-title">Caixa</div>
+    <div class="login-rest restaurant-name"></div>
+    <div class="login-erro" id="login-erro">Credenciais inválidas</div>
+    <input class="form-input" id="l-email" type="email" placeholder="caixa@email.com">
+    <input class="form-input" id="l-senha" type="password" placeholder="Senha"
+           onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="fazerLogin()">Entrar</button>
+  </div>
+</div>
+
+<div id="app-screen" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-dot"></div>
+      <span class="restaurant-name"></span> — Caixa
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn btn-sm" onclick="carregarMesas()">↻</button>
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+
+  <div class="caixa-grid">
+    <!-- MESAS -->
+    <div class="mesas-panel">
+      <div class="panel-title">Mesas</div>
+      <div class="mesas-grid" id="mesas-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- CONTA -->
+    <div class="conta-panel">
+      <div class="conta-header">
+        <div class="conta-mesa-num" id="conta-mesa-num">—</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="conta-mesa-info">Selecione uma mesa</div>
+      </div>
+      <div class="conta-body" id="conta-body">
+        <div class="conta-vazia">
+          <div style="font-size:32px">🧾</div>
+          <span>Selecione uma mesa ocupada</span>
+        </div>
+      </div>
+      <div class="conta-footer" id="conta-footer" style="display:none;">
+        <div class="total-row">
+          <span class="total-label">Total</span>
+          <span class="total-val" id="conta-total">R$ 0,00</span>
+        </div>
+        <div class="pgto-grid">
+          <button class="pgto-opt" onclick="selPgto(this,'dinheiro')">💵 Dinheiro</button>
+          <button class="pgto-opt" onclick="selPgto(this,'pix')">📲 Pix</button>
+          <button class="pgto-opt" onclick="selPgto(this,'cartao_credito')">💳 Crédito</button>
+          <button class="pgto-opt" onclick="selPgto(this,'cartao_debito')">💳 Débito</button>
+        </div>
+        <button class="btn-fechar" id="btn-fechar" onclick="fecharConta()" disabled>
+          ✓ Fechar conta
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/shared/config.js"></script>
+<script src="/shared/tenant.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/r/caixa/app.js"></script>
+</body>
+</html>
+
+
+
+

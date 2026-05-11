@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TV — Status dos Pedidos</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/r/tv/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-tv-card">
+    <div class="login-tv-icon">📺</div>
+    <div class="login-tv-title">Tela de Status</div>
+    <div class="login-tv-rest restaurant-name"></div>
+    <div class="login-erro-tv" id="login-erro">Credenciais inválidas</div>
+    <input class="form-input-tv" id="l-email" type="email" placeholder="tv@restaurante.com">
+    <input class="form-input-tv" id="l-senha" type="password" placeholder="Senha"
+           onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn-tv-login" onclick="fazerLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- TV -->
+<div class="header">
+  <div class="header-left">
+    <div class="live-dot"></div>
+    <div>
+      <div class="restaurant-name-tv restaurant-name"></div>
+      <div class="header-brand">STATUS DOS PEDIDOS</div>
+    </div>
+  </div>
+  <div class="header-clock" id="relogio">--:--</div>
+</div>
+
+<div class="status-grid">
+  <!-- EM PREPARO -->
+  <div class="status-col">
+    <div class="col-header preparando">
+      <div class="col-title">Em Preparo</div>
+      <div class="col-count preparando" id="cnt-preparando">0</div>
+    </div>
+    <div class="col-body" id="col-preparando">
+      <div class="col-vazio"><div class="col-vazio-icon">🔥</div><div class="col-vazio-txt">Nada no fogo</div></div>
+    </div>
+  </div>
+
+  <!-- PRONTO -->
+  <div class="status-col">
+    <div class="col-header pronto">
+      <div class="col-title">Pronto para Retirar</div>
+      <div class="col-count pronto" id="cnt-pronto">0</div>
+    </div>
+    <div class="col-body" id="col-pronto">
+      <div class="col-vazio"><div class="col-vazio-icon">🛎</div><div class="col-vazio-txt">Nenhum aguardando</div></div>
+    </div>
+  </div>
+
+  <!-- ENTREGUE -->
+  <div class="status-col">
+    <div class="col-header entregue">
+      <div class="col-title">Entregues (últimos)</div>
+      <div class="col-count entregue" id="cnt-entregue">0</div>
+    </div>
+    <div class="col-body" id="col-entregue">
+      <div class="col-vazio"><div class="col-vazio-icon">✓</div><div class="col-vazio-txt">Nenhum ainda</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="ticker">
+  <div class="ticker-inner" id="ticker-inner">
+    <span class="ticker-item">🍽️ Sistema de Pedidos <span>SaaS Restaurante</span></span>
+    <span class="ticker-item">✅ Pedido pronto? O garçom será notificado</span>
+    <span class="ticker-item">📊 Acompanhe o status em tempo real</span>
+    <span class="ticker-item">🔔 Novos pedidos aparecem automaticamente</span>
+    <span class="ticker-item">🍽️ Sistema de Pedidos <span>SaaS Restaurante</span></span>
+    <span class="ticker-item">✅ Pedido pronto? O garçom será notificado</span>
+    <span class="ticker-item">📊 Acompanhe o status em tempo real</span>
+    <span class="ticker-item">🔔 Novos pedidos aparecem automaticamente</span>
+  </div>
+</div>
+
+<script src="/shared/config.js"></script>
+<script src="/shared/tenant.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/r/tv/app.js"></script>
+</body>
+</html>
+
+
+
+

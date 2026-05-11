@@ -1,0 +1,69 @@
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/api/*"
+  to   = "https://sistema-pedidos-zk2w.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+
+[[redirects]]
+  from = "/r/:slug/admin"
+  to   = "/r/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/admin/"
+  to   = "/r/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/cozinha"
+  to   = "/r/cozinha/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/cozinha/"
+  to   = "/r/cozinha/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/caixa"
+  to   = "/r/caixa/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/caixa/"
+  to   = "/r/caixa/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/tv"
+  to   = "/r/tv/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/tv/"
+  to   = "/r/tv/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/mesa/:token"
+  to   = "/r/mesa/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/mesa/:token/"
+  to   = "/r/mesa/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/super-admin"
+  to   = "/super-admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/super-admin/"
+  to   = "/super-admin/index.html"
+  status = 200

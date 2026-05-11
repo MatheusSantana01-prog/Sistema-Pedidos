@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cozinha — KDS</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/r/cozinha/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-title">Tela da Cozinha</div>
+    <div class="login-rest restaurant-name"></div>
+    <div class="login-erro" id="login-erro">Credenciais inválidas</div>
+    <input class="form-input" id="l-email" type="email" placeholder="cozinha@email.com" value="">
+    <input class="form-input" id="l-senha" type="password" placeholder="Senha" onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn-login" onclick="fazerLogin()">Entrar na cozinha</button>
+  </div>
+</div>
+
+<!-- KDS -->
+<div id="kds-screen" style="display:none;flex-direction:column;height:100vh;">
+  <div class="header">
+    <div class="header-brand">
+      <div class="live-dot"></div>
+      <span class="restaurant-name"></span> — KDS
+    </div>
+    <div class="header-right">
+      <div class="header-stat">Fila: <strong id="stat-fila">0</strong></div>
+      <div class="header-stat">Prontos: <strong id="stat-prontos">0</strong></div>
+      <div class="header-clock" id="relogio">--:--</div>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="col">
+      <div class="col-head pendente">
+        <div class="col-label">Aguardando</div>
+        <div class="col-count pendente" id="cnt-pendente">0</div>
+      </div>
+      <div class="col-body" id="col-pendente"></div>
+    </div>
+    <div class="col">
+      <div class="col-head confirmado">
+        <div class="col-label">Confirmado</div>
+        <div class="col-count confirmado" id="cnt-confirmado">0</div>
+      </div>
+      <div class="col-body" id="col-confirmado"></div>
+    </div>
+    <div class="col">
+      <div class="col-head em_preparo">
+        <div class="col-label">Em preparo</div>
+        <div class="col-count em_preparo" id="cnt-em_preparo">0</div>
+      </div>
+      <div class="col-body" id="col-em_preparo"></div>
+    </div>
+    <div class="col">
+      <div class="col-head pronto">
+        <div class="col-label">Pronto p/ entregar</div>
+        <div class="col-count pronto" id="cnt-pronto">0</div>
+      </div>
+      <div class="col-body" id="col-pronto"></div>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif">🔔</div>
+<div class="offline-bar" id="offline-bar">⚠ Sem conexão — tentando reconectar...</div>
+
+<script src="/shared/config.js"></script>
+<script src="/shared/tenant.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/r/cozinha/app.js"></script>
+</body>
+</html>
+
+
+
+

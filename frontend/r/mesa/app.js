@@ -1,0 +1,392 @@
+let RESTAURANT   = null;
+let MESA         = null;
+let SESSAO_ID    = null;
+let categorias   = [];
+let todosProdutos = [];
+let carrinho     = [];
+let prodAtual    = null;
+let modsSelecionadas = {};
+let pollingConta = null;
+
+/* ── INIT ───────────────────────────────────────────── */
+async function init() {
+  // 1. Resolver restaurante pelo slug
+  RESTAURANT = await initTenant();
+  if (!RESTAURANT) return;
+
+  // 2. Buscar mesa pelo token na URL
+  // URL: /r/{slug}/mesa/{token}
+  const path  = window.location.pathname;
+  const match = path.match(/\/mesa\/([^\/]+)/);
+  const token = match ? match[1] : new URLSearchParams(window.location.search).get('mesa');
+
+  if (!token) {
+    showToast('Mesa não identificada', 'error'); return;
+  }
+
+  try {
+    const slug = getCurrentRestaurantSlug();
+    // Validar mesa via API
+    const resp = await apiPublic('GET', `/api/public/restaurants/${slug}/tables/${token}`);
+    MESA = Array.isArray(resp.mesa) ? resp.mesa[0] : resp.mesa;
+    if (!MESA?.id) throw new Error('Mesa inválida');
+    document.getElementById('header-mesa').textContent = `Mesa ${MESA.numero || ''}`;
+
+    // Abrir/recuperar sessão
+    const sessResp = await apiPublic('POST', `/api/public/restaurants/${slug}/tables/${token}/sessions`);
+    const sessaoData = Array.isArray(sessResp.sessao) ? sessResp.sessao[0] : sessResp.sessao;
+    SESSAO_ID = sessaoData?.id;
+    if (!SESSAO_ID) throw new Error('Sessão da mesa não foi criada');
+
+    document.getElementById('app').style.display = 'block';
+    carregarCardapio();
+    iniciarPollingConta();
+  } catch (e) {
+    document.body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;background:var(--color-bg);color:var(--color-text);font-family:sans-serif;">
+        <div style="font-size:48px;">🚫</div>
+        <h2>Mesa não encontrada</h2>
+        <p style="color:var(--muted)">Escaneie o QR Code da mesa novamente.</p>
+      </div>`;
+  }
+}
+
+/* ── CARDÁPIO ────────────────────────────────────────── */
+async function carregarCardapio() {
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const { cardapio } = await apiPublic('GET', `/api/public/restaurants/${slug}/menu`);
+    categorias = (cardapio || [])
+      .map(c => ({ ...c, nome: c.nome || 'Categoria', icone: c.icone || '', produtos: c.produtos || [] }))
+      .filter(c => c.produtos.length);
+    todosProdutos = categorias.flatMap(c => c.produtos || []).map(p => ({
+      ...p,
+      nome: p.nome || 'Produto',
+      descricao: p.descricao || '',
+      preco: Number(p.preco || 0),
+      foto_url: p.foto_url || '',
+      ings: p.ings || []
+    }));
+    renderCats();
+    renderDestaques();
+    renderProdutos(categorias);
+  } catch (e) {
+    showToast('Erro ao carregar cardápio', 'error');
+  }
+}
+
+function renderCats() {
+  const el = document.getElementById('cats');
+  el.innerHTML = '<button class="cat-pill active" onclick="filtrarCat(this,null)">Tudo</button>';
+  categorias.forEach(c => {
+    el.innerHTML += `<button class="cat-pill" onclick="filtrarCat(this,'${c.id}')">${c.icone||''} ${c.nome}</button>`;
+  });
+}
+
+function filtrarCat(btn, id) {
+  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderProdutos(id ? categorias.filter(c => c.id === id) : categorias);
+  document.getElementById('produtos-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderDestaques() {
+  const dest = todosProdutos.filter(p => p.destaque && p.disponivel !== false);
+  const wrap = document.getElementById('destaques-wrap');
+  if (!dest.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<div class="dest-wrap">
+    <div class="dest-label">⭐ Destaques</div>
+    <div class="dest-grid">
+      ${dest.slice(0,4).map(p => `
+        <div class="dest-card" onclick="abrirProduto('${p.id}')">
+          ${p.foto_url
+            ? `<img src="${p.foto_url}" alt="${p.nome}" loading="lazy">`
+            : `<div class="dest-card-img-placeholder">${emoji(p.nome)}</div>`}
+          <div class="dest-card-body">
+            <div class="dest-card-nome">${p.nome}</div>
+            <div class="dest-card-preco">R$ ${fmt(p.preco)}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderProdutos(cats) {
+  const wrap = document.getElementById('produtos-wrap');
+  if (!cats.length) { wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Nenhum produto encontrado</div>'; return; }
+  wrap.innerHTML = cats.map(c => `
+    <div class="cat-section" id="cat-${c.id}">
+      <div class="cat-section-title">${c.icone||''} ${c.nome}</div>
+      ${(c.produtos||[]).map(p => `
+        <div class="produto-card" onclick="${p.disponivel!==false?`abrirProduto('${p.id}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
+          ${p.foto_url
+            ? `<img class="produto-img" src="${p.foto_url}" alt="${p.nome}" loading="lazy">`
+            : `<div class="produto-img-placeholder">${emoji(p.nome)}</div>`}
+          <div class="produto-info">
+            <div class="produto-nome">${p.nome}</div>
+            ${p.descricao?`<div class="produto-desc">${p.descricao}</div>`:''}
+            <div class="${p.disponivel===false?'produto-ind':'produto-preco'}">${p.disponivel===false?'Indisponível':'R$ '+fmt(p.preco)}</div>
+          </div>
+          ${p.disponivel!==false?`<button class="produto-add" onclick="event.stopPropagation();adicionarRapido('${p.id}')">+</button>`:''}
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+function buscar(q) {
+  const clear = document.getElementById('search-clear');
+  clear.classList.toggle('show', q.length > 0);
+  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+  if (!q.trim()) {
+    document.querySelector('.cat-pill')?.classList.add('active');
+    renderProdutos(categorias); return;
+  }
+  const t = q.toLowerCase();
+  const res = todosProdutos.filter(p => p.disponivel!==false &&
+    ((p.nome||'').toLowerCase().includes(t) || (p.descricao||'').toLowerCase().includes(t)));
+  renderProdutos([{ id:'s', nome:`Resultados (${res.length})`, icone:'🔍', produtos: res }]);
+  document.getElementById('produtos-wrap').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function limparBusca() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').classList.remove('show');
+  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+  document.querySelector('.cat-pill')?.classList.add('active');
+  renderProdutos(categorias);
+}
+
+/* ── PRODUTO MODAL ───────────────────────────────────── */
+function abrirProduto(id) {
+  prodAtual = todosProdutos.find(p => p.id === id);
+  if (!prodAtual) return;
+  modsSelecionadas = {};
+  document.getElementById('modal-qty').textContent = '1';
+  document.getElementById('modal-nome').textContent = prodAtual.nome;
+  document.getElementById('modal-desc').textContent = prodAtual.descricao || '';
+  document.getElementById('modal-preco').textContent = 'R$ ' + fmt(prodAtual.preco);
+  document.getElementById('modal-total').textContent = fmt(prodAtual.preco);
+  document.getElementById('modal-obs').value = '';
+
+  const imgEl = document.getElementById('modal-produto-img');
+  if (prodAtual.foto_url) {
+    imgEl.innerHTML = `<img src="${prodAtual.foto_url}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;">`;
+  } else {
+    imgEl.innerHTML = `<span style="font-size:64px;">${emoji(prodAtual.nome)}</span>`;
+  }
+
+  const ings = prodAtual.ings || [];
+  document.getElementById('modal-ings').innerHTML = ings.length ? `
+    <div class="modal-section-title" style="margin-top:16px;">Ingredientes</div>
+    ${ings.map(ing => `
+      <div class="mod-item" onclick="toggleMod('${ing}')">
+        <span>${ing}</span>
+        <div class="mod-check checked" id="mod-${ing.replace(/\s/g,'-')}">✓</div>
+      </div>`).join('')}` : '';
+
+  document.getElementById('modal-produto').classList.add('show');
+}
+
+function toggleMod(nome) {
+  modsSelecionadas[nome] = !modsSelecionadas[nome];
+  const el = document.getElementById('mod-' + nome.replace(/\s/g, '-'));
+  if (el) {
+    if (modsSelecionadas[nome]) { el.classList.remove('checked'); el.textContent = ''; }
+    else { el.classList.add('checked'); el.textContent = '✓'; }
+  }
+}
+
+function mudarQty(delta) {
+  const el  = document.getElementById('modal-qty');
+  const qty = Math.max(1, parseInt(el.textContent) + delta);
+  el.textContent = qty;
+  document.getElementById('modal-total').textContent = fmt(prodAtual.preco * qty);
+}
+
+function adicionarAoCarrinho() {
+  const qty  = parseInt(document.getElementById('modal-qty').textContent);
+  const obs  = document.getElementById('modal-obs').value.trim();
+  const ings = Object.entries(modsSelecionadas).filter(([,r]) => r).map(([n]) => n);
+  carrinho.push({
+    produto_id:      prodAtual.id,
+    nome_produto:    prodAtual.nome,
+    preco_unitario:  prodAtual.preco,
+    quantidade:      qty,
+    subtotal:        prodAtual.preco * qty,
+    observacao:      obs || null,
+    ingredientes:    ings.map(n => ({ nome_ingrediente: n, acao: 'remover' })),
+  });
+  fecharModal('modal-produto');
+  atualizarFAB();
+  showToast(`${qty}× ${prodAtual.nome} adicionado`, 'success');
+}
+
+function adicionarRapido(id) {
+  const p = todosProdutos.find(x => x.id === id);
+  if (!p) return;
+  carrinho.push({ produto_id:p.id, nome_produto:p.nome, preco_unitario:p.preco, quantidade:1, subtotal:p.preco, observacao:null, ingredientes:[] });
+  atualizarFAB();
+  showToast(`${p.nome} adicionado`, 'success');
+}
+
+function atualizarFAB() {
+  const total = carrinho.reduce((a, i) => a + i.quantidade, 0);
+  const fab   = document.getElementById('cart-fab');
+  document.getElementById('cart-count').textContent = total;
+  fab.classList.toggle('show', total > 0);
+}
+
+/* ── CARRINHO ────────────────────────────────────────── */
+function abrirCarrinho() {
+  const total = carrinho.reduce((a, i) => a + i.subtotal, 0);
+  document.getElementById('carrinho-itens').innerHTML = carrinho.map((it, idx) => `
+    <div class="carrinho-item">
+      <div style="flex:1">
+        <div style="font-weight:500">${it.quantidade}× ${it.nome_produto}</div>
+        ${it.ingredientes?.length ? `<div style="font-size:12px;color:var(--muted)">Sem: ${it.ingredientes.map(i=>i.nome_ingrediente).join(', ')}</div>` : ''}
+        ${it.observacao ? `<div style="font-size:12px;color:var(--muted)">${it.observacao}</div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:14px;font-weight:600;color:var(--color-primary)">R$ ${fmt(it.subtotal)}</span>
+        <button onclick="removerItem(${idx})" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;">✕</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('carrinho-total-val').textContent = 'R$ ' + fmt(total);
+  document.getElementById('obs-geral').value = '';
+  document.getElementById('modal-carrinho').classList.add('show');
+}
+
+function removerItem(idx) {
+  carrinho.splice(idx, 1);
+  if (!carrinho.length) { fecharModal('modal-carrinho'); atualizarFAB(); return; }
+  abrirCarrinho();
+  atualizarFAB();
+}
+
+async function enviarPedido() {
+  if (!carrinho.length) return;
+  const btn   = document.querySelector('.btn-enviar');
+  const obsG  = document.getElementById('obs-geral').value.trim();
+  const total = carrinho.reduce((a, i) => a + i.subtotal, 0);
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    const slug = getCurrentRestaurantSlug();
+    await apiPublic('POST', `/api/public/restaurants/${slug}/orders`, {
+      restaurant_id:     RESTAURANT.id,
+      mesa_id:           MESA.id,
+      sessao_mesa_id:    SESSAO_ID,
+      subtotal:          total,
+      total:             total,
+      observacao_geral:  obsG || null,
+      itens:             carrinho,
+    });
+    carrinho = [];
+    fecharModal('modal-carrinho');
+    atualizarFAB();
+    document.getElementById('sucesso-overlay').classList.add('show');
+  } catch (e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Enviar pedido';
+  }
+}
+
+function fecharSucesso() {
+  document.getElementById('sucesso-overlay').classList.remove('show');
+}
+
+/* ── CONTA ───────────────────────────────────────────── */
+async function verConta() {
+  document.getElementById('modal-conta').classList.add('show');
+  document.getElementById('conta-conteudo').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Carregando...</div>';
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
+    const pedidos = data.pedidos || [];
+    const total   = pedidos.reduce((a, p) => a + Number(p.total), 0);
+
+    if (data.sessao_status === 'fechada') {
+      document.getElementById('conta-conteudo').innerHTML = `
+        <div style="text-align:center;padding:32px;"><div style="font-size:48px;margin-bottom:12px">✅</div>
+        <div style="font-size:18px;font-weight:700">Conta fechada</div>
+        <div style="color:var(--muted);margin-top:8px">Obrigado pela visita!</div></div>`;
+      return;
+    }
+
+    document.getElementById('conta-conteudo').innerHTML = `
+      ${pedidos.map(p => `
+        <div style="margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Pedido #${p.numero}</div>
+          ${(p.itens||[]).map(it => `
+            <div class="conta-item">
+              <span>${it.quantidade}× ${it.nome_produto}</span>
+              <span style="font-family:monospace;font-weight:600">R$ ${fmt(it.subtotal)}</span>
+            </div>`).join('')}
+        </div>`).join('')}
+      <div class="conta-total">
+        <span>Total</span>
+        <span style="color:var(--color-primary)">R$ ${fmt(total)}</span>
+      </div>
+      ${RESTAURANT.settings?.allow_table_close_request ? `
+        <div style="margin-top:8px;font-size:13px;color:var(--muted);text-align:center">
+          Peça ao garçom para fechar sua conta.
+        </div>` : ''}`;
+  } catch (e) {
+    document.getElementById('conta-conteudo').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro ao carregar conta.</div>';
+  }
+}
+
+function iniciarPollingConta() {
+  async function verificar() {
+    if (!SESSAO_ID) return;
+    try {
+      const slug = getCurrentRestaurantSlug();
+      const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
+      if (data.sessao_status === 'fechada') {
+        clearTimeout(pollingConta);
+        mostrarContaFechada();
+        return;
+      }
+    } catch(e) {}
+    pollingConta = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
+  }
+  pollingConta = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
+}
+
+function mostrarContaFechada() {
+  document.getElementById('cart-fab').classList.remove('show');
+  showToast('✅ Conta fechada pelo caixa. Obrigado!', 'success');
+  const btn = document.querySelector('.btn-enviar');
+  if (btn) btn.disabled = true;
+}
+
+/* ── UTILS ───────────────────────────────────────────── */
+function fmt(n) { return Number(n).toFixed(2).replace('.', ','); }
+
+function emoji(nome) {
+  const n = (nome||'').toLowerCase();
+  if (n.includes('pizza'))                return '🍕';
+  if (n.includes('burguer')||n.includes('smash')||n.includes('hambur')) return '🍔';
+  if (n.includes('frango')||n.includes('chicken')) return '🍗';
+  if (n.includes('batata')||n.includes('frita'))   return '🍟';
+  if (n.includes('shake')||n.includes('milk'))     return '🥤';
+  if (n.includes('suco'))                return '🍊';
+  if (n.includes('refri')||n.includes('coca'))     return '🥃';
+  if (n.includes('brownie')||n.includes('sobr'))   return '🍫';
+  if (n.includes('combo'))               return '🎁';
+  return '🍽️';
+}
+
+function showToast(msg, tipo = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (tipo ? ' ' + tipo : '') + ' show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function fecharModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-bg').forEach(b =>
+  b.addEventListener('click', e => { if (e.target === b) b.classList.remove('show'); }));
+
+init();
+

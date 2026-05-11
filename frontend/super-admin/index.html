@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Admin — SaaS Restaurante</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/super-admin/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-badge">⚡ Super Admin</div>
+    <div class="login-title">Painel da Plataforma</div>
+    <div class="login-sub">Acesso restrito — administradores da plataforma</div>
+    <div class="login-erro" id="login-erro">Credenciais inválidas ou sem acesso</div>
+    <input class="form-input" id="l-email" type="email" placeholder="admin@plataforma.com"
+           oninput="document.getElementById('login-erro').classList.remove('show')">
+    <input class="form-input" id="l-senha" type="password" placeholder="••••••••"
+           oninput="document.getElementById('login-erro').classList.remove('show')"
+           onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;" onclick="fazerLogin()">
+      <span id="login-txt">Entrar</span>
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="topbar">
+    <div class="topbar-brand"><div class="sa-dot"></div>SaaS Restaurante — Super Admin</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="user-email" style="font-size:12px;color:var(--muted);"></span>
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+  <div class="nav">
+    <div class="nav-tab active" onclick="irPara('restaurantes',this)">🏪 Restaurantes</div>
+    <div class="nav-tab" onclick="irPara('usuarios',this)">👥 Usuários</div>
+    <div class="nav-tab" onclick="irPara('metricas',this)">📊 Métricas</div>
+    <div class="nav-tab" onclick="irPara('validacao',this)">✅ Validação</div>
+  </div>
+  <div class="main">
+
+    <!-- RESTAURANTES -->
+    <div class="page active" id="page-restaurantes">
+      <div class="section-head">
+        <div class="section-title">Restaurantes da plataforma</div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoRest()">+ Novo restaurante</button>
+      </div>
+      <div id="restaurantes-lista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- USUÁRIOS -->
+    <div class="page" id="page-usuarios">
+      <div class="section-head">
+        <div class="section-title">Todos os usuários</div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo usuário</button>
+      </div>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Restaurante</th><th>Role</th><th>Ativo</th></tr></thead>
+          <tbody id="usuarios-tbody"><tr><td colspan="5" class="tabela-empty">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MÉTRICAS -->
+    <div class="page" id="page-metricas">
+      <div class="section-head"><div class="section-title">Métricas da plataforma</div></div>
+      <div id="metricas-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- VALIDAÇÃO -->
+    <div class="page" id="page-validacao">
+      <div class="section-head">
+        <div class="section-title">Validação de isolamento</div>
+        <button class="btn btn-sm" onclick="executarValidacao()">↻ Executar</button>
+      </div>
+      <div id="validacao-content"><div class="tabela-empty">Clique em "Executar" para rodar os checks.</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL NOVO RESTAURANTE -->
+<div class="modal-bg" id="modal-rest">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Novo restaurante</div>
+      <button class="modal-close" onclick="fecharModal('modal-rest')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Nome do restaurante</label><input class="form-input" id="r-nome" placeholder="Ex: Pizzaria Bella Massa"></div>
+      <div class="form-row"><label class="form-label">Slug (URL única)</label><input class="form-input" id="r-slug" placeholder="Ex: pizzaria-bella-massa" oninput="gerarSlug()"></div>
+      <div class="form-row"><label class="form-label">E-mail de contato</label><input class="form-input" id="r-email" type="email" placeholder="contato@restaurante.com"></div>
+      <div class="form-row"><label class="form-label">Plano</label>
+        <select class="form-input" id="r-plano">
+          <option value="starter">Starter</option>
+          <option value="pro">Pro</option>
+          <option value="enterprise">Enterprise</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div class="form-row" style="flex:1;margin:0"><label class="form-label">Cor primária</label>
+          <input type="color" id="r-cor" value="#ff4d1c" style="width:100%;height:38px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;"></div>
+      </div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;">Dono (opcional)</div>
+        <div class="form-row"><label class="form-label">Nome do dono</label><input class="form-input" id="r-owner-nome" placeholder="João Silva"></div>
+        <div class="form-row"><label class="form-label">E-mail do dono</label><input class="form-input" id="r-owner-email" type="email" placeholder="dono@restaurante.com"></div>
+        <div class="form-row"><label class="form-label">Senha do dono</label><input class="form-input" id="r-owner-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-rest')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarRestaurante()">Criar restaurante</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO USUÁRIO -->
+<div class="modal-bg" id="modal-usuario">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Adicionar usuário ao restaurante</div>
+      <button class="modal-close" onclick="fecharModal('modal-usuario')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Restaurante</label><select class="form-input" id="u-restaurant"></select></div>
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="u-nome" placeholder="Nome completo"></div>
+      <div class="form-row"><label class="form-label">E-mail</label><input class="form-input" id="u-email" type="email"></div>
+      <div class="form-row"><label class="form-label">Senha</label><input class="form-input" id="u-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-row"><label class="form-label">Role</label>
+        <select class="form-input" id="u-role">
+          <option value="owner">Owner (Dono)</option>
+          <option value="manager">Manager (Gerente)</option>
+          <option value="cashier">Cashier (Caixa)</option>
+          <option value="waiter">Waiter (Garçom)</option>
+          <option value="kitchen">Kitchen (Cozinha)</option>
+          <option value="tv">TV (Somente leitura)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarUsuario()">Criar usuário</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/shared/config.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/super-admin/app.js"></script>
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Painel</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/r/admin/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">Sistema de Pedidos</div>
+    <div class="login-nome-rest restaurant-name"></div>
+    <div class="login-sub">Entre com suas credenciais</div>
+    <div class="login-erro" id="login-erro">E-mail ou senha incorretos</div>
+    <div class="form-row">
+      <label class="form-label">E-mail</label>
+      <input class="form-input" id="l-email" type="email" placeholder="seu@email.com"
+             oninput="document.getElementById('login-erro').classList.remove('show')">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Senha</label>
+      <input class="form-input" id="l-senha" type="password" placeholder="••••••••"
+             oninput="document.getElementById('login-erro').classList.remove('show')"
+             onkeydown="if(event.key==='Enter')fazerLogin()">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="fazerLogin()">
+      <span id="login-txt">Entrar</span>
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none;flex-direction:column;min-height:100vh;">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-dot"></div>
+      <span class="restaurant-name">Admin</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user">
+        <span id="user-nome">—</span>
+        <span class="role-badge" id="user-role">—</span>
+      </div>
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </div>
+
+  <div class="nav" id="nav">
+    <div class="nav-tab active"  onclick="irPara('mesas',this)"    >🪑 Mesas</div>
+    <div class="nav-tab"         onclick="irPara('pedidos',this)"  >📋 Pedidos</div>
+    <div class="nav-tab role-manager role-owner" onclick="irPara('cardapio',this)">🍔 Cardápio</div>
+    <div class="nav-tab role-owner" onclick="irPara('financeiro',this)">📊 Financeiro</div>
+    <div class="nav-tab role-owner" onclick="irPara('usuarios',this)">👥 Usuários</div>
+    <div class="nav-tab role-owner" onclick="irPara('configuracoes',this)">⚙️ Configurações</div>
+    <div class="nav-tab role-owner" onclick="irPara('auditoria',this)">🔍 Auditoria</div>
+  </div>
+
+  <div class="main">
+
+    <!-- MESAS -->
+    <div class="page active" id="page-mesas">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Ocupadas</div><div class="stat-val accent" id="s-ocup">—</div></div>
+        <div class="stat-card"><div class="stat-label">Livres</div><div class="stat-val green" id="s-liv">—</div></div>
+        <div class="stat-card"><div class="stat-label">Faturamento aberto</div><div class="stat-val amber" id="s-fat">—</div></div>
+      </div>
+      <div class="section-head">
+        <div class="section-title">Mapa de mesas</div>
+        <button class="btn btn-sm" onclick="carregarMesas()">↻ Atualizar</button>
+      </div>
+      <div class="mesas-grid" id="mesas-grid"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- PEDIDOS -->
+    <div class="page" id="page-pedidos">
+      <div class="section-head">
+        <div class="section-title">Pedidos</div>
+        <button class="btn btn-sm" onclick="carregarPedidos()">↻ Atualizar</button>
+      </div>
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>#</th><th>Mesa</th><th>Itens</th><th>Total</th><th>Status</th><th>Horário</th><th>Ações</th></tr></thead>
+          <tbody id="pedidos-tbody"><tr><td colspan="7"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CARDÁPIO -->
+    <div class="page" id="page-cardapio">
+      <div class="section-head">
+        <div class="section-title">Cardápio</div>
+        <button class="btn btn-sm btn-primary role-manager role-owner" onclick="abrirModalProduto()">+ Produto</button>
+      </div>
+      <div id="produtos-lista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- FINANCEIRO -->
+    <div class="page" id="page-financeiro">
+      <div class="section-head">
+        <div class="section-title">Dashboard financeiro</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input class="form-input" id="fin-inicio" type="date" style="width:140px;">
+          <input class="form-input" id="fin-fim"    type="date" style="width:140px;">
+          <button class="btn btn-sm btn-primary" onclick="carregarFinanceiro()">Consultar</button>
+        </div>
+      </div>
+      <div id="financeiro-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- USUÁRIOS -->
+    <div class="page" id="page-usuarios">
+      <div class="section-head">
+        <div class="section-title">Usuários do restaurante</div>
+        <button class="btn btn-sm btn-primary" onclick="abrirModalUsuario()">+ Novo usuário</button>
+      </div>
+      <div class="tabela-wrap">
+        <div id="usuarios-lista"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+    <!-- CONFIGURAÇÕES -->
+    <div class="page" id="page-configuracoes">
+      <div class="section-head"><div class="section-title">Configurações do restaurante</div></div>
+      <div id="config-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- AUDITORIA -->
+    <div class="page" id="page-auditoria">
+      <div class="section-head">
+        <div class="section-title">Log de auditoria</div>
+        <button class="btn btn-sm" onclick="carregarAuditoria()">Atualizar</button>
+      </div>
+      <div class="tabela-wrap" style="padding:0 16px;">
+        <div id="auditoria-lista"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL CONTA -->
+<div class="modal-bg" id="modal-conta">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-conta-title">Conta — Mesa</div>
+      <button class="modal-close" onclick="fecharModal('modal-conta')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-conta-body"></div>
+    <div class="modal-footer" id="modal-conta-footer" style="display:none;">
+      <button class="btn" onclick="fecharModal('modal-conta')">Cancelar</button>
+      <button class="btn btn-success" id="btn-fechar-conta" onclick="confirmarFecharConta()" disabled>✓ Fechar conta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PRODUTO -->
+<div class="modal-bg" id="modal-produto">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Produto</div>
+      <button class="modal-close" onclick="fecharModal('modal-produto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prod-id">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="prod-nome"></div>
+      <div class="form-row"><label class="form-label">Descrição</label><input class="form-input" id="prod-desc"></div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Preço (R$)</label><input class="form-input" id="prod-preco" type="number" step="0.01"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Custo (R$)</label><input class="form-input" id="prod-custo" type="number" step="0.01" value="0"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Categoria</label><select class="form-input" id="prod-cat"></select></div>
+      <div class="form-row"><label class="form-label">Foto (URL)</label><input class="form-input" id="prod-foto" placeholder="https://..."></div>
+      <div style="display:flex;gap:20px;margin-top:4px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prod-disp" checked> Disponível</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prod-dest"> Destaque</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-produto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUÁRIO -->
+<div class="modal-bg" id="modal-usuario">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Novo usuário</div>
+      <button class="modal-close" onclick="fecharModal('modal-usuario')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="u-nome"></div>
+      <div class="form-row"><label class="form-label">E-mail</label><input class="form-input" id="u-email" type="email"></div>
+      <div class="form-row"><label class="form-label">Senha</label><input class="form-input" id="u-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-row"><label class="form-label">Papel (role)</label>
+        <select class="form-input" id="u-role">
+          <option value="waiter">Garçom</option>
+          <option value="kitchen">Cozinha</option>
+          <option value="cashier">Caixa</option>
+          <option value="manager">Gerente</option>
+          <option value="owner">Dono</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-usuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">Criar usuário</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Scripts -->
+<script src="/shared/config.js"></script>
+<script src="/shared/tenant.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/r/admin/app.js"></script>
+</body>
+</html>
+
+
+
+

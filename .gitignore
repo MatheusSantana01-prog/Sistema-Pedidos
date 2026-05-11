@@ -1,0 +1,13 @@
+# Ambiente
+backend/.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+.env
+
+# Sistema
+.DS_Store
+Thumbs.db
+node_modules/
+*.log
