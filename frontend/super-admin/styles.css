@@ -52,6 +52,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .badge-inactive{background:rgba(239,68,68,.1);color:var(--red);}
 .badge-plan{background:rgba(124,58,237,.1);color:var(--primary);}
 .rest-actions{display:flex;gap:6px;}
+.rest-actions a{text-decoration:none;}
 /* MODAL */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
 .modal-bg.show{display:flex;}

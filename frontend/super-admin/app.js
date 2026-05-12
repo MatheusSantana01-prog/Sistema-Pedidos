@@ -78,10 +78,12 @@ async function carregarRestaurantes() {
             </div>
           </div>
           <div class="rest-actions">
+            <a class="btn btn-sm" href="/r/${r.slug}/admin" target="_blank" rel="noopener">Admin</a>
             <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${r.name}')">QR Codes</button>
             <button class="btn btn-sm ${r.is_active?'btn-danger':''}" onclick="toggleAtivo('${r.id}',${r.is_active})">
               ${r.is_active ? 'Desativar' : 'Ativar'}
             </button>
+            <button class="btn btn-sm btn-danger" onclick="deletarRestaurante('${r.id}','${r.name}')">Deletar</button>
           </div>
         </div>`).join('');
   } catch(e) {
@@ -96,6 +98,18 @@ async function toggleAtivo(id, atual) {
     showToast(atual ? 'Restaurante desativado' : 'Restaurante ativado', 'success');
     carregarRestaurantes();
   } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function deletarRestaurante(id, nome) {
+  const ok = confirm(`Deletar "${nome}" e todos os dados dele? Esta ação apaga mesas, produtos, pedidos e usuários vinculados ao restaurante.`);
+  if (!ok) return;
+  try {
+    await apiCall('DELETE', `/api/super-admin/restaurants/${id}`);
+    showToast('Restaurante deletado', 'success');
+    carregarRestaurantes();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
 }
 
 async function verQRCodes(restId, nome) {
@@ -176,7 +190,9 @@ async function criarRestaurante() {
     showToast(`Restaurante "${nome}" criado. Acesse /r/${slug}/admin`, 'success');
     fecharModal('modal-rest');
     carregarRestaurantes();
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
 }
 
 /* ── USUÁRIOS ───────────────────────────────────────── */

@@ -1077,43 +1077,67 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
     payload = body.model_dump(exclude={"initial_table_count", "create_default_categories"})
     resp = sb.table("restaurants").insert(payload).select("*").execute()
     rest = _row(resp)
+    try:
+        # Criar settings padrão
+        sb.table("restaurant_settings").insert({
+            "restaurant_id": rest["id"],
+            "service_fee_enabled": False,
+            "service_fee_percent": 10,
+            "allow_customer_notes": True,
+            "allow_waiter_call": True,
+            "allow_table_close_request": True,
+            "accept_pix": True,
+            "accept_card": True,
+            "accept_cash": True,
+        }).execute()
 
-    # Criar settings padrão
-    sb.table("restaurant_settings").insert({
-        "restaurant_id": rest["id"],
-        "service_fee_enabled": False,
-        "service_fee_percent": 10,
-        "allow_customer_notes": True,
-        "allow_waiter_call": False,
-        "allow_table_close_request": True,
-        "accept_pix": True,
-        "accept_card": True,
-        "accept_cash": True,
-    }).execute()
+        if body.create_default_categories:
+            sb.table("categorias").insert([
+                {"restaurant_id": rest["id"], "nome": "Entradas", "icone": "🥗", "ordem": 1},
+                {"restaurant_id": rest["id"], "nome": "Pratos principais", "icone": "🍽️", "ordem": 2},
+                {"restaurant_id": rest["id"], "nome": "Bebidas", "icone": "🥤", "ordem": 3},
+                {"restaurant_id": rest["id"], "nome": "Sobremesas", "icone": "🍰", "ordem": 4},
+            ]).execute()
 
-    if body.create_default_categories:
-        sb.table("categorias").insert([
-            {"restaurant_id": rest["id"], "nome": "Entradas", "icone": "🥗", "ordem": 1},
-            {"restaurant_id": rest["id"], "nome": "Pratos principais", "icone": "🍽️", "ordem": 2},
-            {"restaurant_id": rest["id"], "nome": "Bebidas", "icone": "🥤", "ordem": 3},
-            {"restaurant_id": rest["id"], "nome": "Sobremesas", "icone": "🍰", "ordem": 4},
-        ]).execute()
-
-    if body.initial_table_count:
-        sb.table("mesas").insert([
-            {
-                "restaurant_id": rest["id"],
-                "numero": n,
-                "capacidade": 4,
-                "ativa": True,
-                "status": "livre",
-                "qr_code_token": secrets.token_urlsafe(24),
-            }
-            for n in range(1, body.initial_table_count + 1)
-        ]).execute()
+        if body.initial_table_count:
+            sb.table("mesas").insert([
+                {
+                    "restaurant_id": rest["id"],
+                    "numero": n,
+                    "capacidade": 4,
+                    "ativa": True,
+                    "status": "livre",
+                    "qr_code_token": secrets.token_urlsafe(24),
+                }
+                for n in range(1, body.initial_table_count + 1)
+            ]).execute()
+    except Exception as exc:
+        apagar_restaurante_dados(rest["id"])
+        raise HTTPException(500, f"Erro ao preparar restaurante inicial: {exc}")
 
     log_acao(u, "criar_restaurante", "restaurants", rest["id"], None, {"slug": body.slug, "name": body.name}, request)
     return {"restaurant": rest}
+
+
+def apagar_restaurante_dados(restaurant_id: str):
+    pedidos = _rows(sb.table("pedidos").select("id").eq("restaurant_id", restaurant_id).execute())
+    pedido_ids = [p["id"] for p in pedidos]
+    if pedido_ids:
+        itens = _rows(sb.table("pedido_itens").select("id").in_("pedido_id", pedido_ids).execute())
+        item_ids = [i["id"] for i in itens]
+        if item_ids:
+            sb.table("pedido_item_ingredientes").delete().in_("pedido_item_id", item_ids).execute()
+        sb.table("pedido_itens").delete().in_("pedido_id", pedido_ids).execute()
+    sb.table("pedidos").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("sessao_mesa").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("fechamento_caixa").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("audit_log").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("produtos").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("categorias").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("mesas").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("restaurant_settings").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("restaurant_memberships").delete().eq("restaurant_id", restaurant_id).execute()
+    sb.table("restaurants").delete().eq("id", restaurant_id).execute()
 
 
 @app.patch("/api/super-admin/restaurants/{restaurant_id}/status", tags=["super-admin"])
@@ -1126,6 +1150,17 @@ def toggle_restaurante_status(restaurant_id: str, body: dict, request: Request,
     resp = sb.table("restaurants").update({"is_active": is_active, "updated_at": utcnow()}).eq("id", restaurant_id).select("id,name,slug,is_active").execute()
     log_acao(u, "toggle_restaurante", "restaurants", restaurant_id, None, {"is_active": is_active}, request)
     return {"restaurant": _row(resp)}
+
+
+@app.delete("/api/super-admin/restaurants/{restaurant_id}", tags=["super-admin"])
+def deletar_restaurante(restaurant_id: str, request: Request,
+                        u: dict = Depends(require_super_admin)):
+    rest = sb.table("restaurants").select("id,name,slug").eq("id", restaurant_id).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    apagar_restaurante_dados(restaurant_id)
+    log_acao(u, "deletar_restaurante", "restaurants", restaurant_id, rest.data, None, request)
+    return {"mensagem": "Restaurante deletado", "restaurant": rest.data}
 
 
 @app.get("/api/super-admin/metrics", tags=["super-admin"])
