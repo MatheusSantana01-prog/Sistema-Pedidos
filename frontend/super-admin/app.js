@@ -109,7 +109,9 @@ async function verQRCodes(restId, nome) {
       </div>`
     ).join('');
     alert(`QR Codes — ${nome}\n\nAcesse cada URL:\n${(mesas||[]).map(m=>m.url_slug).join('\n')}`);
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) {
+    showToast('Backend precisa ser atualizado no Render para listar QR Codes aqui.', 'error');
+  }
 }
 
 function abrirModalNovoRest() {
@@ -171,7 +173,7 @@ async function criarRestaurante() {
       });
     }
 
-    showToast(`Restaurante "${nome}" criado!`, 'success');
+    showToast(`Restaurante "${nome}" criado. Acesse /r/${slug}/admin`, 'success');
     fecharModal('modal-rest');
     carregarRestaurantes();
   } catch(e) { showToast(e.message, 'error'); }
@@ -192,7 +194,10 @@ async function carregarUsuarios() {
           <td><span style="font-size:10px;color:${m.is_active?'var(--green)':'var(--red)'}">${m.is_active?'✓ Ativo':'✗ Inativo'}</span></td>
         </tr>`).join('');
   } catch(e) {
-    document.getElementById('usuarios-tbody').innerHTML = '<tr><td colspan="5" class="tabela-empty">Erro: ' + e.message + '</td></tr>';
+    document.getElementById('usuarios-tbody').innerHTML = `
+      <tr><td colspan="5" class="tabela-empty">
+        Este backend ainda não expõe a listagem de usuários. Os usuários criados são salvos, mas esta aba depende do redeploy do Render.
+      </td></tr>`;
   }
 }
 
@@ -250,7 +255,12 @@ async function executarValidacao() {
           </tbody>
         </table>
       </div>`;
-  } catch(e) { showToast(e.message, 'error'); }
+  } catch(e) {
+    document.getElementById('validacao-content').innerHTML = `
+      <div class="tabela-empty">
+        A validação avançada depende do backend atualizado no Render. Rode o deploy do último commit no Render para liberar estes checks.
+      </div>`;
+  }
 }
 
 /* ── UTILS ──────────────────────────────────────────── */
