@@ -96,6 +96,14 @@
         <div class="section-title">Cardápio</div>
         <button class="btn btn-sm btn-primary role-manager role-owner" onclick="abrirModalProduto()">+ Produto</button>
       </div>
+      <div class="cardapio-toolbar">
+        <input class="form-input" id="cardapio-busca" placeholder="Buscar por produto, descrição ou categoria" oninput="renderAdminProdutos()">
+        <select class="form-input" id="cardapio-status" onchange="renderAdminProdutos()">
+          <option value="todos">Todos os produtos</option>
+          <option value="disponiveis">Disponíveis</option>
+          <option value="pausados">Pausados</option>
+        </select>
+      </div>
       <div id="produtos-lista"><div class="loading"><div class="spinner"></div></div></div>
     </div>
 
@@ -167,14 +175,21 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="prod-id">
-      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="prod-nome"></div>
-      <div class="form-row"><label class="form-label">Descrição</label><input class="form-input" id="prod-desc"></div>
+      <div class="produto-editor-preview">
+        <img id="prod-preview-img" src="" alt="Prévia do produto">
+        <div>
+          <div class="form-label">Imagem do cardápio</div>
+          <div class="produto-editor-hint">Use uma URL de foto real. Sem URL, o sistema usa uma imagem automática pelo nome do produto.</div>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="prod-nome" oninput="atualizarPreviewProduto()"></div>
+      <div class="form-row"><label class="form-label">Descrição</label><input class="form-input" id="prod-desc" oninput="atualizarPreviewProduto()"></div>
       <div class="form-row-2">
         <div class="form-row" style="margin:0"><label class="form-label">Preço (R$)</label><input class="form-input" id="prod-preco" type="number" step="0.01"></div>
         <div class="form-row" style="margin:0"><label class="form-label">Custo (R$)</label><input class="form-input" id="prod-custo" type="number" step="0.01" value="0"></div>
       </div>
       <div class="form-row"><label class="form-label">Categoria</label><select class="form-input" id="prod-cat"></select></div>
-      <div class="form-row"><label class="form-label">Foto (URL)</label><input class="form-input" id="prod-foto" placeholder="https://..."></div>
+      <div class="form-row"><label class="form-label">Foto (URL)</label><input class="form-input" id="prod-foto" placeholder="https://..." oninput="atualizarPreviewProduto()"></div>
       <div style="display:flex;gap:20px;margin-top:4px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prod-disp" checked> Disponível</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prod-dest"> Destaque</label>

@@ -307,6 +307,27 @@ class CriarProdutoInput(BaseModel):
     destaque: bool = False
     tempo_preparo_minutos: int = 10
 
+    @field_validator("preco")
+    @classmethod
+    def val_preco(cls, v):
+        if v <= 0:
+            raise ValueError("Preço precisa ser maior que zero")
+        return v
+
+    @field_validator("custo")
+    @classmethod
+    def val_custo(cls, v):
+        if v < 0:
+            raise ValueError("Custo não pode ser negativo")
+        return v
+
+    @field_validator("tempo_preparo_minutos")
+    @classmethod
+    def val_tempo_preparo(cls, v):
+        if v < 1 or v > 240:
+            raise ValueError("Tempo de preparo precisa ficar entre 1 e 240 minutos")
+        return v
+
 
 class FecharContaInput(BaseModel):
     forma_pagamento: str
@@ -420,13 +441,43 @@ def criar_pedido_public(slug: str, body: dict):
     produto_ids = [str(i.get("produto_id")) for i in itens if i.get("produto_id")]
     if len(produto_ids) != len(itens):
         raise HTTPException(400, "Todos os itens precisam informar produto_id")
-    produtos = sb.table("produtos").select("id").eq("restaurant_id", rid).eq("disponivel", True).in_("id", produto_ids).execute()
-    encontrados = {str(p["id"]) for p in _rows(produtos)}
+    produtos = sb.table("produtos").select("id,nome,preco").eq("restaurant_id", rid).eq("disponivel", True).in_("id", produto_ids).execute()
+    produtos_por_id = {str(p["id"]): p for p in _rows(produtos)}
+    encontrados = set(produtos_por_id.keys())
     if set(produto_ids) - encontrados:
         raise HTTPException(400, "Pedido contém produto indisponível ou inexistente")
 
+    itens_sanitizados = []
+    subtotal = 0.0
+    for item in itens:
+        produto_id = str(item.get("produto_id"))
+        produto = produtos_por_id[produto_id]
+        try:
+            quantidade = int(item.get("quantidade", 1))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Quantidade inválida")
+        if quantidade < 1 or quantidade > 50:
+            raise HTTPException(400, "Quantidade precisa ficar entre 1 e 50")
+
+        preco = float(produto["preco"])
+        item_subtotal = round(preco * quantidade, 2)
+        subtotal = round(subtotal + item_subtotal, 2)
+        itens_sanitizados.append({
+            "produto_id": produto_id,
+            "nome_produto": produto["nome"],
+            "preco_unitario": preco,
+            "quantidade": quantidade,
+            "subtotal": item_subtotal,
+            "observacao": item.get("observacao") or None,
+            "ingredientes": item.get("ingredientes") or [],
+        })
+
     # Garantir que o restaurant_id é o certo (nunca confia no body)
     body["restaurant_id"] = rid
+    body["itens"] = itens_sanitizados
+    body["items"] = itens_sanitizados
+    body["subtotal"] = subtotal
+    body["total"] = subtotal
 
     resp = sb.rpc("criar_pedido", {"payload": body}).execute()
     data = _first(resp.data)

@@ -9,7 +9,16 @@ let mesaAberta     = null;
 let pgtoSelecionado = null;
 let produtosMap    = {};
 let categoriasLista = [];
+let produtosLista  = [];
 let pollingHandle  = null;
+
+const ADMIN_FOOD_IMAGES = {
+  pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=700&q=80',
+  burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=700&q=80',
+  drink: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=700&q=80',
+  dessert: 'https://images.unsplash.com/photo-1564355808539-22fda35bed7e?auto=format&fit=crop&w=700&q=80',
+  default: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80',
+};
 
 /* ── INIT ─────────────────────────────────────────── */
 async function init() {
@@ -278,33 +287,52 @@ async function carregarCardapio() {
       apiCall('GET', '/api/admin/categories'),
     ]);
     categoriasLista = catsResp.categorias || [];
-    const prods = prodsResp.produtos || [];
-    prods.forEach(p => produtosMap[p.id] = p);
-
-    document.getElementById('produtos-lista').innerHTML = !prods.length
-      ? '<div class="tabela-empty">Nenhum produto</div>'
-      : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-          ${prods.map(p => `
-          <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;gap:12px;align-items:flex-start;">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:13px;margin-bottom:2px">${p.nome}</div>
-              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${p.categorias?.nome||''}</div>
-              <div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--color-primary)">R$ ${fmt(p.preco)}</div>
-              <div style="margin-top:6px;display:flex;gap:4px;">
-                <span style="font-size:10px;padding:2px 6px;border-radius:3px;font-weight:700;${p.disponivel?'background:rgba(29,185,84,.1);color:var(--green)':'background:rgba(239,68,68,.1);color:var(--red)'}">
-                  ${p.disponivel?'Disponível':'Indisponível'}
-                </span>
-              </div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:4px">
-              <button class="btn btn-sm" onclick="abrirModalProdutoById('${p.id}')">Editar</button>
-              <button class="btn btn-sm ${p.disponivel?'btn-danger':''}" onclick="toggleProduto('${p.id}',${p.disponivel},this)">${p.disponivel?'Pausar':'Ativar'}</button>
-            </div>
-          </div>`).join('')}
-        </div>`;
+    produtosLista = prodsResp.produtos || [];
+    produtosMap = {};
+    produtosLista.forEach(p => produtosMap[p.id] = p);
+    renderAdminProdutos();
   } catch (e) {
     document.getElementById('produtos-lista').innerHTML = '<div class="tabela-empty">Erro ao carregar.</div>';
   }
+}
+
+function renderAdminProdutos() {
+  const q = (document.getElementById('cardapio-busca')?.value || '').toLowerCase();
+  const status = document.getElementById('cardapio-status')?.value || 'todos';
+  const prods = produtosLista.filter(p => {
+    const texto = `${p.nome || ''} ${p.descricao || ''} ${p.categorias?.nome || ''}`.toLowerCase();
+    const statusOk = status === 'todos' || (status === 'disponiveis' && p.disponivel) || (status === 'pausados' && !p.disponivel);
+    return statusOk && (!q || texto.includes(q));
+  });
+
+  document.getElementById('produtos-lista').innerHTML = !prods.length
+    ? '<div class="tabela-empty">Nenhum produto encontrado</div>'
+    : `<div class="admin-produtos-grid">
+        ${prods.map(p => `
+        <div class="admin-produto-card ${p.disponivel ? '' : 'is-paused'}">
+          <img class="admin-produto-img" src="${imageForAdminProduct(p)}" alt="${p.nome}" loading="lazy" onerror="this.src='${ADMIN_FOOD_IMAGES.default}'">
+          <div class="admin-produto-body">
+            <div class="admin-produto-top">
+              <div>
+                <div class="admin-produto-cat">${p.categorias?.icone || ''} ${p.categorias?.nome || 'Sem categoria'}</div>
+                <div class="admin-produto-nome">${p.nome}</div>
+              </div>
+              <span class="admin-produto-badge ${p.disponivel ? 'ok' : 'off'}">${p.disponivel ? 'Disponível' : 'Pausado'}</span>
+            </div>
+            ${p.descricao ? `<div class="admin-produto-desc">${p.descricao}</div>` : ''}
+            <div class="admin-produto-footer">
+              <div>
+                <div class="admin-produto-preco">R$ ${fmt(p.preco)}</div>
+                ${p.destaque ? '<div class="admin-produto-destaque">Destaque na mesa</div>' : ''}
+              </div>
+              <div class="admin-produto-actions">
+                <button class="btn btn-sm" onclick="abrirModalProdutoById('${p.id}')">Editar</button>
+                <button class="btn btn-sm ${p.disponivel?'btn-danger':'btn-success'}" onclick="toggleProduto('${p.id}',${p.disponivel},this)">${p.disponivel?'Pausar':'Ativar'}</button>
+              </div>
+            </div>
+          </div>
+        </div>`).join('')}
+      </div>`;
 }
 
 function abrirModalProdutoById(id) { abrirModalProduto(produtosMap[id]); }
@@ -316,6 +344,7 @@ function abrirModalProduto(p = null) {
   document.getElementById('prod-preco').value = p?.preco || '';
   document.getElementById('prod-custo').value = p?.custo || 0;
   document.getElementById('prod-foto').value  = p?.foto_url || '';
+  atualizarPreviewProduto();
   document.getElementById('prod-disp').checked = p ? p.disponivel : true;
   document.getElementById('prod-dest').checked = p?.destaque || false;
   document.getElementById('prod-cat').innerHTML =
@@ -544,6 +573,25 @@ async function carregarAuditoria() {
 /* ── UTILITÁRIOS ──────────────────────────────────── */
 function fmt(n)       { return Number(n).toFixed(2).replace('.',','); }
 function statusLabel(s) { return {pendente:'Aguardando',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue',cancelado:'Cancelado'}[s]||s; }
+
+function imageForAdminProduct(produto) {
+  if (produto?.foto_url) return produto.foto_url;
+  const text = `${produto?.nome || ''} ${produto?.descricao || ''}`.toLowerCase();
+  if (text.includes('pizza') || text.includes('calabresa') || text.includes('margherita')) return ADMIN_FOOD_IMAGES.pizza;
+  if (text.includes('burger') || text.includes('burguer') || text.includes('hambur') || text.includes('smash')) return ADMIN_FOOD_IMAGES.burger;
+  if (text.includes('bebida') || text.includes('refri') || text.includes('suco') || text.includes('coca')) return ADMIN_FOOD_IMAGES.drink;
+  if (text.includes('sobr') || text.includes('doce') || text.includes('brownie') || text.includes('tiramisu')) return ADMIN_FOOD_IMAGES.dessert;
+  return ADMIN_FOOD_IMAGES.default;
+}
+
+function atualizarPreviewProduto() {
+  const preview = document.getElementById('prod-preview-img');
+  if (!preview) return;
+  const foto = document.getElementById('prod-foto').value.trim();
+  const nome = document.getElementById('prod-nome').value.trim();
+  const desc = document.getElementById('prod-desc').value.trim();
+  preview.src = foto || imageForAdminProduct({ nome, descricao: desc });
+}
 
 function showToast(msg, tipo = '') {
   const t = document.getElementById('toast');
