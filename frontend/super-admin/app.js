@@ -209,9 +209,10 @@ async function carregarUsuarios() {
   document.getElementById('usuarios-tbody').innerHTML = '<tr><td colspan="5" class="tabela-empty">Carregando...</td></tr>';
   try {
     const { memberships } = await apiCall('GET', '/api/super-admin/users');
-    document.getElementById('usuarios-tbody').innerHTML = !memberships.length
+    const rows = (memberships || []).filter(m => mostrarInativos || m.restaurants?.is_active !== false);
+    document.getElementById('usuarios-tbody').innerHTML = !rows.length
       ? '<tr><td colspan="5" class="tabela-empty">Nenhum usuário</td></tr>'
-      : memberships.map(m => `<tr>
+      : rows.map(m => `<tr>
           <td>${m.usuarios?.nome||'—'}</td>
           <td class="mono" style="font-size:12px">${m.usuarios?.email||'—'}</td>
           <td style="font-size:12px;color:var(--muted)">${m.restaurants?.name||'—'}</td>

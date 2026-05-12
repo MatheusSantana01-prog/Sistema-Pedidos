@@ -1183,7 +1183,7 @@ def listar_usuarios_plataforma(u: dict = Depends(require_super_admin)):
     resp = sb.table("restaurant_memberships").select(
         "role,is_active,created_at,"
         "usuarios(id,nome,email,ativo),"
-        "restaurants(id,name,slug)"
+        "restaurants(id,name,slug,is_active)"
     ).order("created_at", desc=True).limit(200).execute()
     return {"memberships": _rows(resp)}
 
