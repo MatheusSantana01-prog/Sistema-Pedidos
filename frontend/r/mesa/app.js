@@ -181,7 +181,9 @@ function abrirProduto(id) {
   document.getElementById('modal-desc').textContent = prodAtual.descricao || '';
   document.getElementById('modal-preco').textContent = 'R$ ' + fmt(prodAtual.preco);
   document.getElementById('modal-total').textContent = fmt(prodAtual.preco);
-  document.getElementById('modal-obs').value = '';
+  const obsEl = document.getElementById('modal-obs');
+  obsEl.value = '';
+  obsEl.style.display = RESTAURANT.settings?.allow_customer_notes === false ? 'none' : 'block';
 
   const imgEl = document.getElementById('modal-produto-img');
   imgEl.innerHTML = `<img src="${imageForProduct(prodAtual)}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;">`;
@@ -264,6 +266,7 @@ function abrirCarrinho() {
     </div>`).join('');
   document.getElementById('carrinho-total-val').textContent = 'R$ ' + fmt(total);
   document.getElementById('obs-geral').value = '';
+  document.getElementById('obs-geral').style.display = RESTAURANT.settings?.allow_customer_notes === false ? 'none' : 'block';
   document.getElementById('modal-carrinho').classList.add('show');
 }
 
@@ -314,7 +317,10 @@ async function verConta() {
     const slug = getCurrentRestaurantSlug();
     const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
     const pedidos = data.pedidos || [];
-    const total   = pedidos.reduce((a, p) => a + Number(p.total), 0);
+    const total   = Number(data.total_consumido ?? pedidos.reduce((a, p) => a + Number(p.total), 0));
+    const taxa    = Number(data.taxa_servico || 0);
+    const totalFinal = Number(data.total_com_taxa ?? (total + taxa));
+    const settings = data.settings || {};
 
     if (data.sessao_status === 'fechada') {
       document.getElementById('conta-conteudo').innerHTML = `
@@ -335,10 +341,19 @@ async function verConta() {
             </div>`).join('')}
         </div>`).join('')}
       <div class="conta-total">
-        <span>Total</span>
+        <span>Subtotal</span>
         <span style="color:var(--color-primary)">R$ ${fmt(total)}</span>
       </div>
-      ${RESTAURANT.settings?.allow_table_close_request ? `
+      ${taxa ? `<div class="conta-item"><span>Taxa de serviço</span><span>R$ ${fmt(taxa)}</span></div>
+      <div class="conta-total"><span>Total</span><span style="color:var(--color-primary)">R$ ${fmt(totalFinal)}</span></div>` : ''}
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px">
+        Pagamento: ${[
+          settings.accept_pix !== false ? 'Pix' : '',
+          settings.accept_card !== false ? 'cartão' : '',
+          settings.accept_cash !== false ? 'dinheiro' : '',
+        ].filter(Boolean).join(', ') || 'consulte o atendimento'}
+      </div>
+      ${settings.allow_table_close_request ? `
         <div style="margin-top:8px;font-size:13px;color:var(--muted);text-align:center">
           Peça ao garçom para fechar sua conta.
         </div>` : ''}`;

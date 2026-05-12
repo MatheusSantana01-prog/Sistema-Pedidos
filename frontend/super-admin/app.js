@@ -117,6 +117,8 @@ function abrirModalNovoRest() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  document.getElementById('r-mesas').value = 10;
+  document.getElementById('r-categorias').checked = true;
   document.getElementById('modal-rest').classList.add('show');
 }
 
@@ -137,15 +139,26 @@ async function criarRestaurante() {
   const email = document.getElementById('r-email').value.trim() || null;
   const plano = document.getElementById('r-plano').value;
   const cor   = document.getElementById('r-cor').value;
+  const mesas = Number(document.getElementById('r-mesas').value || 0);
+  const categorias = document.getElementById('r-categorias').checked;
   const ownerNome  = document.getElementById('r-owner-nome').value.trim() || null;
   const ownerEmail = document.getElementById('r-owner-email').value.trim() || null;
   const ownerSenha = document.getElementById('r-owner-senha').value || null;
 
   if (!nome || !slug) return showToast('Nome e slug obrigatórios', 'error');
   if (!slug.match(/^[a-z0-9-]+$/)) return showToast('Slug só pode ter letras minúsculas, números e hífens', 'error');
+  if (mesas < 0 || mesas > 100) return showToast('Mesas iniciais precisa ficar entre 0 e 100', 'error');
 
   try {
-    const payload = { name: nome, slug, email, plan: plano, primary_color: cor };
+    const payload = {
+      name: nome,
+      slug,
+      email,
+      plan: plano,
+      primary_color: cor,
+      initial_table_count: mesas,
+      create_default_categories: categorias,
+    };
     const { restaurant } = await apiCall('POST', '/api/super-admin/restaurants', payload);
 
     // Criar owner via super-admin endpoint se fornecido

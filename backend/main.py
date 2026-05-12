@@ -10,6 +10,7 @@ Versão: 2.0.0
 """
 from __future__ import annotations
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
@@ -219,6 +220,22 @@ class CriarRestauranteInput(BaseModel):
     background_color: str = "#0a0a0a"
     text_color: str = "#f2f0eb"
     plan: str = "starter"
+    initial_table_count: int = 10
+    create_default_categories: bool = True
+
+    @field_validator("slug")
+    @classmethod
+    def val_slug(cls, v):
+        if not v or not all(c.islower() or c.isdigit() or c == "-" for c in v):
+            raise ValueError("Slug deve conter apenas letras minúsculas, números e hífens")
+        return v
+
+    @field_validator("initial_table_count")
+    @classmethod
+    def val_initial_table_count(cls, v):
+        if v < 0 or v > 100:
+            raise ValueError("Quantidade inicial de mesas precisa ficar entre 0 e 100")
+        return v
 
 
 class AtualizarRestauranteInput(BaseModel):
@@ -445,6 +462,11 @@ def criar_pedido_public(slug: str, body: dict):
     if not mesa.data or not mesa.data["ativa"]:
         raise HTTPException(404, "Mesa não encontrada")
 
+    settings_resp = sb.table("restaurant_settings").select(
+        "allow_customer_notes"
+    ).eq("restaurant_id", rid).single().execute()
+    settings = settings_resp.data or {}
+
     produto_ids = [str(i.get("produto_id")) for i in itens if i.get("produto_id")]
     if len(produto_ids) != len(itens):
         raise HTTPException(400, "Todos os itens precisam informar produto_id")
@@ -475,7 +497,7 @@ def criar_pedido_public(slug: str, body: dict):
             "preco_unitario": preco,
             "quantidade": quantidade,
             "subtotal": item_subtotal,
-            "observacao": item.get("observacao") or None,
+            "observacao": (item.get("observacao") or None) if settings.get("allow_customer_notes", True) else None,
             "ingredientes": item.get("ingredientes") or [],
         })
 
@@ -485,6 +507,8 @@ def criar_pedido_public(slug: str, body: dict):
     body["items"] = itens_sanitizados
     body["subtotal"] = subtotal
     body["total"] = subtotal
+    if not settings.get("allow_customer_notes", True):
+        body["observacao_geral"] = None
 
     resp = sb.rpc("criar_pedido", {"payload": body}).execute()
     data = _first(resp.data)
@@ -506,10 +530,19 @@ def get_conta_public(slug: str, sessao_id: str):
     if not sessao.data:
         raise HTTPException(404, "Sessão não encontrada")
 
+    settings = _first(sb.table("restaurant_settings").select(
+        "service_fee_enabled,service_fee_percent,accept_pix,accept_card,accept_cash,allow_table_close_request"
+    ).eq("restaurant_id", rid).execute().data) or {}
     pedidos = sb.rpc("get_pedidos_sessao", {"p_sessao_id": sessao_id, "p_restaurant_id": rid}).execute()
+    total_consumido = float(sessao.data["total_consumido"] or 0)
+    taxa_percent = float(settings.get("service_fee_percent") or 0) if settings.get("service_fee_enabled") else 0
+    taxa_servico = round(total_consumido * taxa_percent / 100, 2)
     return {
         "sessao_status":     sessao.data["status"],
-        "total_consumido":   sessao.data["total_consumido"],
+        "total_consumido":   total_consumido,
+        "taxa_servico":      taxa_servico,
+        "total_com_taxa":    round(total_consumido + taxa_servico, 2),
+        "settings":          settings,
         "sessao_fechada_em": sessao.data["fechada_em"],
         "pedidos":           pedidos.data or [],
     }
@@ -706,7 +739,6 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
 @app.post("/api/admin/tables", tags=["admin"])
 def criar_mesa(body: CriarMesaInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
-    import secrets
     token = secrets.token_urlsafe(24)
     resp = sb.table("mesas").insert({
         "restaurant_id": rid, "numero": body.numero,
@@ -1042,12 +1074,43 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
     if existe.data:
         raise HTTPException(400, f"Slug '{body.slug}' já está em uso")
 
-    payload = body.model_dump()
+    payload = body.model_dump(exclude={"initial_table_count", "create_default_categories"})
     resp = sb.table("restaurants").insert(payload).select("*").execute()
     rest = _row(resp)
 
     # Criar settings padrão
-    sb.table("restaurant_settings").insert({"restaurant_id": rest["id"]}).execute()
+    sb.table("restaurant_settings").insert({
+        "restaurant_id": rest["id"],
+        "service_fee_enabled": False,
+        "service_fee_percent": 10,
+        "allow_customer_notes": True,
+        "allow_waiter_call": False,
+        "allow_table_close_request": True,
+        "accept_pix": True,
+        "accept_card": True,
+        "accept_cash": True,
+    }).execute()
+
+    if body.create_default_categories:
+        sb.table("categorias").insert([
+            {"restaurant_id": rest["id"], "nome": "Entradas", "icone": "🥗", "ordem": 1},
+            {"restaurant_id": rest["id"], "nome": "Pratos principais", "icone": "🍽️", "ordem": 2},
+            {"restaurant_id": rest["id"], "nome": "Bebidas", "icone": "🥤", "ordem": 3},
+            {"restaurant_id": rest["id"], "nome": "Sobremesas", "icone": "🍰", "ordem": 4},
+        ]).execute()
+
+    if body.initial_table_count:
+        sb.table("mesas").insert([
+            {
+                "restaurant_id": rest["id"],
+                "numero": n,
+                "capacidade": 4,
+                "ativa": True,
+                "status": "livre",
+                "qr_code_token": secrets.token_urlsafe(24),
+            }
+            for n in range(1, body.initial_table_count + 1)
+        ]).execute()
 
     log_acao(u, "criar_restaurante", "restaurants", rest["id"], None, {"slug": body.slug, "name": body.name}, request)
     return {"restaurant": rest}
@@ -1140,6 +1203,36 @@ def diagnosticos_plataforma(u: dict = Depends(require_super_admin)):
         "check_name": "memberships",
         "status": "OK" if qtd_membros_sem_restaurante == 0 else "WARN",
         "detail": "Todos os usuários vinculados possuem restaurante" if qtd_membros_sem_restaurante == 0 else f"{qtd_membros_sem_restaurante} vínculo(s) sem restaurante",
+    })
+
+    restaurantes = _rows(sb.table("restaurants").select("id,name").eq("is_active", True).execute())
+    restaurantes_sem_mesas = []
+    restaurantes_sem_categorias = []
+    restaurantes_sem_owner = []
+    for rest in restaurantes:
+        rid = rest["id"]
+        if not _rows(sb.table("mesas").select("id").eq("restaurant_id", rid).eq("ativa", True).limit(1).execute()):
+            restaurantes_sem_mesas.append(rest["name"])
+        if not _rows(sb.table("categorias").select("id").eq("restaurant_id", rid).limit(1).execute()):
+            restaurantes_sem_categorias.append(rest["name"])
+        owner = sb.table("restaurant_memberships").select("id").eq("restaurant_id", rid).eq("role", "owner").eq("is_active", True).limit(1).execute()
+        if not _rows(owner):
+            restaurantes_sem_owner.append(rest["name"])
+
+    checks.append({
+        "check_name": "mesas_ativas",
+        "status": "OK" if not restaurantes_sem_mesas else "WARN",
+        "detail": "Todos os restaurantes ativos possuem mesas" if not restaurantes_sem_mesas else f"Sem mesas: {', '.join(restaurantes_sem_mesas)}",
+    })
+    checks.append({
+        "check_name": "categorias_cardapio",
+        "status": "OK" if not restaurantes_sem_categorias else "WARN",
+        "detail": "Todos os restaurantes ativos possuem categorias" if not restaurantes_sem_categorias else f"Sem categorias: {', '.join(restaurantes_sem_categorias)}",
+    })
+    checks.append({
+        "check_name": "owner_restaurante",
+        "status": "OK" if not restaurantes_sem_owner else "WARN",
+        "detail": "Todos os restaurantes ativos possuem owner" if not restaurantes_sem_owner else f"Sem owner: {', '.join(restaurantes_sem_owner)}",
     })
 
     return {"checks": checks}
