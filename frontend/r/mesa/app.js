@@ -8,6 +8,17 @@ let prodAtual    = null;
 let modsSelecionadas = {};
 let pollingConta = null;
 
+const FOOD_IMAGES = {
+  pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=80',
+  burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=900&q=80',
+  fries: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=900&q=80',
+  chicken: 'https://images.unsplash.com/photo-1606755962773-d324e0a13086?auto=format&fit=crop&w=900&q=80',
+  drink: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=900&q=80',
+  juice: 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?auto=format&fit=crop&w=900&q=80',
+  dessert: 'https://images.unsplash.com/photo-1564355808539-22fda35bed7e?auto=format&fit=crop&w=900&q=80',
+  default: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80',
+};
+
 /* ── INIT ───────────────────────────────────────────── */
 async function init() {
   // 1. Resolver restaurante pelo slug
@@ -95,15 +106,19 @@ function renderDestaques() {
   const wrap = document.getElementById('destaques-wrap');
   if (!dest.length) { wrap.innerHTML = ''; return; }
   wrap.innerHTML = `<div class="dest-wrap">
-    <div class="dest-label">⭐ Destaques</div>
+    <div class="dest-head">
+      <div>
+        <div class="dest-label">Seleção da casa</div>
+        <div class="dest-title">Destaques do cardápio</div>
+      </div>
+    </div>
     <div class="dest-grid">
       ${dest.slice(0,4).map(p => `
         <div class="dest-card" onclick="abrirProduto('${p.id}')">
-          ${p.foto_url
-            ? `<img src="${p.foto_url}" alt="${p.nome}" loading="lazy">`
-            : `<div class="dest-card-img-placeholder">${emoji(p.nome)}</div>`}
+          <img src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy">
           <div class="dest-card-body">
             <div class="dest-card-nome">${p.nome}</div>
+            ${p.descricao ? `<div class="dest-card-desc">${p.descricao}</div>` : ''}
             <div class="dest-card-preco">R$ ${fmt(p.preco)}</div>
           </div>
         </div>`).join('')}
@@ -116,12 +131,13 @@ function renderProdutos(cats) {
   if (!cats.length) { wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Nenhum produto encontrado</div>'; return; }
   wrap.innerHTML = cats.map(c => `
     <div class="cat-section" id="cat-${c.id}">
-      <div class="cat-section-title">${c.icone||''} ${c.nome}</div>
+      <div class="cat-section-title">
+        <span>${c.icone||''}</span>
+        <span>${c.nome}</span>
+      </div>
       ${(c.produtos||[]).map(p => `
         <div class="produto-card" onclick="${p.disponivel!==false?`abrirProduto('${p.id}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
-          ${p.foto_url
-            ? `<img class="produto-img" src="${p.foto_url}" alt="${p.nome}" loading="lazy">`
-            : `<div class="produto-img-placeholder">${emoji(p.nome)}</div>`}
+          <img class="produto-img" src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy">
           <div class="produto-info">
             <div class="produto-nome">${p.nome}</div>
             ${p.descricao?`<div class="produto-desc">${p.descricao}</div>`:''}
@@ -168,11 +184,7 @@ function abrirProduto(id) {
   document.getElementById('modal-obs').value = '';
 
   const imgEl = document.getElementById('modal-produto-img');
-  if (prodAtual.foto_url) {
-    imgEl.innerHTML = `<img src="${prodAtual.foto_url}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;">`;
-  } else {
-    imgEl.innerHTML = `<span style="font-size:64px;">${emoji(prodAtual.nome)}</span>`;
-  }
+  imgEl.innerHTML = `<img src="${imageForProduct(prodAtual)}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;">`;
 
   const ings = prodAtual.ings || [];
   document.getElementById('modal-ings').innerHTML = ings.length ? `
@@ -361,6 +373,21 @@ function mostrarContaFechada() {
 
 /* ── UTILS ───────────────────────────────────────────── */
 function fmt(n) { return Number(n).toFixed(2).replace('.', ','); }
+
+function imageForProduct(produto) {
+  if (produto?.foto_url) return produto.foto_url;
+  const n = (produto?.nome || '').toLowerCase();
+  const d = (produto?.descricao || '').toLowerCase();
+  const text = `${n} ${d}`;
+  if (text.includes('pizza') || text.includes('margherita') || text.includes('calabresa')) return FOOD_IMAGES.pizza;
+  if (text.includes('burguer') || text.includes('burger') || text.includes('smash') || text.includes('hambur')) return FOOD_IMAGES.burger;
+  if (text.includes('batata') || text.includes('frita')) return FOOD_IMAGES.fries;
+  if (text.includes('frango') || text.includes('chicken')) return FOOD_IMAGES.chicken;
+  if (text.includes('suco') || text.includes('laranja') || text.includes('limão') || text.includes('limao')) return FOOD_IMAGES.juice;
+  if (text.includes('refri') || text.includes('coca') || text.includes('bebida') || text.includes('drink')) return FOOD_IMAGES.drink;
+  if (text.includes('brownie') || text.includes('sobr') || text.includes('doce') || text.includes('tiramisu')) return FOOD_IMAGES.dessert;
+  return FOOD_IMAGES.default;
+}
 
 function emoji(nome) {
   const n = (nome||'').toLowerCase();
