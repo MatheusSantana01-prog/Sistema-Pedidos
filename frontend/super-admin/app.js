@@ -1,4 +1,5 @@
 let RESTAURANTES = [];
+let mostrarInativos = false;
 
 /* ── LOGIN ──────────────────────────────────────────── */
 async function fazerLogin() {
@@ -63,9 +64,11 @@ async function carregarRestaurantes() {
       sel.innerHTML = RESTAURANTES.map(r => `<option value="${r.id}">${r.name} (${r.slug})</option>`).join('');
     }
 
-    document.getElementById('restaurantes-lista').innerHTML = !RESTAURANTES.length
+    const visiveis = mostrarInativos ? RESTAURANTES : RESTAURANTES.filter(r => r.is_active);
+
+    document.getElementById('restaurantes-lista').innerHTML = !visiveis.length
       ? '<div style="padding:32px;text-align:center;color:var(--muted)">Nenhum restaurante</div>'
-      : RESTAURANTES.map(r => `
+      : visiveis.map(r => `
         <div class="rest-card">
           <div class="rest-color" style="background:${r.primary_color||'#ff4d1c'}"></div>
           <div class="rest-info">
@@ -101,13 +104,19 @@ async function toggleAtivo(id, atual) {
 }
 
 async function deletarRestaurante(id, nome) {
-  const ok = confirm(`Deletar "${nome}" e todos os dados dele? Esta ação apaga mesas, produtos, pedidos e usuários vinculados ao restaurante.`);
+  const ok = confirm(`Deletar "${nome}"? Se o backend já estiver atualizado, os dados serão apagados. Se ainda não estiver, ele será desativado e removido desta lista.`);
   if (!ok) return;
   try {
     await apiCall('DELETE', `/api/super-admin/restaurants/${id}`);
     showToast('Restaurante deletado', 'success');
     carregarRestaurantes();
   } catch(e) {
+    if (String(e.message || '').toLowerCase().includes('not found')) {
+      await apiCall('PATCH', `/api/super-admin/restaurants/${id}/status`, { is_active: false });
+      showToast('Backend sem DELETE ainda. Restaurante desativado e removido da lista.', 'success');
+      carregarRestaurantes();
+      return;
+    }
     showToast(e.message, 'error');
   }
 }

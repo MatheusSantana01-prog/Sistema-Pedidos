@@ -49,7 +49,10 @@
     <div class="page active" id="page-restaurantes">
       <div class="section-head">
         <div class="section-title">Restaurantes da plataforma</div>
-        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoRest()">+ Novo restaurante</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label class="check-row" style="margin:0"><input type="checkbox" id="show-inactive" onchange="mostrarInativos=this.checked;carregarRestaurantes()"> Mostrar inativos</label>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalNovoRest()">+ Novo restaurante</button>
+        </div>
       </div>
       <div id="restaurantes-lista"><div class="loading"><div class="spinner"></div></div></div>
     </div>
