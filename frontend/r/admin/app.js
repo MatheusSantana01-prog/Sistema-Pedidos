@@ -420,19 +420,22 @@ async function carregarUsuarios() {
   document.getElementById('usuarios-lista').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const { usuarios } = await apiCall('GET', '/api/admin/users');
+    const atual = getUsuario();
     document.getElementById('usuarios-lista').innerHTML = !usuarios.length
       ? '<div class="tabela-empty">Nenhum usuário</div>'
       : usuarios.map(m => {
           const u = m.usuarios || {};
-          return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
-            <div style="width:36px;height:36px;border-radius:50%;background:var(--border2);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--muted);">
+          const podeRemover = temRole('owner') && u.id !== atual?.id;
+          return `<div class="usuario-row">
+            <div class="usuario-avatar">
               ${(u.nome||'?').slice(0,2).toUpperCase()}
             </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:14px">${u.nome||'—'}</div>
-              <div style="font-size:12px;color:var(--muted)">${u.email||'—'}</div>
+            <div class="usuario-info">
+              <div class="usuario-nome">${u.nome||'—'}</div>
+              <div class="usuario-email">${u.email||'—'}</div>
             </div>
             <span class="role-badge">${m.role}</span>
+            ${podeRemover ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario('${u.id}',this)">Remover</button>` : ''}
           </div>`;
         }).join('');
   } catch (e) {
@@ -459,6 +462,19 @@ async function salvarUsuario() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+async function removerUsuario(usuarioId, btn) {
+  if (!confirm('Remover este usuário deste restaurante?')) return;
+  btn.disabled = true;
+  try {
+    await apiCall('DELETE', `/api/admin/users/${usuarioId}`);
+    showToast('Usuário removido', 'success');
+    carregarUsuarios();
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
 /* ── CONFIGURAÇÕES ────────────────────────────────── */
 async function carregarConfiguracoes() {
   document.getElementById('config-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -466,16 +482,24 @@ async function carregarConfiguracoes() {
     const { restaurant } = await apiCall('GET', '/api/admin/restaurant');
     const s = restaurant.restaurant_settings?.[0] || {};
     document.getElementById('config-content').innerHTML = `
-      <div style="max-width:600px;display:flex;flex-direction:column;gap:20px;">
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:16px;">Identidade visual</div>
+      <div class="config-grid">
+        <div class="config-card">
+          <div class="config-title">Identidade visual</div>
           <div class="form-row"><label class="form-label">Nome do restaurante</label>
             <input class="form-input" id="cfg-nome" value="${restaurant.name||''}"></div>
+          <div class="form-row"><label class="form-label">Logo (URL)</label>
+            <input class="form-input" id="cfg-logo" value="${restaurant.logo_url||''}" placeholder="https://..."></div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor primária</label>
             <input type="color" class="color-swatch" id="cfg-primary" value="${restaurant.primary_color||'#ff4d1c'}"
                    oninput="document.documentElement.style.setProperty('--color-primary',this.value)">
             <input class="form-input" id="cfg-primary-txt" value="${restaurant.primary_color||'#ff4d1c'}" style="width:110px">
+          </div>
+          <div class="color-picker-row">
+            <label class="form-label" style="min-width:140px">Cor de destaque</label>
+            <input type="color" class="color-swatch" id="cfg-accent" value="${restaurant.accent_color||'#ff6b3d'}"
+                   oninput="document.documentElement.style.setProperty('--color-accent',this.value)">
+            <input class="form-input" id="cfg-accent-txt" value="${restaurant.accent_color||'#ff6b3d'}" style="width:110px">
           </div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor de fundo</label>
@@ -485,22 +509,38 @@ async function carregarConfiguracoes() {
           </div>
           <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="salvarConfiguracoes()">Salvar visual</button>
         </div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:16px;">Taxas e pagamento</div>
-          <div class="form-row">
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" id="cfg-taxa" ${s.service_fee_enabled?'checked':''}> Cobrar taxa de serviço (10%)
-            </label>
+        <div class="config-card">
+          <div class="config-title">Taxas e pagamentos</div>
+          <label class="toggle-row"><input type="checkbox" id="cfg-taxa" ${s.service_fee_enabled?'checked':''}> Cobrar taxa de serviço</label>
+          <div class="form-row"><label class="form-label">Taxa de serviço (%)</label>
+            <input class="form-input" id="cfg-taxa-percent" type="number" min="0" max="30" step="0.5" value="${s.service_fee_percent ?? 10}">
           </div>
-          <div class="form-row">
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" id="cfg-pix" ${s.accept_pix!==false?'checked':''}> Aceitar Pix
-            </label>
-          </div>
+          <label class="toggle-row"><input type="checkbox" id="cfg-pix" ${s.accept_pix!==false?'checked':''}> Aceitar Pix</label>
+          <label class="toggle-row"><input type="checkbox" id="cfg-card" ${s.accept_card!==false?'checked':''}> Aceitar cartão</label>
+          <label class="toggle-row"><input type="checkbox" id="cfg-cash" ${s.accept_cash!==false?'checked':''}> Aceitar dinheiro</label>
           <div class="form-row"><label class="form-label">Chave Pix</label>
             <input class="form-input" id="cfg-pix-key" value="${s.pix_key||''}" placeholder="CPF, CNPJ, e-mail ou chave aleatória">
           </div>
           <button class="btn btn-primary btn-sm" onclick="salvarSettings()">Salvar configurações</button>
+        </div>
+        <div class="config-card">
+          <div class="config-title">Experiência da mesa</div>
+          <label class="toggle-row"><input type="checkbox" id="cfg-notes" ${s.allow_customer_notes!==false?'checked':''}> Cliente pode enviar observações</label>
+          <label class="toggle-row"><input type="checkbox" id="cfg-waiter" ${s.allow_waiter_call?'checked':''}> Permitir chamar garçom</label>
+          <label class="toggle-row"><input type="checkbox" id="cfg-close-request" ${s.allow_table_close_request?'checked':''}> Permitir solicitar fechamento da conta</label>
+          <button class="btn btn-primary btn-sm" onclick="salvarSettings()">Salvar experiência</button>
+        </div>
+        <div class="config-card">
+          <div class="config-title">Contato e funcionamento</div>
+          <div class="form-row"><label class="form-label">WhatsApp</label>
+            <input class="form-input" id="cfg-whatsapp" value="${s.whatsapp||''}" placeholder="(11) 99999-9999"></div>
+          <div class="form-row"><label class="form-label">Endereço</label>
+            <input class="form-input" id="cfg-address" value="${s.address||''}" placeholder="Rua, número, bairro"></div>
+          <div class="form-row-2">
+            <div class="form-row" style="margin:0"><label class="form-label">Abre</label><input class="form-input" id="cfg-open" type="time" value="${s.opening_time||''}"></div>
+            <div class="form-row" style="margin:0"><label class="form-label">Fecha</label><input class="form-input" id="cfg-close" type="time" value="${s.closing_time||''}"></div>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:16px" onclick="salvarSettings()">Salvar contato</button>
         </div>
       </div>`;
 
@@ -511,6 +551,9 @@ async function carregarConfiguracoes() {
     document.getElementById('cfg-bg').addEventListener('input', e => {
       document.getElementById('cfg-bg-txt').value = e.target.value;
     });
+    document.getElementById('cfg-accent').addEventListener('input', e => {
+      document.getElementById('cfg-accent-txt').value = e.target.value;
+    });
   } catch (e) {
     document.getElementById('config-content').innerHTML = '<div class="tabela-empty">Erro ao carregar.</div>';
   }
@@ -520,12 +563,15 @@ async function salvarConfiguracoes() {
   try {
     await apiCall('PUT', '/api/admin/restaurant', {
       name:             document.getElementById('cfg-nome').value.trim(),
+      logo_url:         document.getElementById('cfg-logo').value.trim() || null,
       primary_color:    document.getElementById('cfg-primary-txt').value,
+      accent_color:     document.getElementById('cfg-accent-txt').value,
       background_color: document.getElementById('cfg-bg-txt').value,
     });
     showToast('Visual atualizado', 'success');
     applyRestaurantTheme({ ...window.__RESTAURANT__,
       primary_color: document.getElementById('cfg-primary-txt').value,
+      accent_color: document.getElementById('cfg-accent-txt').value,
       background_color: document.getElementById('cfg-bg-txt').value,
     });
   } catch (e) { showToast(e.message, 'error'); }
@@ -535,8 +581,18 @@ async function salvarSettings() {
   try {
     await apiCall('PUT', '/api/admin/restaurant/settings', {
       service_fee_enabled: document.getElementById('cfg-taxa').checked,
+      service_fee_percent: Number(document.getElementById('cfg-taxa-percent').value || 0),
+      allow_customer_notes: document.getElementById('cfg-notes').checked,
+      allow_waiter_call: document.getElementById('cfg-waiter').checked,
+      allow_table_close_request: document.getElementById('cfg-close-request').checked,
       accept_pix:          document.getElementById('cfg-pix').checked,
+      accept_card:         document.getElementById('cfg-card').checked,
+      accept_cash:         document.getElementById('cfg-cash').checked,
       pix_key:             document.getElementById('cfg-pix-key').value || null,
+      whatsapp:            document.getElementById('cfg-whatsapp').value || null,
+      address:             document.getElementById('cfg-address').value || null,
+      opening_time:        document.getElementById('cfg-open').value || null,
+      closing_time:        document.getElementById('cfg-close').value || null,
     });
     showToast('Configurações salvas', 'success');
   } catch (e) { showToast(e.message, 'error'); }

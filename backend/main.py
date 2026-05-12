@@ -249,6 +249,13 @@ class AtualizarSettingsInput(BaseModel):
     opening_time: Optional[str] = None
     closing_time: Optional[str] = None
 
+    @field_validator("service_fee_percent")
+    @classmethod
+    def val_taxa_servico(cls, v):
+        if v is not None and (v < 0 or v > 30):
+            raise ValueError("Taxa de serviço precisa ficar entre 0% e 30%")
+        return v
+
 
 class CriarUsuarioInput(BaseModel):
     nome: str
