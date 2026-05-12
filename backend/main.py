@@ -647,7 +647,7 @@ def fila_cozinha(u: dict = Depends(authorize(["tv", "kitchen", "manager", "owner
 
 @app.patch("/api/kitchen/orders/{pedido_id}/status", tags=["cozinha"])
 def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
-                   request: Request, u: dict = Depends(authorize(["kitchen", "manager", "owner"]))):
+                   request: Request, u: dict = Depends(authorize(["tv", "kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
 
     # Validar que o pedido pertence ao restaurante do token
@@ -658,6 +658,8 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
     status_atual = ant.data["status"]
     if body.status not in ORDER_TRANSITIONS.get(status_atual, set()):
         raise HTTPException(409, f"Transição inválida: {status_atual} -> {body.status}")
+    if u.get("role") == "tv" and not (status_atual == "pronto" and body.status == "entregue"):
+        raise HTTPException(403, "TV só pode marcar pedido pronto como entregue")
     if body.status == "cancelado" and u.get("role") == "kitchen":
         raise HTTPException(403, "Cozinha não pode cancelar pedidos")
 

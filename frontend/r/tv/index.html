@@ -33,7 +33,11 @@
       <div class="header-brand">STATUS DOS PEDIDOS</div>
     </div>
   </div>
-  <div class="header-clock" id="relogio">--:--</div>
+  <div class="header-actions">
+    <div class="tv-role" id="tv-user">online</div>
+    <button class="btn-tv-refresh" onclick="carregar()">Atualizar</button>
+    <div class="header-clock" id="relogio">--:--</div>
+  </div>
 </div>
 
 <div class="status-grid">
@@ -83,6 +87,8 @@
     <span class="ticker-item">🔔 Novos pedidos aparecem automaticamente</span>
   </div>
 </div>
+
+<div class="tv-status-msg" id="tv-status-msg"></div>
 
 <script src="/shared/config.js"></script>
 <script src="/shared/tenant.js"></script>

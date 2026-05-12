@@ -1,5 +1,6 @@
 let RESTAURANT = null;
 let polling    = null;
+let carregando = false;
 
 async function init() {
   RESTAURANT = await initTenant();
@@ -29,6 +30,8 @@ async function fazerLogin() {
 
 function iniciarTV() {
   document.getElementById('login-overlay').style.display = 'none';
+  const usuario = getUsuario();
+  document.getElementById('tv-user').textContent = usuario?.role ? usuario.role : 'online';
   tickRelogio();
   carregar();
   function agendar() {
@@ -45,6 +48,8 @@ function tickRelogio() {
 }
 
 async function carregar() {
+  if (carregando) return;
+  carregando = true;
   try {
     const { pedidos } = await apiCall('GET', '/api/kitchen/queue?limite=50');
     const lista = pedidos || [];
@@ -71,6 +76,9 @@ async function carregar() {
     renderEntregues('col-entregue', entregues);
   } catch(e) {
     console.error('[tv]', e.message);
+    showStatus('Falha ao atualizar a TV', 'error');
+  } finally {
+    carregando = false;
   }
 }
 
@@ -87,6 +95,7 @@ function renderCol(colId, pedidos, tipo) {
     const tcls = mins < 10 ? 'ok' : mins < 20 ? 'warn' : 'late';
     const ttxt = mins < 60 ? mins + 'min' : Math.floor(mins/60) + 'h' + (mins%60>0?(mins%60)+'m':'');
     const mesa = p.mesas?.numero ? `Mesa ${p.mesas.numero}` : `#${p.numero}`;
+    const action = actionForPedido(p);
     return `<div class="card-tv ${tipo}">
       <div class="card-tv-head">
         <div class="card-mesa ${tipo}">${mesa}</div>
@@ -100,6 +109,7 @@ function renderCol(colId, pedidos, tipo) {
           `<div class="item-tv"><span class="item-tv-qty">${it.quantidade}×</span>${it.nome_produto}</div>`
         ).join('')}
       </div>
+      ${action ? `<div class="card-tv-actions"><button class="btn-tv-action ${action.cls}" onclick="avancarTV('${p.id}','${action.next}',this)">${action.label}</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -125,6 +135,44 @@ function renderEntregues(colId, pedidos) {
       </div>
     </div>`;
   }).join('');
+}
+
+function actionForPedido(p) {
+  const role = getUsuario()?.role;
+  if (role === 'tv') {
+    return p.status === 'pronto'
+      ? { label: 'Dar baixa', cls: 'entregar', next: 'entregue' }
+      : null;
+  }
+  return {
+    pendente:   { label: 'Confirmar', cls: 'confirmar', next: 'confirmado' },
+    confirmado: { label: 'Iniciar', cls: 'preparo', next: 'em_preparo' },
+    em_preparo: { label: 'Marcar pronto', cls: 'pronto', next: 'pronto' },
+    pronto:     { label: 'Dar baixa', cls: 'entregar', next: 'entregue' },
+  }[p.status] || null;
+}
+
+async function avancarTV(pedidoId, novoStatus, btn) {
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = 'Atualizando...';
+  try {
+    await apiCall('PATCH', `/api/kitchen/orders/${pedidoId}/status`, { status: novoStatus });
+    showStatus(novoStatus === 'entregue' ? 'Pedido entregue' : 'Status atualizado', 'success');
+    await carregar();
+  } catch (e) {
+    showStatus(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+function showStatus(msg, tipo) {
+  const el = document.getElementById('tv-status-msg');
+  el.textContent = msg;
+  el.className = 'tv-status-msg show ' + (tipo || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
 init();
