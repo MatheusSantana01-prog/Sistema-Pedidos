@@ -1532,6 +1532,9 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
 
 
 def apagar_restaurante_dados(restaurant_id: str):
+    def delete_restaurant_rows(table: str):
+        sb.table(table).delete().eq("restaurant_id", restaurant_id).execute()
+
     pedidos = _rows(sb.table("pedidos").select("id").eq("restaurant_id", restaurant_id).execute())
     pedido_ids = [p["id"] for p in pedidos]
     if pedido_ids:
@@ -1539,16 +1542,37 @@ def apagar_restaurante_dados(restaurant_id: str):
         item_ids = [i["id"] for i in itens]
         if item_ids:
             sb.table("pedido_item_ingredientes").delete().in_("pedido_item_id", item_ids).execute()
+        sb.table("pedido_status_log").delete().in_("pedido_id", pedido_ids).execute()
         sb.table("pedido_itens").delete().in_("pedido_id", pedido_ids).execute()
-    sb.table("pedidos").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("sessao_mesa").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("fechamento_caixa").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("audit_log").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("produtos").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("categorias").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("mesas").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("restaurant_settings").delete().eq("restaurant_id", restaurant_id).execute()
-    sb.table("restaurant_memberships").delete().eq("restaurant_id", restaurant_id).execute()
+
+    # Tabelas filhas primeiro para evitar erro de FK ao apagar o restaurante.
+    for table in (
+        "pedido_item_ingredientes",
+        "pedido_status_log",
+        "pedido_itens",
+        "movimentacao_estoque",
+        "produto_insumos",
+        "produto_ingredientes",
+        "integration_events",
+        "restaurant_integrations",
+        "promocoes",
+        "cupons",
+        "configuracoes",
+        "fechamento_caixa",
+        "audit_log",
+        "pedidos",
+        "sessao_mesa",
+        "produtos",
+        "ingredientes",
+        "insumos",
+        "fornecedores",
+        "categorias",
+        "mesas",
+        "restaurant_settings",
+        "restaurant_memberships",
+    ):
+        delete_restaurant_rows(table)
+
     sb.table("restaurants").delete().eq("id", restaurant_id).execute()
 
 
@@ -1570,7 +1594,12 @@ def deletar_restaurante(restaurant_id: str, request: Request,
     rest = sb.table("restaurants").select("id,name,slug").eq("id", restaurant_id).single().execute()
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
-    apagar_restaurante_dados(restaurant_id)
+    try:
+        apagar_restaurante_dados(restaurant_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Erro ao deletar restaurante e dados relacionados: {exc}")
     log_acao(u, "deletar_restaurante", "restaurants", restaurant_id, rest.data, None, request)
     return {"mensagem": "Restaurante deletado", "restaurant": rest.data}
 
