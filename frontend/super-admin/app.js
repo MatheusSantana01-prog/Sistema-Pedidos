@@ -556,7 +556,7 @@ async function carregarMetricas() {
       <div class="stats-row">
         <div class="stat-card"><div class="stat-label">Total restaurantes</div><div class="stat-val purple">${m.total_restaurants}</div></div>
         <div class="stat-card"><div class="stat-label">Restaurantes ativos</div><div class="stat-val green">${m.active_restaurants}</div></div>
-        <div class="stat-card"><div class="stat-label">Total usuários</div><div class="stat-val amber">${m.total_users}</div></div>
+        <div class="stat-card"><div class="stat-label">Usuários vinculados</div><div class="stat-val amber">${m.total_users}</div></div>
         <div class="stat-card"><div class="stat-label">Total pedidos</div><div class="stat-val">${m.total_orders}</div></div>
       </div>`;
   } catch(e) {

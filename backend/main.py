@@ -1716,13 +1716,23 @@ def deletar_restaurante(restaurant_id: str, request: Request,
 def metrics(u: dict = Depends(require_super_admin)):
     total_rests  = sb.table("restaurants").select("id", count="exact").execute()
     active_rests = sb.table("restaurants").select("id", count="exact").eq("is_active", True).execute()
-    total_users  = sb.table("usuarios").select("id", count="exact").execute()
+    memberships = _rows(sb.table("restaurant_memberships").select(
+        "usuario_id,is_active,usuarios(id,ativo),restaurants(id,is_active)"
+    ).execute())
+    total_users = len({
+        m.get("usuario_id")
+        for m in memberships
+        if m.get("usuario_id")
+        and m.get("is_active") is not False
+        and (m.get("usuarios") or {}).get("ativo") is not False
+        and (m.get("restaurants") or {}).get("is_active") is not False
+    })
     total_orders = sb.table("pedidos").select("id", count="exact").execute()
 
     return {
         "total_restaurants":  total_rests.count,
         "active_restaurants": active_rests.count,
-        "total_users":        total_users.count,
+        "total_users":        total_users,
         "total_orders":       total_orders.count,
     }
 
