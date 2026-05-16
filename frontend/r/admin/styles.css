@@ -64,6 +64,12 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 
 /* CARDS STATS */
 .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+.finance-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+.calls-admin-box { margin-bottom:18px; padding:12px; border:1px solid var(--border); border-radius:10px; background:rgba(239,68,68,.08); }
+.calls-admin-title { font-family:var(--mono); font-size:11px; color:#fecaca; text-transform:uppercase; letter-spacing:.6px; margin-bottom:8px; }
+.call-admin-item { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px solid rgba(255,255,255,.08); font-size:13px; }
+.call-admin-item:first-of-type { border-top:0; }
+.call-admin-item button { border:0; border-radius:7px; background:var(--green); color:#06110a; font-weight:800; padding:7px 10px; cursor:pointer; }
 .stat-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; }
 .stat-label { font-size:11px; color:var(--muted); font-weight:500; letter-spacing:.5px; text-transform:uppercase; margin-bottom:8px; }
 .stat-val { font-family:var(--mono); font-size:22px; font-weight:600; }

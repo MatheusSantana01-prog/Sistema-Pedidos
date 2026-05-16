@@ -62,6 +62,14 @@
         <div class="stat"><span>Em aberto</span><strong id="s-fat">—</strong></div>
       </div>
 
+      <div class="calls-box">
+        <div class="calls-head">
+          <div class="section-kicker">Chamados da mesa</div>
+          <button class="icon-btn small" title="Atualizar chamados" onclick="carregarChamados()">↻</button>
+        </div>
+        <div id="calls-list" class="calls-list"><div class="empty">Nenhum chamado aberto.</div></div>
+      </div>
+
       <div class="filters">
         <button class="filter active" onclick="filtrarMesas(this,'todas')">Todas</button>
         <button class="filter" onclick="filtrarMesas(this,'ocupada')">Com pedido</button>

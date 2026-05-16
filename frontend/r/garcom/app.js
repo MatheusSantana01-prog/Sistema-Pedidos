@@ -64,6 +64,7 @@ function iniciarApp() {
   document.getElementById('user-nome').textContent = u.nome || 'Usuário';
   document.getElementById('user-role').textContent = u.role || '';
   carregarMesas();
+  carregarChamados();
   carregarCardapio();
   iniciarPolling();
 }
@@ -81,10 +82,44 @@ function iniciarPolling() {
   function tick() {
     pollingHandle = setTimeout(async () => {
       await carregarMesas(false);
+      await carregarChamados(false);
       tick();
     }, 12000);
   }
   tick();
+}
+
+async function carregarChamados(showErrors = true) {
+  try {
+    const { chamados } = await apiCall('GET', '/api/admin/service-requests?limite=30');
+    const abertos = (chamados || []).filter(c => c.status !== 'atendido');
+    document.getElementById('calls-list').innerHTML = abertos.length ? abertos.map(c => `
+      <div class="call-card ${c.tipo}">
+        <div>
+          <strong>Mesa ${c.mesa_numero || '—'}</strong>
+          <span>${labelChamado(c.tipo)} · ${tempoAberta(c.created_at)}</span>
+          ${c.mensagem ? `<small>${c.mensagem}</small>` : ''}
+        </div>
+        <button onclick="atenderChamado('${c.id}',this)">Atender</button>
+      </div>`).join('') : '<div class="empty">Nenhum chamado aberto.</div>';
+  } catch (e) {
+    if (showErrors) showToast(e.message, 'error');
+  }
+}
+
+async function atenderChamado(id, btn) {
+  btn.disabled = true;
+  try {
+    await apiCall('PATCH', `/api/admin/service-requests/${id}`, { status: 'atendido' });
+    carregarChamados(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function labelChamado(tipo) {
+  return { garcom: 'Chamou garçom', conta: 'Pediu conta', problema: 'Problema' }[tipo] || 'Chamado';
 }
 
 async function carregarMesas(showErrors = true) {

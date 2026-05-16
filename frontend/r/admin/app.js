@@ -151,6 +151,7 @@ async function carregarMesas() {
     document.getElementById('s-ocup').textContent = ocup;
     document.getElementById('s-liv').textContent  = liv;
     document.getElementById('s-fat').textContent  = 'R$ ' + fmt(fat);
+    carregarChamadosAdmin(false);
 
     document.getElementById('mesas-grid').innerHTML = mesas.map(m => {
       const sess = m.sessao_ativa;
@@ -171,6 +172,41 @@ async function carregarMesas() {
   } catch (e) {
     showToast(e.message, 'error');
   }
+}
+
+async function carregarChamadosAdmin(showErrors = true) {
+  const wrap = document.getElementById('chamados-lista');
+  if (!wrap) return;
+  try {
+    const { chamados } = await apiCall('GET', '/api/admin/service-requests?limite=20');
+    const abertos = (chamados || []).filter(c => c.status !== 'atendido');
+    wrap.innerHTML = abertos.length ? `
+      <div class="calls-admin-box">
+        <div class="calls-admin-title">Chamados pendentes</div>
+        ${abertos.map(c => `
+          <div class="call-admin-item ${c.tipo}">
+            <span>Mesa ${c.mesa_numero || '—'} · ${labelChamado(c.tipo)}</span>
+            <button onclick="atenderChamadoAdmin('${c.id}',this)">Atender</button>
+          </div>`).join('')}
+      </div>` : '';
+  } catch (e) {
+    if (showErrors) showToast(e.message, 'error');
+  }
+}
+
+async function atenderChamadoAdmin(id, btn) {
+  btn.disabled = true;
+  try {
+    await apiCall('PATCH', `/api/admin/service-requests/${id}`, { status: 'atendido' });
+    carregarChamadosAdmin(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function labelChamado(tipo) {
+  return { garcom:'Chamou garçom', conta:'Pediu conta', problema:'Problema' }[tipo] || 'Chamado';
 }
 
 function alertaMesa(sess) {
@@ -500,14 +536,25 @@ async function carregarFinanceiro() {
         <div class="stat-card"><div class="stat-label">Faturamento líquido</div><div class="stat-val blue">R$ ${fmt(d.total_liquido)}</div></div>
         <div class="stat-card"><div class="stat-label">Pedidos</div><div class="stat-val">${d.total_pedidos}</div></div>
         <div class="stat-card"><div class="stat-label">Ticket médio</div><div class="stat-val amber">R$ ${fmt(d.ticket_medio)}</div></div>
+        <div class="stat-card"><div class="stat-label">Avaliação média</div><div class="stat-val">${d.feedback_media ? d.feedback_media + ' ★' : '—'}</div></div>
       </div>
-      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;margin-top:16px;">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Por forma de pagamento</div>
-        ${Object.entries(d.por_pagamento||{}).map(([k,v]) =>
-          `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-            <span>${labelPagamento(k)}</span>
-            <span style="font-family:var(--mono);font-weight:600">R$ ${fmt(v)}</span>
-          </div>`).join('')}
+      <div class="finance-grid">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;margin-top:16px;">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Por forma de pagamento</div>
+          ${Object.entries(d.por_pagamento||{}).map(([k,v]) =>
+            `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+              <span>${labelPagamento(k)}</span>
+              <span style="font-family:var(--mono);font-weight:600">R$ ${fmt(v)}</span>
+            </div>`).join('') || '<div class="tabela-empty">Sem pagamentos no período</div>'}
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;margin-top:16px;">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Produtos mais vendidos</div>
+          ${(d.top_produtos||[]).map(p =>
+            `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+              <span>${p.nome}</span>
+              <span style="font-family:var(--mono);font-weight:600">${p.quantidade} un · R$ ${fmt(p.total)}</span>
+            </div>`).join('') || '<div class="tabela-empty">Sem vendas no período</div>'}
+        </div>
       </div>`;
   } catch (e) {
     document.getElementById('financeiro-content').innerHTML = '<div class="tabela-empty">Erro: ' + e.message + '</div>';

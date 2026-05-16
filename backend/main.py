@@ -285,6 +285,22 @@ def log_acao(u: dict, acao: str, tabela: str = None,
     except Exception:
         pass  # log nunca quebra a operação
 
+def log_publico_restaurante(restaurant_id: str, acao: str, tabela: str = None,
+                            reg_id: str = None, dados=None, request: Request = None):
+    ip = request.client.host if request and request.client else None
+    sb.table("audit_log").insert({
+        "restaurant_id": restaurant_id,
+        "usuario_id": None,
+        "usuario_nome": "Cliente",
+        "perfil": "cliente",
+        "acao": acao,
+        "tabela": tabela,
+        "registro_id": str(reg_id) if reg_id else None,
+        "valor_anterior": None,
+        "valor_novo": dados or {},
+        "ip": ip,
+    }).execute()
+
 
 # ── SCHEMAS ───────────────────────────────────────────────────────
 class LoginInput(BaseModel):
@@ -449,6 +465,31 @@ class FecharContaInput(BaseModel):
         return v
 
 
+class ChamadoMesaInput(BaseModel):
+    tipo: str
+    mensagem: Optional[str] = None
+
+    @field_validator("tipo")
+    @classmethod
+    def val_tipo(cls, v):
+        if v not in {"garcom", "conta", "problema"}:
+            raise ValueError("Tipo de chamado inválido")
+        return v
+
+
+class FeedbackMesaInput(BaseModel):
+    nota: int
+    comentario: Optional[str] = None
+    sessao_mesa_id: Optional[str] = None
+
+    @field_validator("nota")
+    @classmethod
+    def val_nota(cls, v):
+        if v < 1 or v > 5:
+            raise ValueError("Nota precisa ficar entre 1 e 5")
+        return v
+
+
 # ═════════════════════════════════════════════════════════════════
 # ROTAS PÚBLICAS (sem autenticação)
 # ═════════════════════════════════════════════════════════════════
@@ -501,6 +542,31 @@ def get_table_public(slug: str, table_token: str):
     return {"mesa": mesa_data, "restaurant": rest.data}
 
 
+@app.post("/api/public/restaurants/{slug}/tables/{table_token}/call", tags=["público"])
+def criar_chamado_mesa(slug: str, table_token: str, body: ChamadoMesaInput, request: Request):
+    rest = sb.table("restaurants").select("id,name,slug").eq("slug", slug).eq("is_active", True).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    rid = rest.data["id"]
+
+    mesa = sb.table("mesas").select("id,numero").eq("qr_code_token", table_token).eq("restaurant_id", rid).eq("ativa", True).single().execute()
+    if not mesa.data:
+        raise HTTPException(404, "Mesa não encontrada")
+
+    sessao = sb.table("sessao_mesa").select("id").eq("mesa_id", mesa.data["id"]).eq("restaurant_id", rid).eq("status", "aberta").single().execute()
+    dados = {
+        "tipo": body.tipo,
+        "mensagem": body.mensagem,
+        "mesa_id": mesa.data["id"],
+        "mesa_numero": mesa.data["numero"],
+        "sessao_mesa_id": (sessao.data or {}).get("id"),
+        "status": "aberto",
+        "created_at": utcnow(),
+    }
+    log_publico_restaurante(rid, f"mesa_{body.tipo}", "mesa_chamados", mesa.data["id"], dados, request)
+    return {"mensagem": "Chamado enviado", "chamado": dados}
+
+
 @app.post("/api/public/restaurants/{slug}/tables/{table_token}/sessions", tags=["público"])
 def criar_sessao_public(slug: str, table_token: str):
     """Abre ou recupera sessão de uma mesa (cliente via QR Code)."""
@@ -521,6 +587,27 @@ def criar_sessao_public(slug: str, table_token: str):
     if not sessao_data:
         raise HTTPException(500, "Erro ao abrir sessão da mesa")
     return {"sessao": sessao_data}
+
+
+@app.post("/api/public/restaurants/{slug}/tables/{table_token}/feedback", tags=["público"])
+def registrar_feedback(slug: str, table_token: str, body: FeedbackMesaInput, request: Request):
+    rest = sb.table("restaurants").select("id").eq("slug", slug).eq("is_active", True).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    rid = rest.data["id"]
+    mesa = sb.table("mesas").select("id,numero").eq("qr_code_token", table_token).eq("restaurant_id", rid).eq("ativa", True).single().execute()
+    if not mesa.data:
+        raise HTTPException(404, "Mesa não encontrada")
+    dados = {
+        "nota": body.nota,
+        "comentario": body.comentario,
+        "mesa_id": mesa.data["id"],
+        "mesa_numero": mesa.data["numero"],
+        "sessao_mesa_id": body.sessao_mesa_id,
+        "created_at": utcnow(),
+    }
+    log_publico_restaurante(rid, "feedback_cliente", "feedback", mesa.data["id"], dados, request)
+    return {"mensagem": "Obrigado pela avaliação"}
 
 
 @app.post("/api/public/restaurants/{slug}/orders", tags=["público"])
@@ -924,6 +1011,52 @@ def listar_pedidos(status_filtro: Optional[str] = None, limite: int = 50,
     return {"pedidos": _rows(q.execute())}
 
 
+@app.get("/api/admin/service-requests", tags=["atendimento"])
+def listar_chamados(limite: int = 50, u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    rows = _rows(
+        sb.table("audit_log")
+        .select("id,acao,valor_novo,created_at")
+        .eq("restaurant_id", rid)
+        .in_("acao", ["mesa_garcom", "mesa_conta", "mesa_problema"])
+        .order("created_at", desc=True)
+        .limit(min(limite, 100))
+        .execute()
+    )
+    chamados = []
+    for r in rows:
+        dados = r.get("valor_novo") or {}
+        chamados.append({
+            "id": r.get("id"),
+            "acao": r.get("acao"),
+            "created_at": r.get("created_at"),
+            "tipo": dados.get("tipo"),
+            "mesa_numero": dados.get("mesa_numero"),
+            "mensagem": dados.get("mensagem"),
+            "status": dados.get("status", "aberto"),
+        })
+    return {"chamados": chamados}
+
+
+@app.patch("/api/admin/service-requests/{chamado_id}", tags=["atendimento"])
+def atualizar_chamado(chamado_id: str, body: dict, request: Request,
+                      u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    status_chamado = body.get("status", "atendido")
+    if status_chamado not in {"aberto", "atendido"}:
+        raise HTTPException(400, "Status inválido")
+    atual = sb.table("audit_log").select("id,valor_novo").eq("id", chamado_id).eq("restaurant_id", rid).single().execute()
+    if not atual.data:
+        raise HTTPException(404, "Chamado não encontrado")
+    dados = atual.data.get("valor_novo") or {}
+    dados["status"] = status_chamado
+    dados["atendido_em"] = utcnow() if status_chamado == "atendido" else None
+    dados["atendido_por"] = u.get("nome")
+    sb.table("audit_log").update({"valor_novo": dados}).eq("id", chamado_id).eq("restaurant_id", rid).execute()
+    log_acao(u, "atualizar_chamado", "audit_log", chamado_id, None, {"status": status_chamado}, request)
+    return {"mensagem": "Chamado atualizado", "chamado": dados}
+
+
 @app.patch("/api/admin/orders/{pedido_id}/cancel", tags=["admin"])
 def cancelar_pedido(pedido_id: str, body: AtualizarStatusPedidoInput,
                     request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
@@ -1150,7 +1283,7 @@ def dashboard(data_inicio: str, data_fim: str,
     fim_iso = f"{fim.isoformat()}T23:59:59.999999"
     pedidos = _rows(
         sb.table("pedidos")
-        .select("id,status,total,subtotal,desconto,forma_pagamento,status_pagamento,created_at")
+        .select("id,status,total,subtotal,desconto,forma_pagamento,status_pagamento,created_at,pedido_itens(nome_produto,quantidade,subtotal)")
         .eq("restaurant_id", rid)
         .gte("created_at", inicio_iso)
         .lte("created_at", fim_iso)
@@ -1164,6 +1297,26 @@ def dashboard(data_inicio: str, data_fim: str,
     por_pagamento = {}
     for pedido in pedidos:
         _somar_pagamento_dashboard(por_pagamento, pedido.get("forma_pagamento"), pedido.get("total"))
+    produtos = {}
+    for pedido in pedidos:
+        for item in pedido.get("pedido_itens") or []:
+            nome = item.get("nome_produto") or "Produto"
+            atual = produtos.setdefault(nome, {"nome": nome, "quantidade": 0, "total": 0.0})
+            atual["quantidade"] += int(item.get("quantidade") or 0)
+            atual["total"] = round(atual["total"] + _money(item.get("subtotal")), 2)
+    top_produtos = sorted(produtos.values(), key=lambda p: (p["quantidade"], p["total"]), reverse=True)[:5]
+
+    feedback_rows = _rows(
+        sb.table("audit_log")
+        .select("valor_novo,created_at")
+        .eq("restaurant_id", rid)
+        .eq("acao", "feedback_cliente")
+        .gte("created_at", inicio_iso)
+        .lte("created_at", fim_iso)
+        .execute()
+    )
+    notas = [_money((r.get("valor_novo") or {}).get("nota")) for r in feedback_rows if (r.get("valor_novo") or {}).get("nota")]
+    media_feedback = round(sum(notas) / len(notas), 2) if notas else None
 
     total_pedidos = len(pedidos)
     return {
@@ -1173,6 +1326,9 @@ def dashboard(data_inicio: str, data_fim: str,
         "total_pedidos": total_pedidos,
         "ticket_medio": round(total_liquido / total_pedidos, 2) if total_pedidos else 0,
         "por_pagamento": por_pagamento,
+        "top_produtos": top_produtos,
+        "feedback_media": media_feedback,
+        "feedback_total": len(notas),
     }
 
 

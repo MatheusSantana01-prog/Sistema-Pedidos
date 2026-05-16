@@ -7,6 +7,7 @@ let carrinho     = [];
 let prodAtual    = null;
 let modsSelecionadas = {};
 let pollingConta = null;
+let notaFeedback = 5;
 
 const FOOD_IMAGES = {
   pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=80',
@@ -265,9 +266,28 @@ function abrirCarrinho() {
       </div>
     </div>`).join('');
   document.getElementById('carrinho-total-val').textContent = 'R$ ' + fmt(total);
+  renderSugestoesCarrinho();
   document.getElementById('obs-geral').value = '';
   document.getElementById('obs-geral').style.display = RESTAURANT.settings?.allow_customer_notes === false ? 'none' : 'block';
   document.getElementById('modal-carrinho').classList.add('show');
+}
+
+function renderSugestoesCarrinho() {
+  const wrap = document.getElementById('sugestoes-wrap');
+  if (!wrap) return;
+  const ids = new Set(carrinho.map(i => i.produto_id));
+  const sugestoes = todosProdutos
+    .filter(p => p.disponivel !== false && !ids.has(p.id))
+    .sort((a, b) => Number(b.destaque === true) - Number(a.destaque === true) || Number(a.preco) - Number(b.preco))
+    .slice(0, 3);
+  wrap.innerHTML = sugestoes.length ? `
+    <div class="upsell-box">
+      <div class="modal-section-title">Combina com seu pedido</div>
+      ${sugestoes.map(p => `
+        <button class="upsell-item" onclick="adicionarRapido('${p.id}'); abrirCarrinho();">
+          <span>${p.nome}</span><strong>R$ ${fmt(p.preco)}</strong>
+        </button>`).join('')}
+    </div>` : '';
 }
 
 function removerItem(idx) {
@@ -285,7 +305,7 @@ async function enviarPedido() {
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
     const slug = getCurrentRestaurantSlug();
-    await apiPublic('POST', `/api/public/restaurants/${slug}/orders`, {
+    const resp = await apiPublic('POST', `/api/public/restaurants/${slug}/orders`, {
       restaurant_id:     RESTAURANT.id,
       mesa_id:           MESA.id,
       sessao_mesa_id:    SESSAO_ID,
@@ -298,6 +318,7 @@ async function enviarPedido() {
     fecharModal('modal-carrinho');
     atualizarFAB();
     document.getElementById('sucesso-overlay').classList.add('show');
+    setTimeout(verConta, 900);
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
@@ -326,14 +347,18 @@ async function verConta() {
       document.getElementById('conta-conteudo').innerHTML = `
         <div style="text-align:center;padding:32px;"><div style="font-size:48px;margin-bottom:12px">✅</div>
         <div style="font-size:18px;font-weight:700">Conta fechada</div>
-        <div style="color:var(--muted);margin-top:8px">Obrigado pela visita!</div></div>`;
+        <div style="color:var(--muted);margin-top:8px">Obrigado pela visita!</div>
+        <button class="btn-add-cart" style="margin-top:18px" onclick="abrirFeedback()">Avaliar atendimento</button></div>`;
       return;
     }
 
     document.getElementById('conta-conteudo').innerHTML = `
       ${pedidos.map(p => `
-        <div style="margin-bottom:12px;">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Pedido #${p.numero}</div>
+        <div class="conta-pedido">
+          <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:4px;">
+            <div style="font-size:12px;color:var(--muted);">Pedido #${p.numero}</div>
+            <span class="pedido-status-cliente ${p.status}">${statusCliente(p.status)}</span>
+          </div>
           ${(p.itens||[]).map(it => `
             <div class="conta-item">
               <span>${it.quantidade}× ${it.nome_produto}</span>
@@ -355,10 +380,60 @@ async function verConta() {
       </div>
       ${settings.allow_table_close_request ? `
         <div style="margin-top:8px;font-size:13px;color:var(--muted);text-align:center">
-          Peça ao garçom para fechar sua conta.
+          <button class="account-btn" onclick="enviarChamado('conta')">Pedir fechamento da conta</button>
         </div>` : ''}`;
   } catch (e) {
     document.getElementById('conta-conteudo').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro ao carregar conta.</div>';
+  }
+}
+
+function statusCliente(s) {
+  return {pendente:'Recebido',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue',cancelado:'Cancelado'}[s] || s || 'Recebido';
+}
+
+function mesaTokenAtual() {
+  const match = window.location.pathname.match(/\/mesa\/([^\/]+)/);
+  return match ? match[1] : new URLSearchParams(window.location.search).get('mesa');
+}
+
+async function enviarChamado(tipo) {
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const token = mesaTokenAtual();
+    await apiPublic('POST', `/api/public/restaurants/${slug}/tables/${token}/call`, {
+      tipo,
+      mensagem: tipo === 'problema' ? 'Cliente informou um problema na mesa' : null,
+    });
+    showToast(tipo === 'conta' ? 'Conta solicitada ao atendimento' : 'Garçom chamado', 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function abrirFeedback() {
+  setNota(5);
+  document.getElementById('feedback-comentario').value = '';
+  document.getElementById('modal-feedback').classList.add('show');
+}
+
+function setNota(n) {
+  notaFeedback = n;
+  document.querySelectorAll('#rating-row button').forEach((b, idx) => b.classList.toggle('active', idx < n));
+}
+
+async function enviarFeedback() {
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const token = mesaTokenAtual();
+    await apiPublic('POST', `/api/public/restaurants/${slug}/tables/${token}/feedback`, {
+      nota: notaFeedback,
+      comentario: document.getElementById('feedback-comentario').value.trim() || null,
+      sessao_mesa_id: SESSAO_ID,
+    });
+    fecharModal('modal-feedback');
+    showToast('Obrigado pela avaliação', 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
   }
 }
 
