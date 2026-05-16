@@ -795,6 +795,8 @@ def criar_pedido_public(slug: str, body: dict):
     data = _first(resp.data)
     if not data:
         raise HTTPException(500, "Erro ao criar pedido")
+    if data.get("pedido_id") and not data.get("id"):
+        data["id"] = data["pedido_id"]
     return {"pedido": data}
 
 
