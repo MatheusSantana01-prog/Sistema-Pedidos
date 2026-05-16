@@ -135,8 +135,9 @@ async function carregarMesas(showErrors = true) {
 function renderMesas() {
   const ocupadas = mesasLista.filter(m => m.status === 'ocupada').length;
   const livres = mesasLista.filter(m => m.status === 'livre').length;
+  const semPedido = mesasLista.filter(m => m.estado_operacional === 'ocupada_sem_pedido').length;
   const aberto = mesasLista.reduce((a, m) => a + Number(m.sessao_ativa?.total_consumido || 0), 0);
-  document.getElementById('s-ocup').textContent = ocupadas;
+  document.getElementById('s-ocup').textContent = semPedido ? `${ocupadas} (${semPedido} sem pedido)` : ocupadas;
   document.getElementById('s-liv').textContent = livres;
   document.getElementById('s-fat').textContent = 'R$ ' + fmt(aberto);
 
@@ -146,17 +147,66 @@ function renderMesas() {
     const total = Number(sess?.total_consumido || 0);
     const aberta = sess?.aberta_em ? tempoAberta(sess.aberta_em) : '';
     const alerta = alertaMesa(sess);
-    return `<div class="mesa-card ${m.status} ${alerta.classe}" onclick="${sess ? `abrirMesa('${m.id}','${sess.id}',${m.numero})` : ''}">
+    const estado = m.estado_operacional || m.status;
+    return `<div class="mesa-card ${m.status} ${estado} ${alerta.classe}" onclick="${sess ? `abrirMesa('${m.id}','${sess.id}',${m.numero})` : ''}">
       <div>
         <div class="mesa-num">${m.numero}</div>
-        <div class="mesa-status">${m.status === 'ocupada' ? 'Mesa com atendimento' : 'Mesa livre'}</div>
+        <div class="mesa-status">${labelEstadoMesa(m)}</div>
       </div>
       <div>
-        ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div><div class="mesa-note">${aberta}</div>` : '<div class="mesa-note">Sem conta aberta</div>'}
+        ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div><div class="mesa-note">${mesaOrigem(sess)} · ${aberta}</div>` : '<div class="mesa-note">Sem conta aberta</div>'}
         ${alerta.texto ? `<div class="mesa-alerta">${alerta.texto}</div>` : ''}
+        <div class="mesa-actions" onclick="event.stopPropagation()">
+          ${!sess ? `<button onclick="ocuparMesa('${m.id}',${m.numero},this)">Ocupar</button>` : ''}
+          ${sess && (sess.pedidos_count || 0) === 0 ? `<button class="danger" onclick="liberarSemConsumo('${m.id}',${m.numero},this)">Liberar sem consumo</button>` : ''}
+        </div>
       </div>
     </div>`;
   }).join('') : '<div class="empty">Nenhuma mesa neste filtro.</div>';
+}
+
+function labelEstadoMesa(m) {
+  if (m.estado_operacional === 'ocupada_sem_pedido') return 'Mesa ocupada sem pedido';
+  if (m.estado_operacional === 'com_pedido') return 'Mesa com pedido';
+  return m.status === 'ocupada' ? 'Mesa ocupada' : 'Mesa livre';
+}
+
+function mesaOrigem(sess) {
+  const obs = String(sess?.observacao || '');
+  if (obs.includes('cardapio_fisico')) return 'Cardápio físico';
+  if (obs.includes('reserva_chegou')) return 'Reserva chegou';
+  if (obs.includes('aguardando')) return 'Cliente aguardando';
+  if (obs.includes('ocupacao_manual')) return 'Ocupação manual';
+  return (sess?.pedidos_count || 0) === 0 ? 'Sem pedido' : `${sess.pedidos_count} pedido(s)`;
+}
+
+async function ocuparMesa(mesaId, numero, btn) {
+  const motivo = prompt(`Motivo para ocupar a mesa ${numero}:\ncliente_sentou, aguardando, cardapio_fisico, reserva_chegou ou outro`, 'cliente_sentou');
+  if (!motivo) return;
+  btn.disabled = true;
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaId}/occupy`, { motivo: motivo.trim() || 'cliente_sentou' });
+    showToast(`Mesa ${numero} ocupada`, 'success');
+    carregarMesas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function liberarSemConsumo(mesaId, numero, btn) {
+  const motivo = prompt(`Por que liberar a mesa ${numero} sem consumo?\nnao_consumiu, desistiu, aguardou_e_saiu, erro_operacional ou outro`, 'nao_consumiu');
+  if (!motivo) return;
+  if (!confirm(`Confirmar liberação da mesa ${numero} sem consumo?`)) return;
+  btn.disabled = true;
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaId}/release`, { motivo: motivo.trim() || 'nao_consumiu' });
+    showToast(`Mesa ${numero} liberada sem consumo`, 'success');
+    carregarMesas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
 }
 
 function alertaMesa(sess) {

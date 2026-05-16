@@ -420,6 +420,32 @@ class AtualizarMesaInput(BaseModel):
     capacidade: Optional[int] = None
 
 
+class OcuparMesaInput(BaseModel):
+    motivo: str = "cliente_sentou"
+    observacao: Optional[str] = None
+
+    @field_validator("motivo")
+    @classmethod
+    def val_motivo(cls, v):
+        validos = {"cliente_sentou", "aguardando", "cardapio_fisico", "reserva_chegou", "outro"}
+        if v not in validos:
+            raise ValueError(f"Motivo inválido: {sorted(validos)}")
+        return v
+
+
+class LiberarMesaInput(BaseModel):
+    motivo: str = "nao_consumiu"
+    observacao: Optional[str] = None
+
+    @field_validator("motivo")
+    @classmethod
+    def val_motivo(cls, v):
+        validos = {"nao_consumiu", "desistiu", "aguardou_e_saiu", "erro_operacional", "outro"}
+        if v not in validos:
+            raise ValueError(f"Motivo inválido: {sorted(validos)}")
+        return v
+
+
 class CriarProdutoInput(BaseModel):
     categoria_id: UUID
     nome: str
@@ -553,13 +579,13 @@ def criar_chamado_mesa(slug: str, table_token: str, body: ChamadoMesaInput, requ
     if not mesa.data:
         raise HTTPException(404, "Mesa não encontrada")
 
-    sessao = sb.table("sessao_mesa").select("id").eq("mesa_id", mesa.data["id"]).eq("restaurant_id", rid).eq("status", "aberta").single().execute()
+    sessao = sb.table("sessao_mesa").select("id").eq("mesa_id", mesa.data["id"]).eq("restaurant_id", rid).eq("status", "aberta").limit(1).execute()
     dados = {
         "tipo": body.tipo,
         "mensagem": body.mensagem,
         "mesa_id": mesa.data["id"],
         "mesa_numero": mesa.data["numero"],
-        "sessao_mesa_id": (sessao.data or {}).get("id"),
+        "sessao_mesa_id": (_first(_rows(sessao)) or {}).get("id"),
         "status": "aberto",
         "created_at": utcnow(),
     }
@@ -586,6 +612,7 @@ def criar_sessao_public(slug: str, table_token: str):
     sessao_data = _first(sessao.data)
     if not sessao_data:
         raise HTTPException(500, "Erro ao abrir sessão da mesa")
+    sb.table("mesas").update({"status": "ocupada", "updated_at": utcnow()}).eq("id", mesa.data["id"]).eq("restaurant_id", rid).execute()
     return {"sessao": sessao_data}
 
 
@@ -897,7 +924,7 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
     rid = get_restaurant_id_from_token(u)
     resp = sb.table("mesas").select(
         "id,numero,status,capacidade,qr_code_token,"
-        "sessao_mesa!left(id,status,aberta_em,total_consumido)"
+        "sessao_mesa!left(id,status,aberta_em,total_consumido,observacao)"
     ).eq("restaurant_id", rid).eq("ativa", True).order("numero").execute()
     mesas = _rows(resp)
     for m in mesas:
@@ -913,6 +940,16 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
             ).limit(1).execute()
             ultimo_pedido = _first(_rows(ultimo))
             sessao_ativa["ultima_atividade_em"] = (ultimo_pedido or {}).get("created_at") or sessao_ativa.get("aberta_em")
+            pedidos_count = sb.table("pedidos").select("id", count="exact").eq(
+                "sessao_mesa_id", sessao_ativa["id"]
+            ).eq("restaurant_id", rid).neq("status", "cancelado").execute()
+            sessao_ativa["pedidos_count"] = pedidos_count.count or 0
+            if sessao_ativa["pedidos_count"] == 0:
+                m["estado_operacional"] = "ocupada_sem_pedido"
+            else:
+                m["estado_operacional"] = "com_pedido"
+        else:
+            m["estado_operacional"] = "livre"
         m["sessao_ativa"] = sessao_ativa
     return {"mesas": mesas}
 
@@ -947,6 +984,84 @@ def atualizar_mesa(mesa_id: str, body: AtualizarMesaInput, request: Request,
     return {"mesa": _row(resp)}
 
 
+@app.post("/api/admin/tables/{mesa_id}/occupy", tags=["admin"])
+def ocupar_mesa(mesa_id: str, body: OcuparMesaInput, request: Request,
+                u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    mesa = sb.table("mesas").select("id,numero,status").eq("id", mesa_id).eq("restaurant_id", rid).eq("ativa", True).single().execute()
+    if not mesa.data:
+        raise HTTPException(404, "Mesa não encontrada")
+
+    aberta = sb.table("sessao_mesa").select("id,status,aberta_em,total_consumido,observacao").eq(
+        "mesa_id", mesa_id
+    ).eq("restaurant_id", rid).eq("status", "aberta").limit(1).execute()
+    aberta_data = _first(_rows(aberta))
+    if aberta_data:
+        return {"sessao": aberta_data, "mensagem": "Mesa já estava ocupada"}
+
+    observacao = f"ocupacao_manual:{body.motivo}"
+    if body.observacao:
+        observacao += f" | {body.observacao.strip()[:240]}"
+
+    sb.table("sessao_mesa").insert({
+        "restaurant_id": rid,
+        "mesa_id": mesa_id,
+        "status": "aberta",
+        "total_consumido": 0,
+        "observacao": observacao,
+    }).execute()
+    resp = sb.table("sessao_mesa").select("id,status,aberta_em,total_consumido,observacao").eq(
+        "mesa_id", mesa_id
+    ).eq("restaurant_id", rid).eq("status", "aberta").order("aberta_em", desc=True).limit(1).execute()
+    sessao = _first(_rows(resp))
+    if not sessao:
+        raise HTTPException(500, "Erro ao ocupar mesa")
+    sb.table("mesas").update({"status": "ocupada", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
+    log_acao(u, "ocupar_mesa_manual", "sessao_mesa", sessao["id"], None,
+             {"mesa_id": mesa_id, "mesa_numero": mesa.data.get("numero"), "motivo": body.motivo, "observacao": body.observacao}, request)
+    return {"sessao": sessao, "mensagem": "Mesa ocupada"}
+
+
+@app.post("/api/admin/tables/{mesa_id}/release", tags=["admin"])
+def liberar_mesa_sem_consumo(mesa_id: str, body: LiberarMesaInput, request: Request,
+                             u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    mesa = sb.table("mesas").select("id,numero").eq("id", mesa_id).eq("restaurant_id", rid).eq("ativa", True).single().execute()
+    if not mesa.data:
+        raise HTTPException(404, "Mesa não encontrada")
+
+    sess = sb.table("sessao_mesa").select("id,total_consumido,observacao").eq(
+        "mesa_id", mesa_id
+    ).eq("restaurant_id", rid).eq("status", "aberta").limit(1).execute()
+    sessao = _first(_rows(sess))
+    if not sessao:
+        sb.table("mesas").update({"status": "livre", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
+        return {"mensagem": "Mesa liberada"}
+
+    pedidos = sb.table("pedidos").select("id", count="exact").eq(
+        "sessao_mesa_id", sessao["id"]
+    ).eq("restaurant_id", rid).neq("status", "cancelado").execute()
+    if (pedidos.count or 0) > 0 or float(sessao.get("total_consumido") or 0) > 0:
+        raise HTTPException(409, "Esta mesa tem consumo. Feche a conta pelo caixa/admin.")
+
+    observacao = (sessao.get("observacao") or "").strip()
+    fechamento = f"liberada_sem_consumo:{body.motivo}"
+    if body.observacao:
+        fechamento += f" | {body.observacao.strip()[:240]}"
+    observacao = f"{observacao} || {fechamento}" if observacao else fechamento
+
+    sb.table("sessao_mesa").update({
+        "status": "fechada",
+        "fechada_em": utcnow(),
+        "updated_at": utcnow(),
+        "observacao": observacao,
+    }).eq("id", sessao["id"]).eq("restaurant_id", rid).execute()
+    sb.table("mesas").update({"status": "livre", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
+    log_acao(u, "liberar_mesa_sem_consumo", "sessao_mesa", sessao["id"], None,
+             {"mesa_id": mesa_id, "mesa_numero": mesa.data.get("numero"), "motivo": body.motivo, "observacao": body.observacao}, request)
+    return {"mensagem": "Mesa liberada sem consumo"}
+
+
 @app.post("/api/admin/tables/{mesa_id}/close", tags=["admin"])
 def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
                       u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
@@ -977,6 +1092,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
     )
 
     sb.rpc("fechar_sessao_mesa", {"p_sessao_id": sessao["id"], "p_restaurant_id": rid}).execute()
+    sb.table("mesas").update({"status": "livre", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
     for pedido in pedidos_fechamento:
         sb.table("pedidos").update({
             "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, pedido.get("total")),

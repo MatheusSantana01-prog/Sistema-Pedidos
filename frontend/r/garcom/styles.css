@@ -74,6 +74,7 @@ body {
 .mesa-card { border:1px solid var(--border); background:rgba(255,255,255,.04); border-radius:12px; padding:14px; cursor:pointer; min-height:150px; display:flex; flex-direction:column; justify-content:space-between; transition:.15s ease; }
 .mesa-card:hover { transform:translateY(-2px); border-color:var(--color-primary); }
 .mesa-card.ocupada { background:linear-gradient(180deg, rgba(245,158,11,.11), rgba(255,255,255,.035)); }
+.mesa-card.ocupada_sem_pedido { border-color:rgba(245,158,11,.45); background:linear-gradient(180deg, rgba(245,158,11,.16), rgba(255,255,255,.035)); }
 .mesa-card.livre { opacity:.78; }
 .mesa-card.mesa-alerta-atencao { border-color:#ef4444; animation:mesaBlink 1.5s ease-in-out infinite; }
 .mesa-card.mesa-alerta-critico { border-color:#ff1f1f; animation:mesaBlinkStrong .85s ease-in-out infinite; }
@@ -85,6 +86,10 @@ body {
 .mesa-status strong { color:var(--color-text); }
 .mesa-total { font-family:var(--mono); color:var(--color-primary); font-size:16px; font-weight:700; }
 .mesa-note { font-size:12px; color:var(--muted); }
+.mesa-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+.mesa-actions button { border:1px solid var(--border); background:rgba(29,185,84,.12); color:#c8f7d5; border-radius:8px; padding:7px 9px; font-size:12px; font-weight:800; cursor:pointer; }
+.mesa-actions button.danger { background:rgba(239,68,68,.12); color:#fecaca; }
+.mesa-actions button:disabled { opacity:.45; cursor:not-allowed; }
 
 .menu-panel { position:sticky; top:82px; height:calc(100vh - 112px); overflow:hidden; display:flex; flex-direction:column; }
 .menu-list { overflow:auto; padding-right:4px; margin-top:12px; }

@@ -147,8 +147,9 @@ async function carregarMesas() {
     const { mesas } = await apiCall('GET', '/api/admin/tables');
     const ocup = mesas.filter(m => m.status === 'ocupada').length;
     const liv  = mesas.filter(m => m.status === 'livre').length;
+    const semPedido = mesas.filter(m => m.estado_operacional === 'ocupada_sem_pedido').length;
     const fat  = mesas.reduce((a, m) => a + Number(m.sessao_ativa?.total_consumido || 0), 0);
-    document.getElementById('s-ocup').textContent = ocup;
+    document.getElementById('s-ocup').textContent = semPedido ? `${ocup} (${semPedido} sem pedido)` : ocup;
     document.getElementById('s-liv').textContent  = liv;
     document.getElementById('s-fat').textContent  = 'R$ ' + fmt(fat);
     carregarChamadosAdmin(false);
@@ -159,18 +160,67 @@ async function carregarMesas() {
       const dur   = sess ? Math.floor((Date.now() - new Date(sess.aberta_em)) / 60000) : 0;
       const durStr = dur < 60 ? dur + 'min' : Math.floor(dur/60) + 'h' + (dur%60 > 0 ? dur%60 + 'm' : '');
       const alerta = alertaMesa(sess);
-      return `<div class="mesa-card ${m.status} ${alerta.classe}" onclick="${sess ? `abrirConta('${m.id}','${sess.id}',${m.numero},${total})` : ''}">
+      const estado = m.estado_operacional || m.status;
+      return `<div class="mesa-card ${m.status} ${estado} ${alerta.classe}" onclick="${sess ? `abrirConta('${m.id}','${sess.id}',${m.numero},${total})` : ''}">
         <div class="mesa-num">${m.numero}</div>
-        <div class="mesa-status-badge ${m.status}">${m.status === 'livre' ? '● Livre' : m.status === 'ocupada' ? '● Ocupada' : '● Reservada'}</div>
-        <div class="mesa-info">${sess ? `R$ ${fmt(total)} · ${durStr}` : 'Mesa livre'}</div>
+        <div class="mesa-status-badge ${estado}">${labelEstadoMesa(m)}</div>
+        <div class="mesa-info">${sess ? `${mesaOrigem(sess)} · ${durStr}<br>R$ ${fmt(total)}` : 'Mesa livre'}</div>
         ${alerta.texto ? `<div class="mesa-alerta">${alerta.texto}</div>` : ''}
         <div class="mesa-actions" onclick="event.stopPropagation()">
           ${sess ? `<button class="btn btn-sm btn-success" onclick="abrirConta('${m.id}','${sess.id}',${m.numero},${total})">Ver conta →</button>` : ''}
+          ${!sess ? `<button class="btn btn-sm btn-success" onclick="ocuparMesa('${m.id}',${m.numero},this)">Ocupar</button>` : ''}
+          ${sess && (sess.pedidos_count || 0) === 0 ? `<button class="btn btn-sm btn-danger" onclick="liberarSemConsumo('${m.id}',${m.numero},this)">Liberar sem consumo</button>` : ''}
         </div>
       </div>`;
     }).join('');
   } catch (e) {
     showToast(e.message, 'error');
+  }
+}
+
+function labelEstadoMesa(m) {
+  if (m.estado_operacional === 'ocupada_sem_pedido') return '● Ocupada sem pedido';
+  if (m.estado_operacional === 'com_pedido') return '● Com pedido';
+  if (m.status === 'livre') return '● Livre';
+  if (m.status === 'reservada') return '● Reservada';
+  return '● Ocupada';
+}
+
+function mesaOrigem(sess) {
+  const obs = String(sess?.observacao || '');
+  if (obs.includes('cardapio_fisico')) return 'Cardápio físico';
+  if (obs.includes('reserva_chegou')) return 'Reserva chegou';
+  if (obs.includes('aguardando')) return 'Cliente aguardando';
+  if (obs.includes('ocupacao_manual')) return 'Ocupação manual';
+  return (sess?.pedidos_count || 0) === 0 ? 'Sem pedido' : `${sess.pedidos_count} pedido(s)`;
+}
+
+async function ocuparMesa(mesaId, numero, btn) {
+  const motivo = prompt(`Motivo para ocupar a mesa ${numero}:\ncliente_sentou, aguardando, cardapio_fisico, reserva_chegou ou outro`, 'cliente_sentou');
+  if (!motivo) return;
+  btn.disabled = true;
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaId}/occupy`, { motivo: motivo.trim() || 'cliente_sentou' });
+    showToast(`Mesa ${numero} ocupada`, 'success');
+    carregarMesas();
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function liberarSemConsumo(mesaId, numero, btn) {
+  const motivo = prompt(`Por que liberar a mesa ${numero} sem consumo?\nnao_consumiu, desistiu, aguardou_e_saiu, erro_operacional ou outro`, 'nao_consumiu');
+  if (!motivo) return;
+  if (!confirm(`Confirmar liberação da mesa ${numero} sem consumo?`)) return;
+  btn.disabled = true;
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaId}/release`, { motivo: motivo.trim() || 'nao_consumiu' });
+    showToast(`Mesa ${numero} liberada sem consumo`, 'success');
+    carregarMesas();
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
   }
 }
 
