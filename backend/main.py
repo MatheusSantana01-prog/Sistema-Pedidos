@@ -1626,7 +1626,11 @@ def listar_usuarios_plataforma(u: dict = Depends(require_super_admin)):
         "usuarios(id,nome,email,ativo),"
         "restaurants(id,name,slug,is_active)"
     ).order("created_at", desc=True).limit(200).execute()
-    return {"memberships": _rows(resp)}
+    memberships = [
+        m for m in _rows(resp)
+        if m.get("usuarios") and m.get("restaurants")
+    ]
+    return {"memberships": memberships}
 
 
 @app.get("/api/super-admin/restaurants/{restaurant_id}/qrcodes", tags=["super-admin"])
