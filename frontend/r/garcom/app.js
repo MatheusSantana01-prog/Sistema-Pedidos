@@ -15,7 +15,8 @@ const FOOD_IMAGES = {
 async function init() {
   RESTAURANT = await initTenant();
   if (!RESTAURANT) return;
-  if (isLoggedIn()) iniciarApp();
+  if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) iniciarApp();
+  else if (isLoggedIn()) logout();
 }
 
 async function fazerLogin() {
@@ -51,6 +52,7 @@ function fazerLogout() {
 
 function iniciarApp() {
   try {
+    exigirSessaoRestaurante(RESTAURANT);
     exigirPerfil(['waiter', 'manager', 'owner'], 'Use um login de garçom, gerente ou dono para atendimento');
   } catch (e) {
     showLoginError(e.message);

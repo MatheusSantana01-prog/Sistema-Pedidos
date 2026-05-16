@@ -9,7 +9,8 @@ let polling = null;
 async function init() {
   RESTAURANT = await initTenant();
   if (!RESTAURANT) return;
-  if (isLoggedIn()) iniciarApp();
+  if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) iniciarApp();
+  else if (isLoggedIn()) logout();
 }
 
 async function fazerLogin() {
@@ -35,6 +36,7 @@ function fazerLogout() {
 
 function iniciarApp() {
   try {
+    exigirSessaoRestaurante(RESTAURANT);
     exigirPerfil(['cashier', 'manager', 'owner'], 'Use um login de caixa, gerente ou dono para fechar contas');
   } catch (e) {
     document.getElementById('login-erro').textContent = e.message;

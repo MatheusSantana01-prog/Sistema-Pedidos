@@ -27,6 +27,18 @@ function temRole(role) {
 
 function isSuperAdmin() { return _usuario?.is_super_admin === true; }
 
+function sessaoDoRestaurante(restaurante) {
+  if (!_usuario || !restaurante?.id) return false;
+  return _usuario.restaurant_id === restaurante.id;
+}
+
+function exigirSessaoRestaurante(restaurante) {
+  if (!sessaoDoRestaurante(restaurante)) {
+    logout();
+    throw new Error('Entre novamente neste restaurante');
+  }
+}
+
 function rolePermitida(roles) {
   if (!_usuario) return false;
   if (_usuario.is_super_admin && _usuario.restaurant_id) return true;
@@ -124,6 +136,6 @@ async function apiPublic(method, path, body = null) {
 // Expor globalmente
 Object.assign(window, {
   getToken, getUsuario, isLoggedIn, temRole, isSuperAdmin,
-  rolePermitida, exigirPerfil,
+  sessaoDoRestaurante, exigirSessaoRestaurante, rolePermitida, exigirPerfil,
   login, logout, switchRestaurant, apiCall, apiPublic, ROLE_LEVEL,
 });

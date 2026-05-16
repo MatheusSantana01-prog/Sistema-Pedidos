@@ -6,7 +6,8 @@ let RESTAURANT = null;
 async function init() {
   RESTAURANT = await initTenant();
   if (!RESTAURANT) return;
-  if (isLoggedIn()) iniciarKDS();
+  if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) iniciarKDS();
+  else if (isLoggedIn()) logout();
 }
 
 async function fazerLogin() {
@@ -26,6 +27,7 @@ async function fazerLogin() {
 
 function iniciarKDS() {
   try {
+    exigirSessaoRestaurante(RESTAURANT);
     exigirPerfil(['kitchen', 'manager', 'owner'], 'Use um login de cozinha, gerente ou dono para ver os pedidos');
   } catch (e) {
     document.getElementById('login-erro').textContent = e.message;

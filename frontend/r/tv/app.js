@@ -11,7 +11,8 @@ async function init() {
     el.innerHTML = el.innerHTML.replace('SaaS Restaurante', RESTAURANT.name);
   });
 
-  if (isLoggedIn()) iniciarTV();
+  if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) iniciarTV();
+  else if (isLoggedIn()) logout();
 }
 
 async function fazerLogin() {
@@ -30,6 +31,7 @@ async function fazerLogin() {
 
 function iniciarTV() {
   try {
+    exigirSessaoRestaurante(RESTAURANT);
     exigirPerfil(['tv', 'kitchen', 'manager', 'owner'], 'Use um login de TV, cozinha, gerente ou dono para abrir esta tela');
   } catch (e) {
     document.getElementById('login-erro').textContent = e.message;
@@ -46,6 +48,13 @@ function iniciarTV() {
     polling = setTimeout(() => { carregar().finally(agendar); }, 8000);
   }
   agendar();
+}
+
+function fazerLogout() {
+  logout();
+  clearTimeout(polling);
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('tv-user').textContent = 'offline';
 }
 
 function tickRelogio() {

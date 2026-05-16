@@ -28,9 +28,9 @@ async function init() {
   if (!RESTAURANT) return;
 
   // 2. Se já tem sessão válida, entrar direto
-  if (isLoggedIn()) {
+  if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) {
     iniciarApp();
-  }
+  } else if (isLoggedIn()) logout();
 }
 
 /* ── LOGIN ────────────────────────────────────────── */
@@ -76,6 +76,7 @@ function iniciarApp() {
     return;
   }
   try {
+    exigirSessaoRestaurante(RESTAURANT);
     exigirPerfil(['manager', 'owner'], 'Use um login de gerente ou dono para abrir o painel admin');
   } catch (e) {
     document.getElementById('login-erro').textContent = e.message;
