@@ -178,6 +178,12 @@ def _first(data):
         return data[0] if data else None
     return data
 
+def _money(value) -> float:
+    try:
+        return round(float(value or 0), 2)
+    except (TypeError, ValueError):
+        return 0.0
+
 def utcnow() -> str:
     return datetime.utcnow().isoformat()
 
@@ -1028,12 +1034,43 @@ def historico_caixa(u: dict = Depends(authorize(["cashier", "manager", "owner"])
 def dashboard(data_inicio: str, data_fim: str,
               u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
-    resp = sb.rpc("get_dashboard_financeiro", {
-        "p_restaurant_id": rid,
-        "p_data_inicio":   data_inicio,
-        "p_data_fim":      data_fim,
-    }).execute()
-    return resp.data
+    try:
+        inicio = datetime.fromisoformat(data_inicio).date()
+        fim = datetime.fromisoformat(data_fim).date()
+    except ValueError:
+        raise HTTPException(400, "Período inválido")
+    if inicio > fim:
+        raise HTTPException(400, "Data inicial maior que a final")
+
+    inicio_iso = f"{inicio.isoformat()}T00:00:00"
+    fim_iso = f"{fim.isoformat()}T23:59:59.999999"
+    pedidos = _rows(
+        sb.table("pedidos")
+        .select("id,status,total,subtotal,desconto,forma_pagamento,status_pagamento,created_at")
+        .eq("restaurant_id", rid)
+        .gte("created_at", inicio_iso)
+        .lte("created_at", fim_iso)
+        .neq("status", "cancelado")
+        .execute()
+    )
+
+    total_bruto = sum(_money(p.get("subtotal") if p.get("subtotal") is not None else p.get("total")) for p in pedidos)
+    total_descontos = sum(_money(p.get("desconto")) for p in pedidos)
+    total_liquido = sum(_money(p.get("total")) for p in pedidos)
+    por_pagamento = {}
+    for pedido in pedidos:
+        forma = pedido.get("forma_pagamento") or "em_aberto"
+        por_pagamento[forma] = round(por_pagamento.get(forma, 0.0) + _money(pedido.get("total")), 2)
+
+    total_pedidos = len(pedidos)
+    return {
+        "total_bruto": round(total_bruto, 2),
+        "total_descontos": round(total_descontos, 2),
+        "total_liquido": round(total_liquido, 2),
+        "total_pedidos": total_pedidos,
+        "ticket_medio": round(total_liquido / total_pedidos, 2) if total_pedidos else 0,
+        "por_pagamento": por_pagamento,
+    }
 
 
 # ═════════════════════════════════════════════════════════════════
