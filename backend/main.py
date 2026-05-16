@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 import secrets
 import json
+import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
@@ -35,6 +37,7 @@ JWT_EXP_H        = int(os.getenv("JWT_EXP_HOURS", "12"))
 APP_ENV          = os.getenv("APP_ENV", "development")
 CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
 FRONTEND_URL     = os.getenv("PUBLIC_FRONTEND_URL", "*")
+APP_VERSION      = os.getenv("APP_VERSION", os.getenv("RENDER_GIT_COMMIT", "local"))[:12]
 
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET não configurado")
@@ -54,6 +57,8 @@ if CORS_ORIGINS != ["*"]:
     CORS_ORIGINS = list(dict.fromkeys([*CORS_ORIGINS, *LOCAL_CORS_ORIGINS]))
 
 sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+logger = logging.getLogger("restaurante-saas")
+logging.basicConfig(level=logging.INFO)
 
 # ── ROLES HIERARQUIA ─────────────────────────────────────────────
 ROLE_LEVEL = {
@@ -87,6 +92,90 @@ FORMAS_PAGAMENTO = {
     "outro",
 }
 
+PLAN_LIMITS = {
+    "starter": {"users": 5, "tables": 20, "products": 100},
+    "pro": {"users": 15, "tables": 60, "products": 400},
+    "enterprise": {"users": 9999, "tables": 9999, "products": 9999},
+}
+
+TEMPLATE_CATEGORIES = {
+    "restaurante": [
+        {"nome": "Entradas", "icone": "🥗", "ordem": 1},
+        {"nome": "Pratos principais", "icone": "🍽️", "ordem": 2},
+        {"nome": "Bebidas", "icone": "🥤", "ordem": 3},
+        {"nome": "Sobremesas", "icone": "🍰", "ordem": 4},
+    ],
+    "pizzaria": [
+        {"nome": "Pizzas", "icone": "🍕", "ordem": 1},
+        {"nome": "Bordas e adicionais", "icone": "🧀", "ordem": 2},
+        {"nome": "Bebidas", "icone": "🥤", "ordem": 3},
+        {"nome": "Sobremesas", "icone": "🍰", "ordem": 4},
+    ],
+    "padaria": [
+        {"nome": "Pães e salgados", "icone": "🥐", "ordem": 1},
+        {"nome": "Cafés", "icone": "☕", "ordem": 2},
+        {"nome": "Doces", "icone": "🍰", "ordem": 3},
+        {"nome": "Bebidas", "icone": "🥤", "ordem": 4},
+    ],
+    "bar": [
+        {"nome": "Porções", "icone": "🍟", "ordem": 1},
+        {"nome": "Pratos", "icone": "🍽️", "ordem": 2},
+        {"nome": "Drinks", "icone": "🍹", "ordem": 3},
+        {"nome": "Bebidas", "icone": "🥤", "ordem": 4},
+    ],
+    "hamburgueria": [
+        {"nome": "Burgers", "icone": "🍔", "ordem": 1},
+        {"nome": "Combos", "icone": "🎁", "ordem": 2},
+        {"nome": "Acompanhamentos", "icone": "🍟", "ordem": 3},
+        {"nome": "Bebidas", "icone": "🥤", "ordem": 4},
+    ],
+    "delivery": [
+        {"nome": "Mais pedidos", "icone": "⭐", "ordem": 1},
+        {"nome": "Combos", "icone": "🎁", "ordem": 2},
+        {"nome": "Bebidas", "icone": "🥤", "ordem": 3},
+        {"nome": "Sobremesas", "icone": "🍰", "ordem": 4},
+    ],
+}
+
+SAMPLE_PRODUCTS = {
+    "restaurante": [
+        ("Entradas", "Bruschetta da casa", "Pão artesanal, tomate fresco, manjericão e azeite.", 24.90, True, 12),
+        ("Pratos principais", "Risoto de filé", "Arroz arbóreo cremoso, filé mignon e parmesão.", 68.90, True, 25),
+        ("Bebidas", "Suco natural", "Fruta da estação preparada na hora.", 14.90, False, 5),
+        ("Sobremesas", "Brownie com sorvete", "Brownie quente, calda e sorvete de creme.", 27.90, False, 10),
+    ],
+    "pizzaria": [
+        ("Pizzas", "Pizza margherita", "Molho artesanal, mussarela, tomate e manjericão.", 59.90, True, 25),
+        ("Pizzas", "Pizza calabresa especial", "Calabresa, cebola roxa, mussarela e orégano.", 62.90, True, 25),
+        ("Bebidas", "Refrigerante lata", "Opções geladas para acompanhar sua pizza.", 7.90, False, 2),
+        ("Sobremesas", "Pizza doce pequena", "Chocolate cremoso e morangos.", 34.90, False, 18),
+    ],
+    "padaria": [
+        ("Pães e salgados", "Pão na chapa especial", "Pão francês, manteiga e queijo derretido.", 12.90, True, 8),
+        ("Cafés", "Cappuccino cremoso", "Café espresso, leite vaporizado e canela.", 13.90, True, 6),
+        ("Doces", "Fatia de bolo caseiro", "Bolo fresco do dia.", 11.90, False, 4),
+        ("Bebidas", "Suco natural", "Fruta da estação preparada na hora.", 14.90, False, 5),
+    ],
+    "bar": [
+        ("Porções", "Batata rústica", "Batatas crocantes com molho da casa.", 32.90, True, 18),
+        ("Pratos", "Filé aperitivo", "Tiras de filé, cebola e pão de alho.", 69.90, True, 24),
+        ("Drinks", "Gin tônica", "Gin, tônica, limão e especiarias.", 28.90, False, 6),
+        ("Bebidas", "Água com gás", "Garrafa gelada.", 6.90, False, 2),
+    ],
+    "hamburgueria": [
+        ("Burgers", "Smash cheddar", "Blend bovino, cheddar e molho especial.", 34.90, True, 18),
+        ("Combos", "Combo clássico", "Burger, fritas e bebida.", 49.90, True, 20),
+        ("Acompanhamentos", "Batata frita", "Porção crocante com sal da casa.", 19.90, False, 12),
+        ("Bebidas", "Refrigerante lata", "Lata gelada.", 7.90, False, 2),
+    ],
+    "delivery": [
+        ("Mais pedidos", "Combo da casa", "Pedido campeão para entrega rápida.", 44.90, True, 20),
+        ("Combos", "Combo família", "Porção para compartilhar.", 89.90, True, 30),
+        ("Bebidas", "Refrigerante lata", "Lata gelada.", 7.90, False, 2),
+        ("Sobremesas", "Brownie", "Brownie macio com chocolate.", 18.90, False, 8),
+    ],
+}
+
 # ── APP ───────────────────────────────────────────────────────────
 app = FastAPI(
     title="SaaS Restaurante API",
@@ -104,6 +193,42 @@ app.add_middleware(
 )
 
 bearer = HTTPBearer(auto_error=False)
+
+
+@app.middleware("http")
+async def monitorar_requisicoes(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or secrets.token_hex(8)
+    inicio = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duracao_ms = round((time.perf_counter() - inicio) * 1000, 2)
+        logger.exception("erro_nao_tratado request_id=%s path=%s duracao_ms=%s", request_id, request.url.path, duracao_ms)
+        try:
+            sb.table("audit_log").insert({
+                "restaurant_id": None,
+                "usuario_id": None,
+                "usuario_nome": "Sistema",
+                "perfil": "monitoring",
+                "acao": "erro_backend",
+                "tabela": "api",
+                "registro_id": request_id,
+                "valor_anterior": None,
+                "valor_novo": {
+                    "path": request.url.path,
+                    "method": request.method,
+                    "erro": str(exc)[:500],
+                    "duracao_ms": duracao_ms,
+                    "version": APP_VERSION,
+                },
+                "ip": request.client.host if request.client else None,
+            }).execute()
+        except Exception:
+            pass
+        raise
+    response.headers["x-request-id"] = request_id
+    response.headers["x-app-version"] = APP_VERSION
+    return response
 
 
 # ── BCRYPT ────────────────────────────────────────────────────────
@@ -208,7 +333,7 @@ def _platform_control_defaults() -> dict:
         "support_notes": "",
         "block_mode": "none",
         "broadcast_message": "",
-        "limits": {"users": 5, "tables": 20, "products": 100},
+        "limits": PLAN_LIMITS["starter"].copy(),
         "modules": {
             "financeiro": True,
             "estoque": False,
@@ -248,6 +373,11 @@ def save_platform_control(restaurant_id: str, control: dict):
     else:
         sb.table("configuracoes").insert(payload).execute()
 
+def aplicar_limites_plano(control: dict, plan: str) -> dict:
+    limits = PLAN_LIMITS.get(plan or "starter", PLAN_LIMITS["starter"]).copy()
+    control["limits"] = {**limits, **(control.get("limits") or {})}
+    return control
+
 def platform_links(slug: str) -> dict:
     base_url = "" if FRONTEND_URL == "*" else FRONTEND_URL.rstrip("/")
     prefix = f"{base_url}/r/{slug}"
@@ -274,6 +404,57 @@ def enforce_platform_control(restaurant_id: str, area: str):
     modules = control.get("modules") or {}
     if area in modules and modules.get(area) is False:
         raise HTTPException(403, f"Módulo {area} não está liberado no plano")
+
+def enforce_plan_limit(restaurant_id: str, limit_key: str, current_count: int, extra: int = 1):
+    control = get_platform_control(restaurant_id)
+    limit = int((control.get("limits") or {}).get(limit_key) or 0)
+    if limit <= 0 or limit >= 9999:
+        return
+    if current_count + extra > limit:
+        labels = {"users": "usuários", "tables": "mesas", "products": "produtos"}
+        raise HTTPException(403, f"Limite de {labels.get(limit_key, limit_key)} do plano atingido ({limit})")
+
+def active_memberships_count(restaurant_id: str) -> int:
+    resp = sb.table("restaurant_memberships").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("is_active", True).execute()
+    return resp.count or 0
+
+def active_tables_count(restaurant_id: str) -> int:
+    resp = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).execute()
+    return resp.count or 0
+
+def products_count(restaurant_id: str) -> int:
+    resp = sb.table("produtos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
+    return resp.count or 0
+
+def insert_restaurant(payload: dict) -> dict:
+    resp = sb.table("restaurants").insert(payload).execute()
+    inserted = _first(_rows(resp))
+    if inserted:
+        return inserted
+    rest = sb.table("restaurants").select("*").eq("slug", payload["slug"]).single().execute()
+    return _row(rest)
+
+def insert_user(payload: dict, email: str) -> str:
+    resp = sb.table("usuarios").insert(payload).execute()
+    inserted = _first(_rows(resp))
+    if inserted and inserted.get("id"):
+        return inserted["id"]
+    usr = sb.table("usuarios").select("id").eq("email", email).single().execute()
+    return _row(usr)["id"]
+
+def desativar_usuarios_orfaos(usuario_ids: list[str]) -> int:
+    desativados = 0
+    for uid in set(usuario_ids):
+        restantes = sb.table("restaurant_memberships").select("id", count="exact").eq("usuario_id", uid).eq("is_active", True).execute()
+        if restantes.count:
+            continue
+        usuario = _first(_rows(sb.table("usuarios").select("id,email").eq("id", uid).limit(1).execute()))
+        admin = sb.table("platform_admins").select("id", count="exact").eq("usuario_id", uid).execute()
+        if not usuario or admin.count or usuario.get("email") == "admin@restaurante.com":
+            continue
+        sb.table("usuarios").update({"ativo": False}).eq("id", uid).execute()
+        desativados += 1
+    return desativados
 
 def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, dict]:
     total = _money(total)
@@ -401,8 +582,10 @@ class CriarRestauranteInput(BaseModel):
     background_color: str = "#0a0a0a"
     text_color: str = "#f2f0eb"
     plan: str = "starter"
+    template: str = "restaurante"
     initial_table_count: int = 10
     create_default_categories: bool = True
+    create_sample_products: bool = True
 
     @field_validator("slug")
     @classmethod
@@ -416,6 +599,20 @@ class CriarRestauranteInput(BaseModel):
     def val_initial_table_count(cls, v):
         if v < 0 or v > 100:
             raise ValueError("Quantidade inicial de mesas precisa ficar entre 0 e 100")
+        return v
+
+    @field_validator("plan")
+    @classmethod
+    def val_plan(cls, v):
+        if v not in PLAN_LIMITS:
+            raise ValueError(f"Plano inválido: {list(PLAN_LIMITS.keys())}")
+        return v
+
+    @field_validator("template")
+    @classmethod
+    def val_template(cls, v):
+        if v not in TEMPLATE_CATEGORIES:
+            raise ValueError(f"Template inválido: {list(TEMPLATE_CATEGORIES.keys())}")
         return v
 
 
@@ -607,7 +804,7 @@ def root():
 
 @app.get("/health", tags=["geral"])
 def health():
-    return {"status": "ok", "timestamp": utcnow()}
+    return {"status": "ok", "timestamp": utcnow(), "version": APP_VERSION}
 
 
 # ── Público: Buscar restaurante por slug ─────────────────────────
@@ -998,7 +1195,8 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
         extra["cancelado_por"]       = u["sub"]
         extra["motivo_cancelamento"] = body.motivo_cancelamento
 
-    resp = sb.table("pedidos").update({"status": body.status, **extra}).eq("id", pedido_id).select("id,numero,status").execute()
+    sb.table("pedidos").update({"status": body.status, **extra}).eq("id", pedido_id).execute()
+    resp = sb.table("pedidos").select("id,numero,status").eq("id", pedido_id).execute()
     log_acao(u, f"status_{body.status}", "pedidos", pedido_id, {"status": ant.data["status"]}, {"status": body.status}, request)
     return {"pedido": _row(resp)}
 
@@ -1048,6 +1246,7 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
 def criar_mesa(body: CriarMesaInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "admin")
+    enforce_plan_limit(rid, "tables", active_tables_count(rid))
     token = secrets.token_urlsafe(24)
     resp = sb.table("mesas").insert({
         "restaurant_id": rid, "numero": body.numero,
@@ -1322,6 +1521,7 @@ def listar_produtos(disponivel: Optional[bool] = None, u: dict = Depends(authori
 def criar_produto(body: CriarProdutoInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "admin")
+    enforce_plan_limit(rid, "products", products_count(rid))
     payload = body.model_dump()
     payload["restaurant_id"] = rid
     payload["categoria_id"]  = str(payload["categoria_id"])
@@ -1378,13 +1578,16 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
     if existe.data:
         # Usuário já existe — apenas adicionar membership
         uid = existe.data[0]["id"]
+        membership = _first(_rows(sb.table("restaurant_memberships").select("id,is_active").eq("restaurant_id", rid).eq("usuario_id", uid).limit(1).execute()))
+        if not membership or membership.get("is_active") is False:
+            enforce_plan_limit(rid, "users", active_memberships_count(rid))
     else:
-        resp = sb.table("usuarios").insert({
+        enforce_plan_limit(rid, "users", active_memberships_count(rid))
+        uid = insert_user({
             "nome": body.nome, "email": body.email,
             "senha_hash": hash_senha(body.senha),
             "perfil": "funcionario", "ativo": True,
-        }).select("id").execute()
-        uid = _row(resp)["id"]
+        }, body.email)
 
     # Criar ou atualizar membership
     sb.table("restaurant_memberships").upsert({
@@ -1594,10 +1797,17 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
     if existe.data:
         raise HTTPException(400, f"Slug '{body.slug}' já está em uso")
 
-    payload = body.model_dump(exclude={"initial_table_count", "create_default_categories"})
-    resp = sb.table("restaurants").insert(payload).select("*").execute()
-    rest = _row(resp)
+    plan_limits = PLAN_LIMITS.get(body.plan, PLAN_LIMITS["starter"])
+    if body.initial_table_count > plan_limits["tables"]:
+        raise HTTPException(400, f"Quantidade inicial de mesas acima do limite do plano ({plan_limits['tables']})")
+
+    payload = body.model_dump(exclude={"initial_table_count", "create_default_categories", "create_sample_products", "template"})
+    rest = insert_restaurant(payload)
     try:
+        control = aplicar_limites_plano(_platform_control_defaults(), body.plan)
+        control["segment"] = body.template
+        save_platform_control(rest["id"], control)
+
         # Criar settings padrão
         sb.table("restaurant_settings").insert({
             "restaurant_id": rest["id"],
@@ -1611,13 +1821,36 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
             "accept_cash": True,
         }).execute()
 
+        categorias_criadas = []
         if body.create_default_categories:
+            template_cats = TEMPLATE_CATEGORIES.get(body.template, TEMPLATE_CATEGORIES["restaurante"])
             sb.table("categorias").insert([
-                {"restaurant_id": rest["id"], "nome": "Entradas", "icone": "🥗", "ordem": 1},
-                {"restaurant_id": rest["id"], "nome": "Pratos principais", "icone": "🍽️", "ordem": 2},
-                {"restaurant_id": rest["id"], "nome": "Bebidas", "icone": "🥤", "ordem": 3},
-                {"restaurant_id": rest["id"], "nome": "Sobremesas", "icone": "🍰", "ordem": 4},
+                {"restaurant_id": rest["id"], **cat}
+                for cat in template_cats
             ]).execute()
+            categorias_criadas = _rows(sb.table("categorias").select("id,nome").eq("restaurant_id", rest["id"]).execute())
+
+        if body.create_sample_products and categorias_criadas:
+            cat_por_nome = {c["nome"]: c["id"] for c in categorias_criadas}
+            produtos_seed = []
+            for cat_nome, nome, descricao, preco, destaque, tempo in SAMPLE_PRODUCTS.get(body.template, SAMPLE_PRODUCTS["restaurante"]):
+                cat_id = cat_por_nome.get(cat_nome)
+                if not cat_id:
+                    continue
+                produtos_seed.append({
+                    "restaurant_id": rest["id"],
+                    "categoria_id": cat_id,
+                    "nome": nome,
+                    "descricao": descricao,
+                    "preco": preco,
+                    "custo": 0,
+                    "foto_url": None,
+                    "disponivel": True,
+                    "destaque": destaque,
+                    "tempo_preparo_minutos": tempo,
+                })
+            if produtos_seed:
+                sb.table("produtos").insert(produtos_seed).execute()
 
         if body.initial_table_count:
             sb.table("mesas").insert([
@@ -1642,6 +1875,9 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
 def apagar_restaurante_dados(restaurant_id: str):
     def delete_restaurant_rows(table: str):
         sb.table(table).delete().eq("restaurant_id", restaurant_id).execute()
+
+    membros = _rows(sb.table("restaurant_memberships").select("usuario_id").eq("restaurant_id", restaurant_id).execute())
+    usuario_ids = [m["usuario_id"] for m in membros if m.get("usuario_id")]
 
     pedidos = _rows(sb.table("pedidos").select("id").eq("restaurant_id", restaurant_id).execute())
     pedido_ids = [p["id"] for p in pedidos]
@@ -1682,6 +1918,7 @@ def apagar_restaurante_dados(restaurant_id: str):
         delete_restaurant_rows(table)
 
     sb.table("restaurants").delete().eq("id", restaurant_id).execute()
+    desativar_usuarios_orfaos(usuario_ids)
 
 
 @app.patch("/api/super-admin/restaurants/{restaurant_id}/status", tags=["super-admin"])
@@ -1904,6 +2141,166 @@ def qrcodes_restaurante(restaurant_id: str, u: dict = Depends(require_super_admi
     }
 
 
+@app.get("/api/super-admin/restaurants/{restaurant_id}/export", tags=["super-admin"])
+def exportar_restaurante(restaurant_id: str, u: dict = Depends(require_super_admin)):
+    rest = sb.table("restaurants").select("*").eq("id", restaurant_id).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+
+    def table_rows(table: str, select: str = "*"):
+        return _rows(sb.table(table).select(select).eq("restaurant_id", restaurant_id).execute())
+
+    pedidos = table_rows("pedidos")
+    pedido_ids = [p["id"] for p in pedidos]
+    itens = []
+    if pedido_ids:
+        itens = _rows(sb.table("pedido_itens").select("*").in_("pedido_id", pedido_ids).execute())
+
+    usuarios = table_rows(
+        "restaurant_memberships",
+        "id,role,is_active,created_at,usuarios(id,nome,email,ativo,perfil,ultimo_acesso)"
+    )
+    return {
+        "exported_at": utcnow(),
+        "version": APP_VERSION,
+        "restaurant": rest.data,
+        "control": get_platform_control(restaurant_id),
+        "settings": table_rows("restaurant_settings"),
+        "users": usuarios,
+        "tables": table_rows("mesas"),
+        "categories": table_rows("categorias"),
+        "products": table_rows("produtos"),
+        "sessions": table_rows("sessao_mesa"),
+        "orders": pedidos,
+        "order_items": itens,
+        "cash_closures": table_rows("fechamento_caixa"),
+        "audit_logs": table_rows("audit_log"),
+    }
+
+
+@app.post("/api/super-admin/restaurants/{restaurant_id}/repair-seed", tags=["super-admin"])
+def reparar_seed_restaurante(restaurant_id: str, body: dict, request: Request,
+                             u: dict = Depends(require_super_admin)):
+    rest = sb.table("restaurants").select("id,name,plan").eq("id", restaurant_id).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    template = body.get("template") or get_platform_control(restaurant_id).get("segment") or "restaurante"
+    if template not in TEMPLATE_CATEGORIES:
+        template = "restaurante"
+
+    criados = {"settings": 0, "categories": 0, "products": 0, "tables": 0}
+    if not _rows(sb.table("restaurant_settings").select("id").eq("restaurant_id", restaurant_id).limit(1).execute()):
+        sb.table("restaurant_settings").insert({
+            "restaurant_id": restaurant_id,
+            "service_fee_enabled": False,
+            "service_fee_percent": 10,
+            "allow_customer_notes": True,
+            "allow_waiter_call": True,
+            "allow_table_close_request": True,
+            "accept_pix": True,
+            "accept_card": True,
+            "accept_cash": True,
+        }).execute()
+        criados["settings"] = 1
+
+    categorias = _rows(sb.table("categorias").select("id,nome").eq("restaurant_id", restaurant_id).execute())
+    if not categorias:
+        sb.table("categorias").insert([
+            {"restaurant_id": restaurant_id, **cat}
+            for cat in TEMPLATE_CATEGORIES[template]
+        ]).execute()
+        categorias = _rows(sb.table("categorias").select("id,nome").eq("restaurant_id", restaurant_id).execute())
+        criados["categories"] = len(categorias)
+
+    if body.get("create_sample_products", True) and not _rows(sb.table("produtos").select("id").eq("restaurant_id", restaurant_id).limit(1).execute()):
+        cat_por_nome = {c["nome"]: c["id"] for c in categorias}
+        produtos_seed = []
+        for cat_nome, nome, descricao, preco, destaque, tempo in SAMPLE_PRODUCTS.get(template, SAMPLE_PRODUCTS["restaurante"]):
+            if cat_nome in cat_por_nome:
+                produtos_seed.append({
+                    "restaurant_id": restaurant_id,
+                    "categoria_id": cat_por_nome[cat_nome],
+                    "nome": nome,
+                    "descricao": descricao,
+                    "preco": preco,
+                    "custo": 0,
+                    "disponivel": True,
+                    "destaque": destaque,
+                    "tempo_preparo_minutos": tempo,
+                })
+        if produtos_seed:
+            sb.table("produtos").insert(produtos_seed).execute()
+            criados["products"] = len(produtos_seed)
+
+    mesas_ativas = active_tables_count(restaurant_id)
+    mesas_desejadas = int(body.get("tables") or 0)
+    if mesas_desejadas > mesas_ativas:
+        enforce_plan_limit(restaurant_id, "tables", mesas_ativas, mesas_desejadas - mesas_ativas)
+        existentes = _rows(sb.table("mesas").select("numero").eq("restaurant_id", restaurant_id).execute())
+        usados = {int(m["numero"]) for m in existentes if str(m.get("numero", "")).isdigit()}
+        novas = []
+        n = 1
+        while len(novas) < (mesas_desejadas - mesas_ativas):
+            if n not in usados:
+                novas.append({
+                    "restaurant_id": restaurant_id,
+                    "numero": n,
+                    "capacidade": 4,
+                    "ativa": True,
+                    "status": "livre",
+                    "qr_code_token": secrets.token_urlsafe(24),
+                })
+            n += 1
+        sb.table("mesas").insert(novas).execute()
+        criados["tables"] = len(novas)
+
+    log_acao(u, "super_reparar_seed", "restaurants", restaurant_id, None, criados, request)
+    return {"mensagem": "Seed verificado", "created": criados}
+
+
+@app.post("/api/super-admin/maintenance/cleanup", tags=["super-admin"])
+def limpeza_plataforma(body: dict, request: Request, u: dict = Depends(require_super_admin)):
+    apply_changes = body.get("apply") is True
+    memberships = _rows(sb.table("restaurant_memberships").select("usuario_id,is_active,restaurants(id)").execute())
+    usuarios_vinculados = {m.get("usuario_id") for m in memberships if m.get("usuario_id") and m.get("restaurants")}
+    todos_usuarios = _rows(sb.table("usuarios").select("id,email,ativo").execute())
+    admins = {
+        a.get("usuario_id")
+        for a in _rows(sb.table("platform_admins").select("usuario_id").execute())
+        if a.get("usuario_id")
+    }
+    todos_orfaos = [
+        usr for usr in todos_usuarios
+        if usr.get("id") not in usuarios_vinculados
+        and usr.get("id") not in admins
+        and usr.get("email") != "admin@restaurante.com"
+    ]
+    orfaos = [usr for usr in todos_orfaos if usr.get("ativo") is not False]
+
+    memberships_orfaos = [m for m in memberships if not m.get("restaurants")]
+    resultado = {
+        "dry_run": not apply_changes,
+        "orphan_users": len(orfaos),
+        "inactive_orphan_users": len(todos_orfaos) - len(orfaos),
+        "orphan_memberships": len(memberships_orfaos),
+        "deactivated_users": 0,
+        "deleted_memberships": 0,
+    }
+
+    if apply_changes:
+        for m in memberships_orfaos:
+            if m.get("usuario_id"):
+                sb.table("restaurant_memberships").delete().eq("usuario_id", m["usuario_id"]).is_("restaurant_id", "null").execute()
+                resultado["deleted_memberships"] += 1
+        for usr in orfaos:
+            if usr.get("ativo") is not False:
+                sb.table("usuarios").update({"ativo": False}).eq("id", usr["id"]).execute()
+                resultado["deactivated_users"] += 1
+        log_acao(u, "super_limpeza_plataforma", "usuarios", None, None, resultado, request)
+
+    return resultado
+
+
 @app.get("/api/super-admin/diagnostics", tags=["super-admin"])
 def diagnosticos_plataforma(u: dict = Depends(require_super_admin)):
     checks = []
@@ -1978,13 +2375,16 @@ def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
     existe = sb.table("usuarios").select("id").eq("email", body.email).execute()
     if existe.data:
         uid = existe.data[0]["id"]
+        membership = _first(_rows(sb.table("restaurant_memberships").select("id,is_active").eq("restaurant_id", restaurant_id).eq("usuario_id", uid).limit(1).execute()))
+        if not membership or membership.get("is_active") is False:
+            enforce_plan_limit(restaurant_id, "users", active_memberships_count(restaurant_id))
     else:
-        resp = sb.table("usuarios").insert({
+        enforce_plan_limit(restaurant_id, "users", active_memberships_count(restaurant_id))
+        uid = insert_user({
             "nome": body.nome, "email": body.email,
             "senha_hash": hash_senha(body.senha),
             "perfil": "funcionario", "ativo": True,
-        }).select("id").execute()
-        uid = _row(resp)["id"]
+        }, body.email)
 
     sb.table("restaurant_memberships").upsert({
         "restaurant_id": restaurant_id, "usuario_id": uid,

@@ -402,16 +402,22 @@ async function entrarComoDono(restId) {
   }
 }
 
-function exportarRestauranteAtual() {
+async function exportarRestauranteAtual() {
   if (!DETALHE_ATUAL) return;
-  const data = JSON.stringify(DETALHE_ATUAL, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${DETALHE_ATUAL.restaurant.slug}-export.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    const exportData = await apiCall('GET', `/api/super-admin/restaurants/${DETALHE_ATUAL.restaurant.id}/export`);
+    const data = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${DETALHE_ATUAL.restaurant.slug}-export-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Exportação gerada', 'success');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
 }
 
 function abrirModalNovoRest() {
@@ -475,12 +481,13 @@ async function criarRestaurante() {
       slug,
       email,
       plan: plano,
+      template,
       primary_color: cor,
       initial_table_count: mesas,
       create_default_categories: categorias,
+      create_sample_products: categorias,
     };
     const { restaurant } = await apiCall('POST', '/api/super-admin/restaurants', payload);
-    await apiCall('PATCH', `/api/super-admin/restaurants/${restaurant.id}/control`, { segment: template }).catch(() => null);
 
     // Criar owner via super-admin endpoint se fornecido
     if (ownerEmail && ownerSenha) {

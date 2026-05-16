@@ -99,7 +99,7 @@ function renderHero() {
   const sub = document.getElementById('hero-sub');
   const stats = document.getElementById('hero-stats');
   if (destaque && heroBg) {
-    heroBg.style.backgroundImage = `linear-gradient(90deg, rgba(8,7,6,.92), rgba(8,7,6,.58) 46%, rgba(8,7,6,.22)), url('${imageForProduct(destaque)}')`;
+    heroBg.style.backgroundImage = `linear-gradient(90deg, rgba(8,7,6,.92), rgba(8,7,6,.58) 46%, rgba(8,7,6,.22)), url('${safeUrl(imageForProduct(destaque), FOOD_IMAGES.default)}')`;
     title.textContent = destaque.destaque ? 'Destaques preparados para sua mesa' : 'Escolha seu próximo pedido';
     sub.textContent = destaque.destaque
       ? `${destaque.nome} e outras opções da casa prontas para pedir pelo cardápio digital.`
@@ -120,7 +120,7 @@ function renderCats() {
   el.innerHTML = `<button class="cat-pill active" onclick="filtrarCat(this,null)"><span>Tudo</span><small>${total}</small></button>`;
   categorias.forEach(c => {
     const count = (c.produtos || []).filter(p => p.disponivel !== false).length;
-    el.innerHTML += `<button class="cat-pill" onclick="filtrarCat(this,'${c.id}')"><span>${c.icone||''} ${c.nome}</span><small>${count}</small></button>`;
+    el.innerHTML += `<button class="cat-pill" onclick="filtrarCat(this,'${escapeAttr(c.id)}')"><span>${escapeHtml(c.icone||'')} ${escapeHtml(c.nome)}</span><small>${count}</small></button>`;
   });
 }
 
@@ -145,17 +145,17 @@ function renderDestaques() {
     </div>
     <div class="dest-grid">
       ${dest.slice(0,4).map(p => `
-        <div class="dest-card" onclick="abrirProduto('${p.id}')">
+        <div class="dest-card" onclick="abrirProduto('${escapeAttr(p.id)}')">
           <div class="dest-img-wrap">
-            <img src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
+            <img src="${safeUrl(imageForProduct(p), FOOD_IMAGES.default)}" alt="${escapeAttr(p.nome)}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
             <span>Mais pedido</span>
           </div>
           <div class="dest-card-body">
-            <div class="dest-card-nome">${p.nome}</div>
-            ${p.descricao ? `<div class="dest-card-desc">${p.descricao}</div>` : ''}
+            <div class="dest-card-nome">${escapeHtml(p.nome)}</div>
+            ${p.descricao ? `<div class="dest-card-desc">${escapeHtml(p.descricao)}</div>` : ''}
             <div class="dest-card-foot">
               <div class="dest-card-preco">R$ ${fmt(p.preco)}</div>
-              <button onclick="event.stopPropagation();adicionarRapido('${p.id}')">Adicionar</button>
+              <button onclick="event.stopPropagation();adicionarRapido('${escapeAttr(p.id)}')">Adicionar</button>
             </div>
           </div>
         </div>`).join('')}
@@ -167,26 +167,26 @@ function renderProdutos(cats) {
   const wrap = document.getElementById('produtos-wrap');
   if (!cats.length) { wrap.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Nenhum produto encontrado</div>'; return; }
   wrap.innerHTML = cats.map(c => `
-    <div class="cat-section" id="cat-${c.id}">
+    <div class="cat-section" id="cat-${escapeAttr(c.id)}">
       <div class="cat-section-title">
-        <span>${c.icone||''}</span>
-        <span>${c.nome}</span>
+        <span>${escapeHtml(c.icone||'')}</span>
+        <span>${escapeHtml(c.nome)}</span>
       </div>
       ${(c.produtos||[]).map((p, idx) => `
-        <div class="produto-card ${p.destaque ? 'is-featured' : ''}" onclick="${p.disponivel!==false?`abrirProduto('${p.id}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
+        <div class="produto-card ${p.destaque ? 'is-featured' : ''}" onclick="${p.disponivel!==false?`abrirProduto('${escapeAttr(p.id)}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
           <div class="produto-img-wrap">
-            <img class="produto-img" src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
+            <img class="produto-img" src="${safeUrl(imageForProduct(p), FOOD_IMAGES.default)}" alt="${escapeAttr(p.nome)}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
             ${p.destaque ? '<span class="produto-badge">Destaque</span>' : idx < 2 && p.disponivel !== false ? '<span class="produto-badge subtle">Sugestão</span>' : ''}
           </div>
           <div class="produto-info">
-            <div class="produto-nome">${p.nome}</div>
-            ${p.descricao?`<div class="produto-desc">${p.descricao}</div>`:''}
+            <div class="produto-nome">${escapeHtml(p.nome)}</div>
+            ${p.descricao?`<div class="produto-desc">${escapeHtml(p.descricao)}</div>`:''}
             <div class="produto-meta">
               <span class="${p.disponivel===false?'produto-ind':'produto-preco'}">${p.disponivel===false?'Indisponível':'R$ '+fmt(p.preco)}</span>
               ${p.tempo_preparo_minutos ? `<span class="produto-time">${p.tempo_preparo_minutos} min</span>` : ''}
             </div>
           </div>
-          ${p.disponivel!==false?`<button class="produto-add" aria-label="Adicionar ${p.nome}" onclick="event.stopPropagation();adicionarRapido('${p.id}')"><span>+</span></button>`:''}
+          ${p.disponivel!==false?`<button class="produto-add" aria-label="Adicionar ${escapeAttr(p.nome)}" onclick="event.stopPropagation();adicionarRapido('${escapeAttr(p.id)}')"><span>+</span></button>`:''}
         </div>`).join('')}
     </div>`).join('');
 }
@@ -234,18 +234,23 @@ function abrirProduto(id) {
   obsEl.style.display = RESTAURANT.settings?.allow_customer_notes === false ? 'none' : 'block';
 
   const imgEl = document.getElementById('modal-produto-img');
-  imgEl.innerHTML = `<img src="${imageForProduct(prodAtual)}" alt="${prodAtual.nome}" style="width:100%;height:100%;object-fit:cover;">`;
+  imgEl.innerHTML = `<img src="${safeUrl(imageForProduct(prodAtual), FOOD_IMAGES.default)}" alt="${escapeAttr(prodAtual.nome)}" style="width:100%;height:100%;object-fit:cover;">`;
 
   const ings = prodAtual.ings || [];
   document.getElementById('modal-ings').innerHTML = ings.length ? `
     <div class="modal-section-title" style="margin-top:16px;">Ingredientes</div>
-    ${ings.map(ing => `
-      <div class="mod-item" onclick="toggleMod('${ing}')">
-        <span>${ing}</span>
-        <div class="mod-check checked" id="mod-${ing.replace(/\s/g,'-')}">✓</div>
+    ${ings.map((ing, idx) => `
+      <div class="mod-item" onclick="toggleModIndex(${idx})">
+        <span>${escapeHtml(ing)}</span>
+        <div class="mod-check checked" id="mod-${escapeAttr(ing.replace(/\s/g,'-'))}">✓</div>
       </div>`).join('')}` : '';
 
   document.getElementById('modal-produto').classList.add('show');
+}
+
+function toggleModIndex(idx) {
+  const nome = (prodAtual?.ings || [])[idx];
+  if (nome) toggleMod(nome);
 }
 
 function toggleMod(nome) {
@@ -305,9 +310,9 @@ function abrirCarrinho() {
   document.getElementById('carrinho-itens').innerHTML = carrinho.map((it, idx) => `
     <div class="carrinho-item">
       <div style="flex:1">
-        <div style="font-weight:500">${it.quantidade}× ${it.nome_produto}</div>
-        ${it.ingredientes?.length ? `<div style="font-size:12px;color:var(--muted)">Sem: ${it.ingredientes.map(i=>i.nome_ingrediente).join(', ')}</div>` : ''}
-        ${it.observacao ? `<div style="font-size:12px;color:var(--muted)">${it.observacao}</div>` : ''}
+        <div style="font-weight:500">${it.quantidade}× ${escapeHtml(it.nome_produto)}</div>
+        ${it.ingredientes?.length ? `<div style="font-size:12px;color:var(--muted)">Sem: ${escapeHtml(it.ingredientes.map(i=>i.nome_ingrediente).join(', '))}</div>` : ''}
+        ${it.observacao ? `<div style="font-size:12px;color:var(--muted)">${escapeHtml(it.observacao)}</div>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:14px;font-weight:600;color:var(--color-primary)">R$ ${fmt(it.subtotal)}</span>
@@ -333,8 +338,8 @@ function renderSugestoesCarrinho() {
     <div class="upsell-box">
       <div class="modal-section-title">Combina com seu pedido</div>
       ${sugestoes.map(p => `
-        <button class="upsell-item" onclick="adicionarRapido('${p.id}'); abrirCarrinho();">
-          <span>${p.nome}</span><strong>R$ ${fmt(p.preco)}</strong>
+        <button class="upsell-item" onclick="adicionarRapido('${escapeAttr(p.id)}'); abrirCarrinho();">
+          <span>${escapeHtml(p.nome)}</span><strong>R$ ${fmt(p.preco)}</strong>
         </button>`).join('')}
     </div>` : '';
 }
@@ -410,7 +415,7 @@ async function verConta() {
           </div>
           ${(p.itens||[]).map(it => `
             <div class="conta-item">
-              <span>${it.quantidade}× ${it.nome_produto}</span>
+              <span>${it.quantidade}× ${escapeHtml(it.nome_produto)}</span>
               <span style="font-family:monospace;font-weight:600">R$ ${fmt(it.subtotal)}</span>
             </div>`).join('')}
         </div>`).join('')}

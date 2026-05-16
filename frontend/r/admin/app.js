@@ -495,24 +495,24 @@ function renderAdminProdutos() {
     : `<div class="admin-produtos-grid">
         ${prods.map(p => `
         <div class="admin-produto-card ${p.disponivel ? '' : 'is-paused'}">
-          <img class="admin-produto-img" src="${imageForAdminProduct(p)}" alt="${p.nome}" loading="lazy" onerror="this.src='${ADMIN_FOOD_IMAGES.default}'">
+          <img class="admin-produto-img" src="${safeUrl(imageForAdminProduct(p), ADMIN_FOOD_IMAGES.default)}" alt="${escapeAttr(p.nome)}" loading="lazy" onerror="this.src='${ADMIN_FOOD_IMAGES.default}'">
           <div class="admin-produto-body">
             <div class="admin-produto-top">
               <div>
-                <div class="admin-produto-cat">${p.categorias?.icone || ''} ${p.categorias?.nome || 'Sem categoria'}</div>
-                <div class="admin-produto-nome">${p.nome}</div>
+                <div class="admin-produto-cat">${escapeHtml(p.categorias?.icone || '')} ${escapeHtml(p.categorias?.nome || 'Sem categoria')}</div>
+                <div class="admin-produto-nome">${escapeHtml(p.nome)}</div>
               </div>
               <span class="admin-produto-badge ${p.disponivel ? 'ok' : 'off'}">${p.disponivel ? 'Disponível' : 'Pausado'}</span>
             </div>
-            ${p.descricao ? `<div class="admin-produto-desc">${p.descricao}</div>` : ''}
+            ${p.descricao ? `<div class="admin-produto-desc">${escapeHtml(p.descricao)}</div>` : ''}
             <div class="admin-produto-footer">
               <div>
                 <div class="admin-produto-preco">R$ ${fmt(p.preco)}</div>
                 ${p.destaque ? '<div class="admin-produto-destaque">Destaque na mesa</div>' : ''}
               </div>
               <div class="admin-produto-actions">
-                <button class="btn btn-sm" onclick="abrirModalProdutoById('${p.id}')">Editar</button>
-                <button class="btn btn-sm ${p.disponivel?'btn-danger':'btn-success'}" onclick="toggleProduto('${p.id}',${p.disponivel},this)">${p.disponivel?'Pausar':'Ativar'}</button>
+                <button class="btn btn-sm" onclick="abrirModalProdutoById('${escapeAttr(p.id)}')">Editar</button>
+                <button class="btn btn-sm ${p.disponivel?'btn-danger':'btn-success'}" onclick="toggleProduto('${escapeAttr(p.id)}',${p.disponivel},this)">${p.disponivel?'Pausar':'Ativar'}</button>
               </div>
             </div>
           </div>
@@ -533,7 +533,7 @@ function abrirModalProduto(p = null) {
   document.getElementById('prod-disp').checked = p ? p.disponivel : true;
   document.getElementById('prod-dest').checked = p?.destaque || false;
   document.getElementById('prod-cat').innerHTML =
-    categoriasLista.map(c => `<option value="${c.id}" ${p?.categoria_id===c.id?'selected':''}>${c.icone||''} ${c.nome}</option>`).join('');
+    categoriasLista.map(c => `<option value="${escapeAttr(c.id)}" ${p?.categoria_id===c.id?'selected':''}>${escapeHtml(c.icone||'')} ${escapeHtml(c.nome)}</option>`).join('');
   document.getElementById('modal-produto').classList.add('show');
 }
 
@@ -624,14 +624,14 @@ async function carregarUsuarios() {
           const podeRemover = temRole('owner') && u.id !== atual?.id;
           return `<div class="usuario-row">
             <div class="usuario-avatar">
-              ${(u.nome||'?').slice(0,2).toUpperCase()}
+              ${escapeHtml((u.nome||'?').slice(0,2).toUpperCase())}
             </div>
             <div class="usuario-info">
-              <div class="usuario-nome">${u.nome||'—'}</div>
-              <div class="usuario-email">${u.email||'—'}</div>
+              <div class="usuario-nome">${escapeHtml(u.nome||'—')}</div>
+              <div class="usuario-email">${escapeHtml(u.email||'—')}</div>
             </div>
-            <span class="role-badge">${m.role}</span>
-            ${podeRemover ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario('${u.id}',this)">Remover</button>` : ''}
+            <span class="role-badge">${escapeHtml(m.role)}</span>
+            ${podeRemover ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario('${escapeAttr(u.id)}',this)">Remover</button>` : ''}
           </div>`;
         }).join('');
   } catch (e) {

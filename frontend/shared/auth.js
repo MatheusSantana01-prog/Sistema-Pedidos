@@ -11,6 +11,38 @@ const ROLE_LEVEL = {
   cashier: 3, waiter: 2, kitchen: 1, tv: 0,
 };
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+function safeUrl(value, fallback = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (['http:', 'https:'].includes(url.protocol)) return url.href;
+  } catch (_) {}
+  return fallback;
+}
+
+async function readApiError(resp, fallback) {
+  let data = {};
+  try { data = await resp.json(); } catch (_) {}
+  const detail = data.detail || data.message || data.erro;
+  if (Array.isArray(detail)) {
+    const msg = detail.map(item => item.msg || item.message || JSON.stringify(item)).join('; ');
+    return msg || fallback;
+  }
+  if (typeof detail === 'object' && detail) return detail.message || JSON.stringify(detail);
+  return detail || fallback;
+}
+
 // ── Estado da sessão ────────────────────────────────────────────
 let _token   = localStorage.getItem('saas_token')   || null;
 let _usuario = JSON.parse(localStorage.getItem('saas_user') || 'null');
@@ -63,8 +95,7 @@ async function login(email, senha, restaurantSlug = null) {
   if (resp.status === 401) throw new Error('E-mail ou senha incorretos');
   if (resp.status === 403) throw new Error('Sem acesso a este restaurante');
   if (!resp.ok) {
-    const e = await resp.json().catch(() => ({}));
-    throw new Error(e.detail || 'Erro ao fazer login');
+    throw new Error(await readApiError(resp, 'Erro ao fazer login'));
   }
 
   const data = await resp.json();
@@ -112,8 +143,7 @@ async function apiCall(method, path, body = null, opts = {}) {
     throw new Error('Sessão expirada');
   }
   if (!resp.ok) {
-    const e = await resp.json().catch(() => ({}));
-    throw new Error(e.detail || `Erro ${resp.status}`);
+    throw new Error(await readApiError(resp, `Erro ${resp.status}`));
   }
   if (resp.status === 204) return null;
   return resp.json();
@@ -127,8 +157,7 @@ async function apiPublic(method, path, body = null) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!resp.ok) {
-    const e = await resp.json().catch(() => ({}));
-    throw new Error(e.detail || `Erro ${resp.status}`);
+    throw new Error(await readApiError(resp, `Erro ${resp.status}`));
   }
   return resp.json();
 }
@@ -138,4 +167,5 @@ Object.assign(window, {
   getToken, getUsuario, isLoggedIn, temRole, isSuperAdmin,
   sessaoDoRestaurante, exigirSessaoRestaurante, rolePermitida, exigirPerfil,
   login, logout, switchRestaurant, apiCall, apiPublic, ROLE_LEVEL,
+  escapeHtml, escapeAttr, safeUrl, readApiError,
 });
