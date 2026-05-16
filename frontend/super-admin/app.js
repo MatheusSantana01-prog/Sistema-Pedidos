@@ -388,9 +388,15 @@ async function entrarComoDono(restId) {
   if (!confirm('Entrar no painel deste cliente como suporte? A ação será registrada em auditoria.')) return;
   try {
     const data = await apiCall('POST', `/api/super-admin/restaurants/${restId}/impersonate`);
+    const tokenAtual = localStorage.getItem('saas_token');
+    const usuarioAtual = localStorage.getItem('saas_user');
     localStorage.setItem('saas_token', data.token);
     localStorage.setItem('saas_user', JSON.stringify(data.usuario));
     window.open(data.redirect_url, '_blank', 'noopener');
+    setTimeout(() => {
+      if (tokenAtual) localStorage.setItem('saas_token', tokenAtual);
+      if (usuarioAtual) localStorage.setItem('saas_user', usuarioAtual);
+    }, 1200);
   } catch(e) {
     showToast(e.message, 'error');
   }
