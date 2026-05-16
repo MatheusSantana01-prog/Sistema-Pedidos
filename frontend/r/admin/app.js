@@ -70,6 +70,10 @@ function fazerLogout() {
 
 function iniciarApp() {
   const u = getUsuario();
+  if (u.role === 'waiter' && window.location.pathname.includes('/admin')) {
+    window.location.href = `/r/${getCurrentRestaurantSlug()}/garcom`;
+    return;
+  }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'flex';
   document.getElementById('user-nome').textContent = u.nome;

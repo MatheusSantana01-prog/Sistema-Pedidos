@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garçom — Atendimento</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/r/garcom/styles.css">
+<link rel="stylesheet" href="/shared/chic.css">
+</head>
+<body>
+
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">Atendimento</div>
+    <div class="login-nome-rest restaurant-name"></div>
+    <div class="login-sub">Acesso do garçom</div>
+    <div class="login-erro" id="login-erro">E-mail ou senha incorretos</div>
+    <div class="form-row">
+      <label class="form-label">E-mail</label>
+      <input class="form-input" id="l-email" type="email" placeholder="seu@email.com"
+             oninput="document.getElementById('login-erro').classList.remove('show')">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Senha</label>
+      <input class="form-input" id="l-senha" type="password" placeholder="••••••••"
+             oninput="document.getElementById('login-erro').classList.remove('show')"
+             onkeydown="if(event.key==='Enter')fazerLogin()">
+    </div>
+    <button class="btn btn-primary" onclick="fazerLogin()"><span id="login-txt">Entrar</span></button>
+  </div>
+</div>
+
+<div id="app-screen" style="display:none;">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">Salão</div>
+      <div class="restaurant-name brand">Atendimento</div>
+    </div>
+    <div class="topbar-right">
+      <div class="userbox">
+        <span id="user-nome">—</span>
+        <strong id="user-role">—</strong>
+      </div>
+      <button class="ghost-btn" onclick="fazerLogout()">Sair</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="service-panel">
+      <div class="panel-head">
+        <div>
+          <div class="section-kicker">Mesas</div>
+          <h1>Atendimento do salão</h1>
+        </div>
+        <button class="icon-btn" title="Atualizar mesas" onclick="carregarMesas()">↻</button>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat"><span>Ocupadas</span><strong id="s-ocup">—</strong></div>
+        <div class="stat"><span>Livres</span><strong id="s-liv">—</strong></div>
+        <div class="stat"><span>Em aberto</span><strong id="s-fat">—</strong></div>
+      </div>
+
+      <div class="filters">
+        <button class="filter active" onclick="filtrarMesas(this,'todas')">Todas</button>
+        <button class="filter" onclick="filtrarMesas(this,'ocupada')">Com pedido</button>
+        <button class="filter" onclick="filtrarMesas(this,'livre')">Livres</button>
+      </div>
+
+      <div id="mesas-grid" class="mesas-grid"><div class="loading"><div class="spinner"></div></div></div>
+    </section>
+
+    <aside class="menu-panel">
+      <div class="panel-head compact">
+        <div>
+          <div class="section-kicker">Cardápio</div>
+          <h2>Produtos e preços</h2>
+        </div>
+      </div>
+      <input class="search" id="menu-search" placeholder="Buscar produto, categoria ou descrição" oninput="renderCardapio()">
+      <div id="cardapio-lista" class="menu-list"><div class="loading"><div class="spinner"></div></div></div>
+    </aside>
+  </main>
+</div>
+
+<div class="modal-bg" id="modal-mesa">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="section-kicker">Conta da mesa</div>
+        <div class="modal-title" id="modal-title">Mesa</div>
+      </div>
+      <button class="modal-close" onclick="fecharModal('modal-mesa')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/shared/config.js"></script>
+<script src="/shared/tenant.js"></script>
+<script src="/shared/auth.js"></script>
+<script src="/r/garcom/app.js"></script>
+</body>
+</html>

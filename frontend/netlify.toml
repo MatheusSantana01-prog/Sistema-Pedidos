@@ -30,12 +30,12 @@
 
 [[redirects]]
   from = "/r/:slug/garcom"
-  to   = "/r/admin/index.html"
+  to   = "/r/garcom/index.html"
   status = 200
 
 [[redirects]]
   from = "/r/:slug/garcom/"
-  to   = "/r/admin/index.html"
+  to   = "/r/garcom/index.html"
   status = 200
 
 [[redirects]]
