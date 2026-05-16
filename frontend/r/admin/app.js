@@ -7,6 +7,7 @@
 let RESTAURANT     = null;
 let mesaAberta     = null;
 let pgtoSelecionado = null;
+let pagamentosConta = [];
 let produtosMap    = {};
 let categoriasLista = [];
 let produtosLista  = [];
@@ -163,6 +164,7 @@ async function carregarMesas() {
 async function abrirConta(mesaId, sessaoId, numero, total) {
   mesaAberta = { mesa_id: mesaId, sessao_id: sessaoId, numero, total };
   pgtoSelecionado = null;
+  pagamentosConta = [];
   document.getElementById('modal-conta-title').textContent = `Conta — Mesa ${numero}`;
   document.getElementById('modal-conta-footer').style.display = 'none';
   document.getElementById('modal-conta-body').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -194,15 +196,24 @@ async function abrirConta(mesaId, sessaoId, numero, total) {
         <span style="color:var(--muted)">Total</span>
         <span class="conta-total-val">R$ ${fmt(tot)}</span>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin:16px 0 8px;">Forma de pagamento:</div>
-      <div class="pgto-grid">
-        <button class="pgto-btn" onclick="selecionarPgto(this,'dinheiro')">💵 Dinheiro</button>
-        <button class="pgto-btn" onclick="selecionarPgto(this,'pix')">📲 Pix</button>
-        <button class="pgto-btn" onclick="selecionarPgto(this,'cartao_credito')">💳 Crédito</button>
-        <button class="pgto-btn" onclick="selecionarPgto(this,'cartao_debito')">💳 Débito</button>
+      <div class="split-pay-box">
+        <div style="font-size:12px;color:var(--muted);margin:16px 0 8px;">Pagamentos da mesa:</div>
+        <div class="split-pay-row">
+          <select class="form-input" id="split-forma">
+            ${formasPagamentoOptions()}
+          </select>
+          <input class="form-input" id="split-valor" type="number" step="0.01" min="0" placeholder="Valor">
+          <button class="btn btn-sm" onclick="adicionarPagamentoConta()">Adicionar</button>
+        </div>
+        <div class="split-pay-actions">
+          <button class="btn btn-sm" onclick="preencherRestantePagamento()">Usar restante</button>
+          <span id="split-resumo">Restante: R$ ${fmt(tot)}</span>
+        </div>
+        <div id="split-lista" class="split-pay-list"></div>
       </div>`;
 
     document.getElementById('modal-conta-footer').style.display = 'flex';
+    renderPagamentosConta();
   } catch (e) {
     document.getElementById('modal-conta-body').innerHTML = '<div class="tabela-empty">Erro ao carregar conta.</div>';
   }
@@ -215,13 +226,77 @@ function selecionarPgto(btn, pgto) {
   document.getElementById('btn-fechar-conta').disabled = false;
 }
 
+function formasPagamentoOptions() {
+  return [
+    ['dinheiro', 'Dinheiro'],
+    ['pix', 'Pix'],
+    ['cartao_credito', 'Cartão crédito'],
+    ['cartao_debito', 'Cartão débito'],
+    ['vale_refeicao', 'Vale refeição'],
+    ['vale_alimentacao', 'Vale alimentação'],
+    ['transferencia', 'Transferência'],
+    ['outro', 'Outro'],
+  ].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+}
+
+function labelPagamento(forma) {
+  return {
+    dinheiro:'Dinheiro', pix:'Pix', cartao_credito:'Cartão crédito', cartao_debito:'Cartão débito',
+    vale_refeicao:'Vale refeição', vale_alimentacao:'Vale alimentação', transferencia:'Transferência', outro:'Outro',
+  }[forma] || forma;
+}
+
+function totalPagamentosConta() {
+  return pagamentosConta.reduce((a, p) => a + Number(p.valor || 0), 0);
+}
+
+function restantePagamentoConta() {
+  return Math.max(0, Number((Number(mesaAberta?.total || 0) - totalPagamentosConta()).toFixed(2)));
+}
+
+function adicionarPagamentoConta() {
+  const forma = document.getElementById('split-forma').value;
+  const valor = Number(document.getElementById('split-valor').value || 0);
+  if (!valor || valor <= 0) return showToast('Informe um valor válido', 'error');
+  if (valor - restantePagamentoConta() > 0.02) return showToast('Valor maior que o restante da conta', 'error');
+  pagamentosConta.push({ forma_pagamento: forma, valor: Number(valor.toFixed(2)) });
+  document.getElementById('split-valor').value = '';
+  renderPagamentosConta();
+}
+
+function preencherRestantePagamento() {
+  const restante = restantePagamentoConta();
+  if (restante <= 0) return;
+  document.getElementById('split-valor').value = restante.toFixed(2);
+}
+
+function removerPagamentoConta(idx) {
+  pagamentosConta.splice(idx, 1);
+  renderPagamentosConta();
+}
+
+function renderPagamentosConta() {
+  const restante = restantePagamentoConta();
+  const lista = document.getElementById('split-lista');
+  const resumo = document.getElementById('split-resumo');
+  if (!lista || !resumo) return;
+  resumo.textContent = `Pago: R$ ${fmt(totalPagamentosConta())} · Restante: R$ ${fmt(restante)}`;
+  lista.innerHTML = pagamentosConta.length ? pagamentosConta.map((p, idx) => `
+    <div class="split-pay-item">
+      <span>${labelPagamento(p.forma_pagamento)}</span>
+      <strong>R$ ${fmt(p.valor)}</strong>
+      <button onclick="removerPagamentoConta(${idx})">✕</button>
+    </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
+  document.getElementById('btn-fechar-conta').disabled = restante > 0.02 || !pagamentosConta.length;
+}
+
 async function confirmarFecharConta() {
-  if (!pgtoSelecionado || !mesaAberta) return;
+  if (!mesaAberta || !pagamentosConta.length || restantePagamentoConta() > 0.02) return;
   const btn = document.getElementById('btn-fechar-conta');
   btn.disabled = true;
   try {
     await apiCall('POST', `/api/admin/tables/${mesaAberta.mesa_id}/close`,
-      { forma_pagamento: pgtoSelecionado });
+      { pagamentos: pagamentosConta });
     fecharModal('modal-conta');
     showToast(`Mesa ${mesaAberta.numero} fechada · R$ ${fmt(mesaAberta.total)}`, 'success');
     carregarMesas();
@@ -410,7 +485,7 @@ async function carregarFinanceiro() {
         <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Por forma de pagamento</div>
         ${Object.entries(d.por_pagamento||{}).map(([k,v]) =>
           `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-            <span>${{dinheiro:'💵 Dinheiro',pix:'📲 Pix',cartao_credito:'💳 Crédito',cartao_debito:'💳 Débito'}[k]||k}</span>
+            <span>${labelPagamento(k)}</span>
             <span style="font-family:var(--mono);font-weight:600">R$ ${fmt(v)}</span>
           </div>`).join('')}
       </div>`;

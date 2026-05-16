@@ -126,6 +126,15 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 .pgto-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:16px; }
 .pgto-btn { padding:12px; border:1px solid var(--border2); border-radius:6px; background:transparent; color:var(--muted); font-family:var(--sans); font-size:13px; font-weight:500; cursor:pointer; text-align:center; transition:all .15s; }
 .pgto-btn:hover,.pgto-btn.selecionado { border-color:var(--green); background:rgba(29,185,84,.1); color:var(--green); }
+.split-pay-box { margin-top:16px; padding:12px; border:1px solid var(--border); border-radius:8px; background:rgba(255,255,255,.025); }
+.split-pay-row { display:grid; grid-template-columns:1.2fr 1fr auto; gap:8px; align-items:center; }
+.split-pay-actions { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:10px; color:var(--muted); font-size:12px; }
+.split-pay-list { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+.split-pay-item { display:grid; grid-template-columns:1fr auto 28px; gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:rgba(0,0,0,.15); font-size:13px; }
+.split-pay-item strong { font-family:var(--mono); color:var(--green); }
+.split-pay-item button { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; }
+.split-empty { color:var(--muted); font-size:12px; padding:8px 0; }
+@media (max-width:700px) { .split-pay-row { grid-template-columns:1fr; } }
 .conta-total-val { font-family:var(--mono); font-size:22px; font-weight:600; }
 
 /* LOADING / TOAST */

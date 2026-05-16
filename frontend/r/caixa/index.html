@@ -60,11 +60,17 @@
           <span class="total-label">Total</span>
           <span class="total-val" id="conta-total">R$ 0,00</span>
         </div>
-        <div class="pgto-grid">
-          <button class="pgto-opt" onclick="selPgto(this,'dinheiro')">💵 Dinheiro</button>
-          <button class="pgto-opt" onclick="selPgto(this,'pix')">📲 Pix</button>
-          <button class="pgto-opt" onclick="selPgto(this,'cartao_credito')">💳 Crédito</button>
-          <button class="pgto-opt" onclick="selPgto(this,'cartao_debito')">💳 Débito</button>
+        <div class="split-pay-box">
+          <div class="split-pay-row">
+            <select class="form-input" id="split-forma"></select>
+            <input class="form-input" id="split-valor" type="number" step="0.01" min="0" placeholder="Valor">
+            <button class="pgto-opt" onclick="adicionarPagamento()">Adicionar</button>
+          </div>
+          <div class="split-pay-actions">
+            <button class="pgto-opt" onclick="preencherRestante()">Usar restante</button>
+            <span id="split-resumo">Restante: R$ 0,00</span>
+          </div>
+          <div class="split-pay-list" id="split-lista"></div>
         </div>
         <button class="btn-fechar" id="btn-fechar" onclick="fecharConta()" disabled>
           ✓ Fechar conta

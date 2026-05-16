@@ -75,6 +75,16 @@ ORDER_TRANSITIONS = {
 }
 
 OPEN_ORDER_STATUSES = {"pendente", "confirmado", "em_preparo", "pronto"}
+FORMAS_PAGAMENTO = {
+    "dinheiro",
+    "pix",
+    "cartao_credito",
+    "cartao_debito",
+    "vale_refeicao",
+    "vale_alimentacao",
+    "transferencia",
+    "outro",
+}
 
 # ── APP ───────────────────────────────────────────────────────────
 app = FastAPI(
@@ -183,6 +193,74 @@ def _money(value) -> float:
         return round(float(value or 0), 2)
     except (TypeError, ValueError):
         return 0.0
+
+def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, dict]:
+    total = _money(total)
+    pagamentos_raw = body.pagamentos or []
+    pagamentos = []
+    if pagamentos_raw:
+        for item in pagamentos_raw:
+            forma = item.get("forma_pagamento") or item.get("forma")
+            valor = _money(item.get("valor"))
+            if forma not in FORMAS_PAGAMENTO:
+                raise HTTPException(400, f"Forma de pagamento inválida: {forma}")
+            if valor <= 0:
+                raise HTTPException(400, "Valor de pagamento precisa ser maior que zero")
+            pagamentos.append({"forma_pagamento": forma, "valor": valor})
+    elif body.forma_pagamento:
+        if body.forma_pagamento not in FORMAS_PAGAMENTO:
+            raise HTTPException(400, "Forma de pagamento inválida")
+        pagamentos.append({"forma_pagamento": body.forma_pagamento, "valor": total})
+    else:
+        raise HTTPException(400, "Informe a forma de pagamento")
+
+    soma = round(sum(p["valor"] for p in pagamentos), 2)
+    if abs(soma - total) > 0.02:
+        raise HTTPException(400, f"Soma dos pagamentos ({soma:.2f}) diferente do total ({total:.2f})")
+
+    por_forma = {}
+    for p in pagamentos:
+        forma = p["forma_pagamento"]
+        por_forma[forma] = round(por_forma.get(forma, 0.0) + p["valor"], 2)
+
+    if len(por_forma) == 1:
+        forma_db = next(iter(por_forma.keys()))
+    else:
+        partes = [f"{forma}:{valor:.2f}" for forma, valor in sorted(por_forma.items())]
+        forma_db = "misto|" + ";".join(partes)
+
+    return forma_db, {"total": total, "pagamentos": pagamentos, "por_forma": por_forma}
+
+def _somar_pagamento_dashboard(por_pagamento: dict, forma_pagamento: str, total: float):
+    total = _money(total)
+    if not forma_pagamento:
+        por_pagamento["em_aberto"] = round(por_pagamento.get("em_aberto", 0.0) + total, 2)
+        return
+    if forma_pagamento.startswith("misto|"):
+        for parte in forma_pagamento.split("|", 1)[1].split(";"):
+            if ":" not in parte:
+                continue
+            forma, valor = parte.split(":", 1)
+            por_pagamento[forma] = round(por_pagamento.get(forma, 0.0) + _money(valor), 2)
+        return
+    por_pagamento[forma_pagamento] = round(por_pagamento.get(forma_pagamento, 0.0) + total, 2)
+
+def _forma_pagamento_pedido(resumo_pagamento: dict, total_pedido: float) -> str:
+    por_forma = resumo_pagamento.get("por_forma") or {}
+    if len(por_forma) == 1:
+        return next(iter(por_forma.keys()))
+
+    total_conta = _money(resumo_pagamento.get("total"))
+    total_pedido = _money(total_pedido)
+    if total_conta <= 0:
+        return "misto"
+
+    partes = []
+    for forma, valor in sorted(por_forma.items()):
+        valor_pedido = round(total_pedido * _money(valor) / total_conta, 2)
+        if valor_pedido > 0:
+            partes.append(f"{forma}:{valor_pedido:.2f}")
+    return "misto|" + ";".join(partes) if partes else "misto"
 
 def utcnow() -> str:
     return datetime.utcnow().isoformat()
@@ -360,12 +438,13 @@ class CriarProdutoInput(BaseModel):
 
 
 class FecharContaInput(BaseModel):
-    forma_pagamento: str
+    forma_pagamento: Optional[str] = None
+    pagamentos: Optional[list[dict]] = None
 
     @field_validator("forma_pagamento")
     @classmethod
     def val(cls, v):
-        if v not in ["dinheiro", "pix", "cartao_credito", "cartao_debito"]:
+        if v is not None and v not in FORMAS_PAGAMENTO:
             raise ValueError("Forma de pagamento inválida")
         return v
 
@@ -791,16 +870,32 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
     if abertos.count:
         raise HTTPException(409, "Não é possível fechar: ainda existem pedidos em aberto")
 
+    _, resumo_pagamento = _normalizar_pagamentos(body, sessao["total_consumido"])
+    pedidos_fechamento = _rows(
+        sb.table("pedidos")
+        .select("id,total")
+        .eq("sessao_mesa_id", sessao["id"])
+        .eq("restaurant_id", rid)
+        .neq("status", "cancelado")
+        .execute()
+    )
+
     sb.rpc("fechar_sessao_mesa", {"p_sessao_id": sessao["id"], "p_restaurant_id": rid}).execute()
-    sb.table("pedidos").update({
-        "forma_pagamento": body.forma_pagamento,
-        "status_pagamento": "aprovado",
-        "updated_at": utcnow(),
-    }).eq("sessao_mesa_id", sessao["id"]).eq("restaurant_id", rid).neq("status", "cancelado").execute()
+    for pedido in pedidos_fechamento:
+        sb.table("pedidos").update({
+            "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, pedido.get("total")),
+            "status_pagamento": "aprovado",
+            "updated_at": utcnow(),
+        }).eq("id", pedido["id"]).eq("restaurant_id", rid).execute()
 
     log_acao(u, "fechar_conta_mesa", "sessao_mesa", sessao["id"], None,
-             {"pagamento": body.forma_pagamento, "total": sessao["total_consumido"]}, request)
-    return {"mensagem": "Mesa fechada", "total": sessao["total_consumido"], "forma_pagamento": body.forma_pagamento}
+             {"pagamento": resumo_pagamento, "total": sessao["total_consumido"]}, request)
+    return {
+        "mensagem": "Mesa fechada",
+        "total": sessao["total_consumido"],
+        "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, sessao["total_consumido"]),
+        "pagamentos": resumo_pagamento["pagamentos"],
+    }
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1059,8 +1154,7 @@ def dashboard(data_inicio: str, data_fim: str,
     total_liquido = sum(_money(p.get("total")) for p in pedidos)
     por_pagamento = {}
     for pedido in pedidos:
-        forma = pedido.get("forma_pagamento") or "em_aberto"
-        por_pagamento[forma] = round(por_pagamento.get(forma, 0.0) + _money(pedido.get("total")), 2)
+        _somar_pagamento_dashboard(por_pagamento, pedido.get("forma_pagamento"), pedido.get("total"))
 
     total_pedidos = len(pedidos)
     return {
