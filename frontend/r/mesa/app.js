@@ -8,6 +8,7 @@ let prodAtual    = null;
 let modsSelecionadas = {};
 let pollingConta = null;
 let notaFeedback = 5;
+let categoriaAtual = null;
 
 const FOOD_IMAGES = {
   pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=80',
@@ -80,6 +81,7 @@ async function carregarCardapio() {
       ings: p.ings || []
     }));
     renderCats();
+    renderHero();
     renderDestaques();
     renderProdutos(categorias);
   } catch (e) {
@@ -87,15 +89,43 @@ async function carregarCardapio() {
   }
 }
 
+function renderHero() {
+  const disponiveis = todosProdutos.filter(p => p.disponivel !== false);
+  const destaque = disponiveis.find(p => p.destaque) || disponiveis[0];
+  const precos = disponiveis.map(p => Number(p.preco || 0)).filter(v => v > 0);
+  const menorPreco = precos.length ? Math.min(...precos) : 0;
+  const heroBg = document.getElementById('menu-hero-bg');
+  const title = document.getElementById('hero-title');
+  const sub = document.getElementById('hero-sub');
+  const stats = document.getElementById('hero-stats');
+  if (destaque && heroBg) {
+    heroBg.style.backgroundImage = `linear-gradient(90deg, rgba(8,7,6,.92), rgba(8,7,6,.58) 46%, rgba(8,7,6,.22)), url('${imageForProduct(destaque)}')`;
+    title.textContent = destaque.destaque ? 'Destaques preparados para sua mesa' : 'Escolha seu próximo pedido';
+    sub.textContent = destaque.destaque
+      ? `${destaque.nome} e outras opções da casa prontas para pedir pelo cardápio digital.`
+      : 'Veja o cardápio, adicione ao carrinho e acompanhe sua conta pela mesa.';
+  }
+  if (stats) {
+    stats.innerHTML = `
+      <div><strong>${disponiveis.length}</strong><span>itens disponíveis</span></div>
+      <div><strong>${categorias.length}</strong><span>categorias</span></div>
+      ${menorPreco ? `<div><strong>R$ ${fmt(menorPreco)}</strong><span>a partir de</span></div>` : ''}
+    `;
+  }
+}
+
 function renderCats() {
   const el = document.getElementById('cats');
-  el.innerHTML = '<button class="cat-pill active" onclick="filtrarCat(this,null)">Tudo</button>';
+  const total = todosProdutos.filter(p => p.disponivel !== false).length;
+  el.innerHTML = `<button class="cat-pill active" onclick="filtrarCat(this,null)"><span>Tudo</span><small>${total}</small></button>`;
   categorias.forEach(c => {
-    el.innerHTML += `<button class="cat-pill" onclick="filtrarCat(this,'${c.id}')">${c.icone||''} ${c.nome}</button>`;
+    const count = (c.produtos || []).filter(p => p.disponivel !== false).length;
+    el.innerHTML += `<button class="cat-pill" onclick="filtrarCat(this,'${c.id}')"><span>${c.icone||''} ${c.nome}</span><small>${count}</small></button>`;
   });
 }
 
 function filtrarCat(btn, id) {
+  categoriaAtual = id;
   document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderProdutos(id ? categorias.filter(c => c.id === id) : categorias);
@@ -116,11 +146,17 @@ function renderDestaques() {
     <div class="dest-grid">
       ${dest.slice(0,4).map(p => `
         <div class="dest-card" onclick="abrirProduto('${p.id}')">
-          <img src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy">
+          <div class="dest-img-wrap">
+            <img src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
+            <span>Mais pedido</span>
+          </div>
           <div class="dest-card-body">
             <div class="dest-card-nome">${p.nome}</div>
             ${p.descricao ? `<div class="dest-card-desc">${p.descricao}</div>` : ''}
-            <div class="dest-card-preco">R$ ${fmt(p.preco)}</div>
+            <div class="dest-card-foot">
+              <div class="dest-card-preco">R$ ${fmt(p.preco)}</div>
+              <button onclick="event.stopPropagation();adicionarRapido('${p.id}')">Adicionar</button>
+            </div>
           </div>
         </div>`).join('')}
     </div>
@@ -136,15 +172,21 @@ function renderProdutos(cats) {
         <span>${c.icone||''}</span>
         <span>${c.nome}</span>
       </div>
-      ${(c.produtos||[]).map(p => `
-        <div class="produto-card" onclick="${p.disponivel!==false?`abrirProduto('${p.id}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
-          <img class="produto-img" src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy">
+      ${(c.produtos||[]).map((p, idx) => `
+        <div class="produto-card ${p.destaque ? 'is-featured' : ''}" onclick="${p.disponivel!==false?`abrirProduto('${p.id}')`:''}" style="${p.disponivel===false?'opacity:.4':''}">
+          <div class="produto-img-wrap">
+            <img class="produto-img" src="${imageForProduct(p)}" alt="${p.nome}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
+            ${p.destaque ? '<span class="produto-badge">Destaque</span>' : idx < 2 && p.disponivel !== false ? '<span class="produto-badge subtle">Sugestão</span>' : ''}
+          </div>
           <div class="produto-info">
             <div class="produto-nome">${p.nome}</div>
             ${p.descricao?`<div class="produto-desc">${p.descricao}</div>`:''}
-            <div class="${p.disponivel===false?'produto-ind':'produto-preco'}">${p.disponivel===false?'Indisponível':'R$ '+fmt(p.preco)}</div>
+            <div class="produto-meta">
+              <span class="${p.disponivel===false?'produto-ind':'produto-preco'}">${p.disponivel===false?'Indisponível':'R$ '+fmt(p.preco)}</span>
+              ${p.tempo_preparo_minutos ? `<span class="produto-time">${p.tempo_preparo_minutos} min</span>` : ''}
+            </div>
           </div>
-          ${p.disponivel!==false?`<button class="produto-add" onclick="event.stopPropagation();adicionarRapido('${p.id}')">+</button>`:''}
+          ${p.disponivel!==false?`<button class="produto-add" aria-label="Adicionar ${p.nome}" onclick="event.stopPropagation();adicionarRapido('${p.id}')"><span>+</span></button>`:''}
         </div>`).join('')}
     </div>`).join('');
 }
@@ -153,6 +195,7 @@ function buscar(q) {
   const clear = document.getElementById('search-clear');
   clear.classList.toggle('show', q.length > 0);
   document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+  categoriaAtual = null;
   if (!q.trim()) {
     document.querySelector('.cat-pill')?.classList.add('active');
     renderProdutos(categorias); return;
@@ -170,6 +213,10 @@ function limparBusca() {
   document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
   document.querySelector('.cat-pill')?.classList.add('active');
   renderProdutos(categorias);
+}
+
+function scrollParaProdutos() {
+  document.getElementById('produtos-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ── PRODUTO MODAL ───────────────────────────────────── */
@@ -245,8 +292,10 @@ function adicionarRapido(id) {
 
 function atualizarFAB() {
   const total = carrinho.reduce((a, i) => a + i.quantidade, 0);
+  const valor = carrinho.reduce((a, i) => a + i.subtotal, 0);
   const fab   = document.getElementById('cart-fab');
   document.getElementById('cart-count').textContent = total;
+  fab.childNodes[0].textContent = total > 0 ? `Ver carrinho · R$ ${fmt(valor)} ` : '🛒 Ver carrinho ';
   fab.classList.toggle('show', total > 0);
 }
 
