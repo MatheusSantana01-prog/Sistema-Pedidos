@@ -60,7 +60,7 @@ async function carregarMesas() {
       const total = Number(sess?.total_consumido || 0);
       const isSel = mesaSelecionada?.id === m.id;
       return `<button class="mesa-btn ${m.status} ${isSel?'selecionada':''}"
-        onclick="selecionarMesa('${m.id}','${sess?.id||''}',${m.numero},${total},'${m.status}')">
+        onclick="selecionarMesa(this,'${m.id}','${sess?.id||''}',${m.numero},${total},'${m.status}')">
         <div class="mesa-num">${m.numero}</div>
         <div class="mesa-status ${m.status}">${m.status === 'ocupada' ? '● Ocupada' : '● Livre'}</div>
         ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div>` : ''}
@@ -76,7 +76,7 @@ async function carregarMesas() {
   }
 }
 
-function selecionarMesa(mesaId, sessaoId, numero, total, status) {
+function selecionarMesa(el, mesaId, sessaoId, numero, total, status) {
   if (status !== 'ocupada' || !sessaoId) {
     showToast('Mesa livre — nenhuma conta aberta', '');
     return;
@@ -88,13 +88,14 @@ function selecionarMesa(mesaId, sessaoId, numero, total, status) {
   totalContaAtual = Number(total || 0);
   document.getElementById('split-forma').innerHTML = formasPagamentoOptions();
   document.getElementById('btn-fechar').disabled = true;
+  document.getElementById('btn-fechar').textContent = '✓ Fechar conta';
   document.getElementById('conta-mesa-num').textContent = `Mesa ${numero}`;
   document.getElementById('conta-mesa-info').textContent = `R$ ${fmt(total)} em aberto`;
   document.getElementById('conta-footer').style.display = 'block';
   carregarConta(numero, sessaoId);
   // Atualizar visual das mesas
   document.querySelectorAll('.mesa-btn').forEach(b => b.classList.remove('selecionada'));
-  event.currentTarget.classList.add('selecionada');
+  if (el) el.classList.add('selecionada');
 }
 
 async function carregarConta(numero, sessaoId) {

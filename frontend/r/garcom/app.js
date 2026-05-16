@@ -240,7 +240,7 @@ async function abrirMesa(mesaId, sessaoId, numero) {
             <span>#${p.numero || '—'} · ${statusLabel(p.status)}</span>
             <span>R$ ${fmt(p.total || 0)}</span>
           </div>
-          ${(p.pedido_itens || []).map(it => `
+          ${(p.itens || []).map(it => `
             <div class="pedido-item">
               <span>${it.quantidade}x ${it.nome_produto}</span>
               <span>R$ ${fmt(it.subtotal || 0)}</span>
