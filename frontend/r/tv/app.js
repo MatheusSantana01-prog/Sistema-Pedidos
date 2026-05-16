@@ -121,12 +121,12 @@ function renderCol(colId, pedidos, tipo) {
           <div class="card-tempo ${tcls}">${ttxt}</div>
         </div>
       </div>
+      ${action ? `<div class="card-tv-actions card-tv-actions-top"><button class="btn-tv-action ${action.cls}" onclick="avancarTV('${p.id}','${action.next}',this)">${action.label}</button></div>` : ''}
       <div class="card-itens">
         ${(p.pedido_itens||[]).map(it =>
           `<div class="item-tv"><span class="item-tv-qty">${it.quantidade}×</span>${it.nome_produto}</div>`
         ).join('')}
       </div>
-      ${action ? `<div class="card-tv-actions"><button class="btn-tv-action ${action.cls}" onclick="avancarTV('${p.id}','${action.next}',this)">${action.label}</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -175,6 +175,11 @@ async function avancarTV(pedidoId, novoStatus, btn) {
   btn.textContent = 'Atualizando...';
   try {
     await apiCall('PATCH', `/api/kitchen/orders/${pedidoId}/status`, { status: novoStatus });
+    const card = btn.closest('.card-tv');
+    if (card) {
+      card.style.opacity = '.45';
+      card.style.transform = 'scale(.98)';
+    }
     showStatus(novoStatus === 'entregue' ? 'Pedido entregue' : 'Status atualizado', 'success');
     await carregar();
   } catch (e) {

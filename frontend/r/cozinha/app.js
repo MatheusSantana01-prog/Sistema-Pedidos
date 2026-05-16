@@ -180,9 +180,9 @@ function cardHtml(p, status) {
         <span class="card-tempo ${tempoCls}">${tempoTxt}</span>
       </div>
     </div>
+    <div class="card-actions card-actions-top">${btn}</div>
     <div class="card-itens">${itensHtml}</div>
     ${p.observacao_geral?`<div class="card-obs">⚠️ ${p.observacao_geral}</div>`:''}
-    <div class="card-actions">${btn}</div>
   </div>`;
 }
 
