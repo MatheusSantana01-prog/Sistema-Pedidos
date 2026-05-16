@@ -27,6 +27,19 @@ function temRole(role) {
 
 function isSuperAdmin() { return _usuario?.is_super_admin === true; }
 
+function rolePermitida(roles) {
+  if (!_usuario) return false;
+  if (_usuario.is_super_admin && _usuario.restaurant_id) return true;
+  return roles.includes(_usuario.role);
+}
+
+function exigirPerfil(roles, mensagem = 'Entre com um usuário autorizado para este painel') {
+  if (!rolePermitida(roles)) {
+    logout();
+    throw new Error(mensagem);
+  }
+}
+
 // ── Login ───────────────────────────────────────────────────────
 async function login(email, senha, restaurantSlug = null) {
   const resp = await fetch(`${AUTH_API_URL}/api/auth/login`, {
@@ -111,5 +124,6 @@ async function apiPublic(method, path, body = null) {
 // Expor globalmente
 Object.assign(window, {
   getToken, getUsuario, isLoggedIn, temRole, isSuperAdmin,
+  rolePermitida, exigirPerfil,
   login, logout, switchRestaurant, apiCall, apiPublic, ROLE_LEVEL,
 });

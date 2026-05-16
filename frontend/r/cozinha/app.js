@@ -25,6 +25,15 @@ async function fazerLogin() {
 }
 
 function iniciarKDS() {
+  try {
+    exigirPerfil(['kitchen', 'manager', 'owner'], 'Use um login de cozinha, gerente ou dono para ver os pedidos');
+  } catch (e) {
+    document.getElementById('login-erro').textContent = e.message;
+    document.getElementById('login-erro').classList.add('show');
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('kds-screen').style.display = 'none';
+    return;
+  }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('kds-screen').style.display   = 'flex';
   tickRelogio();
@@ -57,6 +66,7 @@ async function carregar() {
     estadoAnt = Object.fromEntries((data.pedidos||[]).map(p => [p.id, p.status]));
   } catch (e) {
     tentativas++;
+    console.warn('[cozinha]', e.message);
     if (tentativas >= 2) setOffline();
   }
 }

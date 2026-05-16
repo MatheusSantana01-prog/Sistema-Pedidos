@@ -34,6 +34,15 @@ function fazerLogout() {
 }
 
 function iniciarApp() {
+  try {
+    exigirPerfil(['cashier', 'manager', 'owner'], 'Use um login de caixa, gerente ou dono para fechar contas');
+  } catch (e) {
+    document.getElementById('login-erro').textContent = e.message;
+    document.getElementById('login-erro').classList.add('show');
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app-screen').style.display = 'none';
+    return;
+  }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'flex';
   carregarMesas();

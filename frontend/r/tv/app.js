@@ -29,6 +29,14 @@ async function fazerLogin() {
 }
 
 function iniciarTV() {
+  try {
+    exigirPerfil(['tv', 'kitchen', 'manager', 'owner'], 'Use um login de TV, cozinha, gerente ou dono para abrir esta tela');
+  } catch (e) {
+    document.getElementById('login-erro').textContent = e.message;
+    document.getElementById('login-erro').classList.add('show');
+    document.getElementById('login-overlay').style.display = 'flex';
+    return;
+  }
   document.getElementById('login-overlay').style.display = 'none';
   const usuario = getUsuario();
   document.getElementById('tv-user').textContent = usuario?.role ? usuario.role : 'online';

@@ -50,12 +50,13 @@ function fazerLogout() {
 }
 
 function iniciarApp() {
-  const u = getUsuario();
-  if (!temRole('waiter')) {
-    showLoginError('Este painel é para atendimento do salão.');
-    logout();
+  try {
+    exigirPerfil(['waiter', 'manager', 'owner'], 'Use um login de garçom, gerente ou dono para atendimento');
+  } catch (e) {
+    showLoginError(e.message);
     return;
   }
+  const u = getUsuario();
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'block';
   document.getElementById('user-nome').textContent = u.nome || 'Usuário';

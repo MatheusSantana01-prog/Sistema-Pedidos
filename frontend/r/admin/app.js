@@ -75,6 +75,15 @@ function iniciarApp() {
     window.location.href = `/r/${getCurrentRestaurantSlug()}/garcom`;
     return;
   }
+  try {
+    exigirPerfil(['manager', 'owner'], 'Use um login de gerente ou dono para abrir o painel admin');
+  } catch (e) {
+    document.getElementById('login-erro').textContent = e.message;
+    document.getElementById('login-erro').classList.add('show');
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    return;
+  }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'flex';
   document.getElementById('user-nome').textContent = u.nome;
