@@ -41,6 +41,7 @@
     <div class="nav-tab active" onclick="irPara('restaurantes',this)">🏪 Restaurantes</div>
     <div class="nav-tab" onclick="irPara('usuarios',this)">👥 Usuários</div>
     <div class="nav-tab" onclick="irPara('metricas',this)">📊 Métricas</div>
+    <div class="nav-tab" onclick="irPara('auditoria',this)">🧾 Auditoria</div>
     <div class="nav-tab" onclick="irPara('validacao',this)">✅ Validação</div>
   </div>
   <div class="main">
@@ -77,6 +78,15 @@
       <div id="metricas-content"><div class="loading"><div class="spinner"></div></div></div>
     </div>
 
+    <!-- AUDITORIA -->
+    <div class="page" id="page-auditoria">
+      <div class="section-head">
+        <div class="section-title">Auditoria da plataforma</div>
+        <button class="btn btn-sm" onclick="carregarAuditoria()">↻ Atualizar</button>
+      </div>
+      <div id="auditoria-content"><div class="tabela-empty">Carregando...</div></div>
+    </div>
+
     <!-- VALIDAÇÃO -->
     <div class="page" id="page-validacao">
       <div class="section-head">
@@ -100,6 +110,16 @@
       <div class="form-row"><label class="form-label">Nome do restaurante</label><input class="form-input" id="r-nome" placeholder="Ex: Pizzaria Bella Massa"></div>
       <div class="form-row"><label class="form-label">Slug (URL única)</label><input class="form-input" id="r-slug" placeholder="Ex: pizzaria-bella-massa" oninput="gerarSlug()"></div>
       <div class="form-row"><label class="form-label">E-mail de contato</label><input class="form-input" id="r-email" type="email" placeholder="contato@restaurante.com"></div>
+      <div class="form-row"><label class="form-label">Template operacional</label>
+        <select class="form-input" id="r-template" onchange="aplicarTemplateRestaurante()">
+          <option value="restaurante">Restaurante</option>
+          <option value="padaria">Padaria</option>
+          <option value="pizzaria">Pizzaria</option>
+          <option value="bar">Bar</option>
+          <option value="hamburgueria">Hamburgueria</option>
+          <option value="delivery">Delivery</option>
+        </select>
+      </div>
       <div class="form-row"><label class="form-label">Plano</label>
         <select class="form-input" id="r-plano">
           <option value="starter">Starter</option>
@@ -153,6 +173,22 @@
     <div class="modal-footer">
       <button class="btn" onclick="fecharModal('modal-usuario')">Cancelar</button>
       <button class="btn btn-primary" onclick="criarUsuario()">Criar usuário</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHES RESTAURANTE -->
+<div class="modal-bg" id="modal-detalhes">
+  <div class="modal modal-xl">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="detalhes-title">Restaurante</div>
+        <div class="modal-subtitle" id="detalhes-subtitle"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal('modal-detalhes')">✕</button>
+    </div>
+    <div class="modal-body" id="detalhes-body">
+      <div class="loading"><div class="spinner"></div></div>
     </div>
   </div>
 </div>

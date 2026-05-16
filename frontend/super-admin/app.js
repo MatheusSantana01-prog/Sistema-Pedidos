@@ -1,5 +1,6 @@
 let RESTAURANTES = [];
 let mostrarInativos = false;
+let DETALHE_ATUAL = null;
 
 /* ── LOGIN ──────────────────────────────────────────── */
 async function fazerLogin() {
@@ -47,7 +48,7 @@ function irPara(pagina, tabEl) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + pagina).classList.add('active');
   tabEl.classList.add('active');
-  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, metricas: carregarMetricas, validacao: () => {} };
+  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, metricas: carregarMetricas, auditoria: carregarAuditoria, validacao: () => {} };
   if (loaders[pagina]) loaders[pagina]();
 }
 
@@ -81,6 +82,7 @@ async function carregarRestaurantes() {
             </div>
           </div>
           <div class="rest-actions">
+            <button class="btn btn-sm btn-primary" onclick="abrirDetalhesRestaurante('${r.id}')">Detalhes</button>
             <a class="btn btn-sm" href="/r/${r.slug}/admin" target="_blank" rel="noopener">Admin</a>
             <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${r.name}')">QR Codes</button>
             <button class="btn btn-sm ${r.is_active?'btn-danger':''}" onclick="toggleAtivo('${r.id}',${r.is_active})">
@@ -206,14 +208,231 @@ async function copiarTexto(texto, msg = 'Copiado') {
   }
 }
 
+async function abrirDetalhesRestaurante(restId) {
+  const modal = document.getElementById('modal-detalhes');
+  const body = document.getElementById('detalhes-body');
+  document.getElementById('detalhes-title').textContent = 'Carregando...';
+  document.getElementById('detalhes-subtitle').textContent = '';
+  body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  modal.classList.add('show');
+  try {
+    DETALHE_ATUAL = await apiCall('GET', `/api/super-admin/restaurants/${restId}/overview`);
+    renderDetalhesRestaurante();
+  } catch(e) {
+    body.innerHTML = `<div class="qr-empty">Erro ao carregar detalhes: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderDetalhesRestaurante() {
+  const d = DETALHE_ATUAL;
+  const r = d.restaurant;
+  const c = d.control || {};
+  const u = d.usage || {};
+  document.getElementById('detalhes-title').textContent = r.name;
+  document.getElementById('detalhes-subtitle').textContent = `/r/${r.slug} • ${r.plan} • ${r.is_active ? 'ativo' : 'inativo'}`;
+  document.getElementById('detalhes-body').innerHTML = `
+    <div class="detail-actions">
+      <a class="btn btn-sm" href="${escapeAttr(d.links.admin)}" target="_blank" rel="noopener">Admin</a>
+      <a class="btn btn-sm" href="${escapeAttr(d.links.caixa)}" target="_blank" rel="noopener">Caixa</a>
+      <a class="btn btn-sm" href="${escapeAttr(d.links.tv)}" target="_blank" rel="noopener">TV</a>
+      <a class="btn btn-sm" href="${escapeAttr(d.links.garcom)}" target="_blank" rel="noopener">Garçom</a>
+      <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${escapeJs(r.name)}')">QR Codes</button>
+      <button class="btn btn-sm btn-primary" onclick="entrarComoDono('${r.id}')">Entrar como dono</button>
+      <button class="btn btn-sm" onclick="exportarRestauranteAtual()">Exportar dados</button>
+    </div>
+
+    <div class="detail-stats">
+      ${statMini('Pedidos 30d', u.orders_30d)}
+      ${statMini('Receita 30d', 'R$ ' + fmtMoney(u.revenue_30d))}
+      ${statMini('Usuários', `${u.active_users}/${c.limits?.users || '-'}`)}
+      ${statMini('Mesas', `${u.tables}/${c.limits?.tables || '-'}`)}
+      ${statMini('Produtos', `${u.products}/${c.limits?.products || '-'}`)}
+      ${statMini('Abertos', u.open_orders)}
+    </div>
+
+    <div class="detail-grid">
+      <div class="detail-panel">
+        <div class="detail-panel-title">Controle comercial</div>
+        <div class="form-grid">
+          ${selectField('ctrl-plan', 'Plano', r.plan, [['starter','Starter'],['pro','Pro'],['enterprise','Enterprise']])}
+          ${selectField('ctrl-billing', 'Status financeiro', c.billing_status, [['em_dia','Em dia'],['teste_gratis','Teste grátis'],['vencido','Vencido'],['bloqueado','Bloqueado']])}
+          ${inputField('ctrl-due', 'Vencimento', c.due_date || '', 'date')}
+          ${inputField('ctrl-trial', 'Teste até', c.trial_until || '', 'date')}
+          ${selectField('ctrl-segment', 'Segmento', c.segment, [['restaurante','Restaurante'],['padaria','Padaria'],['pizzaria','Pizzaria'],['bar','Bar'],['hamburgueria','Hamburgueria'],['delivery','Delivery']])}
+          ${inputField('ctrl-city', 'Cidade', c.city || '')}
+        </div>
+      </div>
+
+      <div class="detail-panel">
+        <div class="detail-panel-title">Limites e módulos</div>
+        <div class="form-grid compact">
+          ${inputField('limit-users', 'Usuários', c.limits?.users ?? 5, 'number')}
+          ${inputField('limit-tables', 'Mesas', c.limits?.tables ?? 20, 'number')}
+          ${inputField('limit-products', 'Produtos', c.limits?.products ?? 100, 'number')}
+          ${selectField('ctrl-block', 'Bloqueio', c.block_mode, [['none','Sem bloqueio'],['orders','Bloquear pedidos'],['admin','Bloquear admin'],['users','Bloquear usuários'],['full','Bloqueio total']])}
+        </div>
+        <div class="module-grid">
+          ${moduleToggle('mod-financeiro', 'Financeiro', c.modules?.financeiro)}
+          ${moduleToggle('mod-estoque', 'Estoque', c.modules?.estoque)}
+          ${moduleToggle('mod-cupons', 'Cupons', c.modules?.cupons)}
+          ${moduleToggle('mod-tv', 'TV', c.modules?.tv)}
+          ${moduleToggle('mod-garcom', 'Garçom', c.modules?.garcom)}
+          ${moduleToggle('mod-relatorios', 'Relatórios', c.modules?.relatorios)}
+        </div>
+      </div>
+
+      <div class="detail-panel">
+        <div class="detail-panel-title">Saúde do cliente</div>
+        <div class="health-list">
+          ${(d.health || []).map(h => `
+            <div class="health-row">
+              <span class="health-dot ${h.status.toLowerCase()}"></span>
+              <div><b>${escapeHtml(h.check)}</b><small>${escapeHtml(h.detail)}</small></div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="detail-panel">
+        <div class="detail-panel-title">Suporte e notas internas</div>
+        <div class="form-grid compact">
+          ${selectField('support-status', 'Chamado', c.support_status, [['sem_chamado','Sem chamado'],['aberto','Aberto'],['em_andamento','Em andamento'],['resolvido','Resolvido']])}
+          ${selectField('support-priority', 'Prioridade', c.support_priority, [['normal','Normal'],['alta','Alta'],['urgente','Urgente']])}
+        </div>
+        <label class="form-label">Notas internas</label>
+        <textarea class="form-input text-area" id="internal-notes">${escapeHtml(c.internal_notes || '')}</textarea>
+        <label class="form-label">Suporte</label>
+        <textarea class="form-input text-area" id="support-notes">${escapeHtml(c.support_notes || '')}</textarea>
+        <label class="form-label">Aviso para o cliente</label>
+        <textarea class="form-input text-area" id="broadcast-message">${escapeHtml(c.broadcast_message || '')}</textarea>
+      </div>
+    </div>
+
+    <div class="detail-grid two">
+      <div class="detail-panel">
+        <div class="detail-panel-title">Usuários</div>
+        <div class="mini-table">
+          ${(d.users || []).map(m => `<div><span>${escapeHtml(m.usuarios?.nome || 'Sem nome')}</span><small>${escapeHtml(m.role)} • ${escapeHtml(m.usuarios?.email || '')}</small></div>`).join('') || '<div class="muted-line">Nenhum usuário</div>'}
+        </div>
+      </div>
+      <div class="detail-panel">
+        <div class="detail-panel-title">Pedidos recentes</div>
+        <div class="mini-table">
+          ${(d.recent_orders || []).map(p => `<div><span>#${escapeHtml(p.numero)} • ${escapeHtml(p.status)}</span><small>Mesa ${escapeHtml(p.mesas?.numero || '-')} • R$ ${fmtMoney(p.total)} • ${fmtDate(p.created_at)}</small></div>`).join('') || '<div class="muted-line">Nenhum pedido recente</div>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer inline-footer">
+      <button class="btn" onclick="fecharModal('modal-detalhes')">Fechar</button>
+      <button class="btn btn-primary" onclick="salvarControleRestaurante('${r.id}')">Salvar controle</button>
+    </div>`;
+}
+
+function statMini(label, value) {
+  return `<div class="detail-stat"><span>${escapeHtml(label)}</span><b>${escapeHtml(value ?? 0)}</b></div>`;
+}
+
+function inputField(id, label, value, type = 'text') {
+  return `<div class="form-row"><label class="form-label">${label}</label><input class="form-input" id="${id}" type="${type}" value="${escapeAttr(value)}"></div>`;
+}
+
+function selectField(id, label, value, options) {
+  return `<div class="form-row"><label class="form-label">${label}</label><select class="form-input" id="${id}">
+    ${options.map(([v, t]) => `<option value="${v}" ${String(value) === v ? 'selected' : ''}>${t}</option>`).join('')}
+  </select></div>`;
+}
+
+function moduleToggle(id, label, checked) {
+  return `<label class="module-toggle"><input type="checkbox" id="${id}" ${checked ? 'checked' : ''}> ${label}</label>`;
+}
+
+async function salvarControleRestaurante(restId) {
+  const payload = {
+    plan: val('ctrl-plan'),
+    billing_status: val('ctrl-billing'),
+    due_date: val('ctrl-due') || null,
+    trial_until: val('ctrl-trial') || null,
+    segment: val('ctrl-segment'),
+    city: val('ctrl-city'),
+    block_mode: val('ctrl-block'),
+    support_status: val('support-status'),
+    support_priority: val('support-priority'),
+    internal_notes: val('internal-notes'),
+    support_notes: val('support-notes'),
+    broadcast_message: val('broadcast-message'),
+    limits: {
+      users: Number(val('limit-users') || 0),
+      tables: Number(val('limit-tables') || 0),
+      products: Number(val('limit-products') || 0),
+    },
+    modules: {
+      financeiro: checked('mod-financeiro'),
+      estoque: checked('mod-estoque'),
+      cupons: checked('mod-cupons'),
+      tv: checked('mod-tv'),
+      garcom: checked('mod-garcom'),
+      relatorios: checked('mod-relatorios'),
+    },
+  };
+  try {
+    await apiCall('PATCH', `/api/super-admin/restaurants/${restId}/control`, payload);
+    showToast('Controle atualizado', 'success');
+    await abrirDetalhesRestaurante(restId);
+    carregarRestaurantes();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function entrarComoDono(restId) {
+  if (!confirm('Entrar no painel deste cliente como suporte? A ação será registrada em auditoria.')) return;
+  try {
+    const data = await apiCall('POST', `/api/super-admin/restaurants/${restId}/impersonate`);
+    localStorage.setItem('saas_token', data.token);
+    localStorage.setItem('saas_user', JSON.stringify(data.usuario));
+    window.open(data.redirect_url, '_blank', 'noopener');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function exportarRestauranteAtual() {
+  if (!DETALHE_ATUAL) return;
+  const data = JSON.stringify(DETALHE_ATUAL, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${DETALHE_ATUAL.restaurant.slug}-export.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function abrirModalNovoRest() {
   ['r-nome','r-slug','r-email','r-owner-nome','r-owner-email','r-owner-senha'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  document.getElementById('r-template').value = 'restaurante';
   document.getElementById('r-mesas').value = 10;
   document.getElementById('r-categorias').checked = true;
   document.getElementById('modal-rest').classList.add('show');
+}
+
+function aplicarTemplateRestaurante() {
+  const template = document.getElementById('r-template').value;
+  const presets = {
+    restaurante: { mesas: 10, plano: 'starter', cor: '#ff4d1c' },
+    padaria: { mesas: 6, plano: 'starter', cor: '#c0843d' },
+    pizzaria: { mesas: 12, plano: 'pro', cor: '#d92d20' },
+    bar: { mesas: 16, plano: 'pro', cor: '#22c55e' },
+    hamburgueria: { mesas: 8, plano: 'pro', cor: '#f59e0b' },
+    delivery: { mesas: 0, plano: 'starter', cor: '#7c3aed' },
+  };
+  const p = presets[template] || presets.restaurante;
+  document.getElementById('r-mesas').value = p.mesas;
+  document.getElementById('r-plano').value = p.plano;
+  document.getElementById('r-cor').value = p.cor;
 }
 
 function gerarSlug() {
@@ -231,6 +450,7 @@ async function criarRestaurante() {
   const nome  = document.getElementById('r-nome').value.trim();
   const slug  = document.getElementById('r-slug').value.trim();
   const email = document.getElementById('r-email').value.trim() || null;
+  const template = document.getElementById('r-template').value;
   const plano = document.getElementById('r-plano').value;
   const cor   = document.getElementById('r-cor').value;
   const mesas = Number(document.getElementById('r-mesas').value || 0);
@@ -254,6 +474,7 @@ async function criarRestaurante() {
       create_default_categories: categorias,
     };
     const { restaurant } = await apiCall('POST', '/api/super-admin/restaurants', payload);
+    await apiCall('PATCH', `/api/super-admin/restaurants/${restaurant.id}/control`, { segment: template }).catch(() => null);
 
     // Criar owner via super-admin endpoint se fornecido
     if (ownerEmail && ownerSenha) {
@@ -337,6 +558,31 @@ async function carregarMetricas() {
   }
 }
 
+async function carregarAuditoria() {
+  const el = document.getElementById('auditoria-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const { logs } = await apiCall('GET', '/api/super-admin/audit');
+    el.innerHTML = `
+      <div class="tabela-wrap">
+        <table class="tabela">
+          <thead><tr><th>Data</th><th>Restaurante</th><th>Ação</th><th>Usuário</th><th>Detalhe</th></tr></thead>
+          <tbody>
+            ${(logs || []).map(l => `<tr>
+              <td class="mono" style="font-size:11px">${fmtDate(l.created_at)}</td>
+              <td>${escapeHtml(l.restaurants?.name || 'Plataforma')}<div class="rest-slug">${escapeHtml(l.restaurants?.slug || '')}</div></td>
+              <td><span class="badge badge-plan">${escapeHtml(l.acao || '-')}</span></td>
+              <td>${escapeHtml(l.usuario_nome || '-')}<div class="rest-slug">${escapeHtml(l.perfil || '')}</div></td>
+              <td style="font-size:12px;color:var(--muted)">${escapeHtml(resumoLog(l.valor_novo))}</td>
+            </tr>`).join('') || '<tr><td colspan="5" class="tabela-empty">Nenhum log</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="tabela-empty">Erro ao carregar auditoria: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
 /* ── VALIDAÇÃO ──────────────────────────────────────── */
 async function executarValidacao() {
   document.getElementById('validacao-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -380,6 +626,30 @@ function escapeAttr(value) {
 
 function escapeJs(value) {
   return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
+}
+
+function val(id) {
+  return document.getElementById(id)?.value;
+}
+
+function checked(id) {
+  return document.getElementById(id)?.checked === true;
+}
+
+function fmtMoney(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(value) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function resumoLog(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  const text = JSON.stringify(value);
+  return text.length > 120 ? text.slice(0, 120) + '...' : text;
 }
 
 function showToast(msg, tipo='') {

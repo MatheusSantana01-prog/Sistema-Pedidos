@@ -194,6 +194,65 @@ def _money(value) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+def _platform_control_defaults() -> dict:
+    return {
+        "billing_status": "em_dia",
+        "trial_until": None,
+        "due_date": None,
+        "segment": "restaurante",
+        "city": "",
+        "internal_notes": "",
+        "support_status": "sem_chamado",
+        "support_priority": "normal",
+        "support_notes": "",
+        "block_mode": "none",
+        "broadcast_message": "",
+        "limits": {"users": 5, "tables": 20, "products": 100},
+        "modules": {
+            "financeiro": True,
+            "estoque": False,
+            "cupons": False,
+            "tv": True,
+            "garcom": True,
+            "relatorios": True,
+        },
+    }
+
+def get_platform_control(restaurant_id: str) -> dict:
+    data = _platform_control_defaults()
+    row = _first(sb.table("configuracoes").select("valor").eq("restaurant_id", restaurant_id).eq("chave", "platform_control").execute().data)
+    if row and isinstance(row.get("valor"), dict):
+        saved = row["valor"]
+        data.update({k: v for k, v in saved.items() if k not in {"limits", "modules"}})
+        data["limits"].update(saved.get("limits") or {})
+        data["modules"].update(saved.get("modules") or {})
+    return data
+
+def save_platform_control(restaurant_id: str, control: dict):
+    payload = {
+        "restaurant_id": restaurant_id,
+        "chave": "platform_control",
+        "valor": control,
+        "descricao": "Controles internos da plataforma",
+        "updated_at": utcnow(),
+    }
+    exists = _first(sb.table("configuracoes").select("chave").eq("restaurant_id", restaurant_id).eq("chave", "platform_control").execute().data)
+    if exists:
+        sb.table("configuracoes").update(payload).eq("restaurant_id", restaurant_id).eq("chave", "platform_control").execute()
+    else:
+        sb.table("configuracoes").insert(payload).execute()
+
+def platform_links(slug: str) -> dict:
+    base_url = "" if FRONTEND_URL == "*" else FRONTEND_URL.rstrip("/")
+    prefix = f"{base_url}/r/{slug}"
+    return {
+        "admin": f"{prefix}/admin",
+        "caixa": f"{prefix}/caixa",
+        "tv": f"{prefix}/tv",
+        "garcom": f"{prefix}/garcom",
+        "cozinha": f"{prefix}/cozinha",
+    }
+
 def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, dict]:
     total = _money(total)
     pagamentos_raw = body.pagamentos or []
@@ -1631,6 +1690,137 @@ def listar_usuarios_plataforma(u: dict = Depends(require_super_admin)):
         if m.get("usuarios") and m.get("restaurants")
     ]
     return {"memberships": memberships}
+
+
+@app.get("/api/super-admin/restaurants/{restaurant_id}/overview", tags=["super-admin"])
+def detalhes_restaurante_plataforma(restaurant_id: str, u: dict = Depends(require_super_admin)):
+    rest = sb.table("restaurants").select("*,restaurant_settings(*)").eq("id", restaurant_id).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    restaurant = rest.data
+    control = get_platform_control(restaurant_id)
+
+    users = _rows(sb.table("restaurant_memberships").select(
+        "id,role,is_active,created_at,usuarios(id,nome,email,ativo,ultimo_acesso)"
+    ).eq("restaurant_id", restaurant_id).order("created_at", desc=True).execute())
+
+    mesas = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).execute()
+    produtos = sb.table("produtos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
+    categorias = sb.table("categorias").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
+    pedidos = sb.table("pedidos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
+    since = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    pedidos_30 = _rows(sb.table("pedidos").select("id,total,status,created_at").eq("restaurant_id", restaurant_id).gte("created_at", since).execute())
+    pedidos_abertos = sb.table("pedidos").select("id", count="exact").eq("restaurant_id", restaurant_id).in_("status", list(OPEN_ORDER_STATUSES)).execute()
+    mesas_ocupadas = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).neq("status", "livre").execute()
+    recentes = _rows(sb.table("pedidos").select("id,numero,status,total,created_at,mesas(numero)").eq("restaurant_id", restaurant_id).order("created_at", desc=True).limit(8).execute())
+    logs = _rows(sb.table("audit_log").select("id,acao,usuario_nome,perfil,created_at,valor_novo").eq("restaurant_id", restaurant_id).order("created_at", desc=True).limit(12).execute())
+
+    health = []
+    def add_health(check, status, detail):
+        health.append({"check": check, "status": status, "detail": detail})
+
+    owner_count = len([m for m in users if m.get("role") == "owner" and m.get("is_active") and m.get("usuarios")])
+    active_users = len([m for m in users if m.get("is_active") and m.get("usuarios")])
+    add_health("Dono", "OK" if owner_count else "WARN", "Owner ativo encontrado" if owner_count else "Sem owner ativo")
+    add_health("Mesas", "OK" if (mesas.count or 0) > 0 else "WARN", f"{mesas.count or 0} mesa(s) ativa(s)")
+    add_health("Cardápio", "OK" if (produtos.count or 0) > 0 and (categorias.count or 0) > 0 else "WARN", f"{produtos.count or 0} produto(s), {categorias.count or 0} categoria(s)")
+    add_health("Pedidos travados", "OK" if (pedidos_abertos.count or 0) == 0 else "INFO", f"{pedidos_abertos.count or 0} pedido(s) aberto(s)")
+    add_health("Mesas ocupadas", "OK" if (mesas_ocupadas.count or 0) == 0 else "INFO", f"{mesas_ocupadas.count or 0} mesa(s) ocupada(s)")
+    if active_users > int((control.get("limits") or {}).get("users") or 9999):
+        add_health("Limite de usuários", "WARN", f"{active_users} usuários ativos acima do limite")
+    if (mesas.count or 0) > int((control.get("limits") or {}).get("tables") or 9999):
+        add_health("Limite de mesas", "WARN", f"{mesas.count} mesas acima do limite")
+    if control.get("billing_status") in {"vencido", "bloqueado"}:
+        add_health("Financeiro", "WARN", f"Status: {control.get('billing_status')}")
+
+    return {
+        "restaurant": restaurant,
+        "control": control,
+        "users": users,
+        "links": platform_links(restaurant["slug"]),
+        "health": health,
+        "usage": {
+            "active_users": active_users,
+            "tables": mesas.count or 0,
+            "products": produtos.count or 0,
+            "categories": categorias.count or 0,
+            "orders_total": pedidos.count or 0,
+            "orders_30d": len(pedidos_30),
+            "revenue_30d": round(sum(_money(p.get("total")) for p in pedidos_30 if p.get("status") != "cancelado"), 2),
+            "open_orders": pedidos_abertos.count or 0,
+            "occupied_tables": mesas_ocupadas.count or 0,
+        },
+        "recent_orders": recentes,
+        "recent_logs": logs,
+    }
+
+
+@app.patch("/api/super-admin/restaurants/{restaurant_id}/control", tags=["super-admin"])
+def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Request,
+                                   u: dict = Depends(require_super_admin)):
+    rest = sb.table("restaurants").select("id,plan,is_active").eq("id", restaurant_id).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+
+    restaurant_patch = {}
+    if body.get("plan") in {"starter", "pro", "enterprise"}:
+        restaurant_patch["plan"] = body["plan"]
+    if isinstance(body.get("is_active"), bool):
+        restaurant_patch["is_active"] = body["is_active"]
+    if restaurant_patch:
+        restaurant_patch["updated_at"] = utcnow()
+        sb.table("restaurants").update(restaurant_patch).eq("id", restaurant_id).execute()
+
+    control = get_platform_control(restaurant_id)
+    for key in ("billing_status", "trial_until", "due_date", "segment", "city", "internal_notes", "support_status", "support_priority", "support_notes", "block_mode", "broadcast_message"):
+        if key in body:
+            control[key] = body.get(key)
+    if isinstance(body.get("limits"), dict):
+        control["limits"].update(body["limits"])
+    if isinstance(body.get("modules"), dict):
+        control["modules"].update(body["modules"])
+    save_platform_control(restaurant_id, control)
+
+    log_acao(u, "super_atualizar_controle", "configuracoes", restaurant_id, None, body, request)
+    return {"mensagem": "Controle atualizado", "control": control, "restaurant_patch": restaurant_patch}
+
+
+@app.post("/api/super-admin/restaurants/{restaurant_id}/impersonate", tags=["super-admin"])
+def impersonar_restaurante(restaurant_id: str, request: Request,
+                           u: dict = Depends(require_super_admin)):
+    rest = sb.table("restaurants").select("id,name,slug,is_active").eq("id", restaurant_id).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    usuario = {
+        "id": u["sub"],
+        "email": u["email"],
+        "nome": u.get("nome") or "Super Admin",
+        "perfil": "super_admin",
+        "is_super_admin": True,
+    }
+    token = criar_token(usuario, restaurant_id, "owner")
+    log_acao(u, "super_impersonar_restaurante", "restaurants", restaurant_id, None, {"slug": rest.data["slug"]}, request)
+    return {
+        "token": token,
+        "usuario": {
+            "id": u["sub"],
+            "nome": usuario["nome"],
+            "email": usuario["email"],
+            "role": "owner",
+            "is_super_admin": True,
+            "restaurant_id": restaurant_id,
+            "restaurant": rest.data,
+        },
+        "redirect_url": f"/r/{rest.data['slug']}/admin",
+    }
+
+
+@app.get("/api/super-admin/audit", tags=["super-admin"])
+def auditoria_plataforma(limite: int = 80, u: dict = Depends(require_super_admin)):
+    rows = _rows(sb.table("audit_log").select(
+        "id,restaurant_id,acao,tabela,registro_id,usuario_nome,perfil,created_at,valor_novo,restaurants(name,slug)"
+    ).order("created_at", desc=True).limit(min(limite, 200)).execute())
+    return {"logs": rows}
 
 
 @app.get("/api/super-admin/restaurants/{restaurant_id}/qrcodes", tags=["super-admin"])
