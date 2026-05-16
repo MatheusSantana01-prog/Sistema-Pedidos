@@ -122,18 +122,87 @@ async function deletarRestaurante(id, nome) {
 }
 
 async function verQRCodes(restId, nome) {
+  const modal = document.getElementById('modal-qrcodes');
+  const title = document.getElementById('qr-modal-title');
+  const body = document.getElementById('qr-modal-body');
+  title.textContent = `QR Codes - ${nome}`;
+  body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  modal.classList.add('show');
+
   try {
     const { mesas } = await apiCall('GET', `/api/super-admin/restaurants/${restId}/qrcodes`);
-    (mesas||[]).map(m =>
-      `<div style="margin-bottom:8px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
-        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">Mesa ${m.mesa_numero}</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">Token: ${m.public_token}</div>
-        <div style="font-size:12px;margin-top:4px;color:var(--green);">${m.url_slug}</div>
-      </div>`
-    ).join('');
-    alert(`QR Codes — ${nome}\n\nAcesse cada URL:\n${(mesas||[]).map(m=>m.url_slug).join('\n')}`);
+    const lista = mesas || [];
+    body.innerHTML = !lista.length
+      ? '<div class="qr-empty">Nenhuma mesa ativa com QR Code para este restaurante.</div>'
+      : `
+        <div class="qr-toolbar">
+          <div>
+            <div class="qr-count">${lista.length} mesa${lista.length === 1 ? '' : 's'} ativa${lista.length === 1 ? '' : 's'}</div>
+            <div class="qr-hint">Clique no link para abrir a mesa ou use copiar para enviar ao restaurante.</div>
+          </div>
+          <button class="btn btn-sm" onclick="copiarTodosQRCodes()">Copiar todos</button>
+        </div>
+        <div class="qr-grid">
+          ${lista.map(m => renderQRCodeCard(m)).join('')}
+        </div>`;
   } catch(e) {
-    showToast('Backend precisa ser atualizado no Render para listar QR Codes aqui.', 'error');
+    body.innerHTML = `
+      <div class="qr-empty">
+        Não foi possível carregar os QR Codes. Verifique se o backend do Render está atualizado.
+      </div>`;
+    showToast('Falha ao carregar QR Codes', 'error');
+  }
+}
+
+function renderQRCodeCard(mesa) {
+  const url = mesa.url_slug || '';
+  const token = mesa.public_token || '';
+  const numero = mesa.mesa_numero || '—';
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=10&data=${encodeURIComponent(url)}`;
+  return `
+    <div class="qr-card">
+      <div class="qr-image-wrap">
+        <img class="qr-image" src="${qrUrl}" alt="QR Code da mesa ${escapeHtml(numero)}" loading="lazy">
+      </div>
+      <div class="qr-card-body">
+        <div class="qr-card-top">
+          <div>
+            <div class="qr-table">Mesa ${escapeHtml(numero)}</div>
+            <div class="qr-token">Token ${escapeHtml(token)}</div>
+          </div>
+          <span class="qr-status">Ativa</span>
+        </div>
+        <a class="qr-link" href="${escapeAttr(url)}" target="_blank" rel="noopener" title="${escapeAttr(url)}">${escapeHtml(url)}</a>
+        <div class="qr-actions">
+          <button class="btn btn-sm btn-primary" onclick="copiarTexto('${escapeJs(url)}','Link da mesa ${escapeJs(numero)} copiado')">Copiar link</button>
+          <a class="btn btn-sm" href="${escapeAttr(url)}" target="_blank" rel="noopener">Abrir mesa</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+function copiarTodosQRCodes() {
+  const links = [...document.querySelectorAll('#modal-qrcodes .qr-link')].map(a => a.href).join('\n');
+  copiarTexto(links, 'Links das mesas copiados');
+}
+
+async function copiarTexto(texto, msg = 'Copiado') {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(texto);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    showToast(msg, 'success');
+  } catch(e) {
+    showToast('Não foi possível copiar automaticamente', 'error');
   }
 }
 
@@ -293,6 +362,20 @@ async function executarValidacao() {
 function fecharModal(id) { document.getElementById(id).classList.remove('show'); }
 document.querySelectorAll('.modal-bg').forEach(b =>
   b.addEventListener('click', e => { if(e.target===b) b.classList.remove('show'); }));
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+function escapeJs(value) {
+  return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
+}
 
 function showToast(msg, tipo='') {
   const t = document.getElementById('toast');
