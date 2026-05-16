@@ -817,7 +817,16 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
         sessoes = m.pop("sessao_mesa", []) or []
         abertas = [s for s in sessoes if s["status"] == "aberta"]
         abertas.sort(key=lambda s: s.get("aberta_em") or "", reverse=True)
-        m["sessao_ativa"] = abertas[0] if abertas else None
+        sessao_ativa = abertas[0] if abertas else None
+        if sessao_ativa:
+            ultimo = sb.table("pedidos").select("created_at").eq(
+                "sessao_mesa_id", sessao_ativa["id"]
+            ).eq("restaurant_id", rid).neq("status", "cancelado").order(
+                "created_at", desc=True
+            ).limit(1).execute()
+            ultimo_pedido = _first(_rows(ultimo))
+            sessao_ativa["ultima_atividade_em"] = (ultimo_pedido or {}).get("created_at") or sessao_ativa.get("aberta_em")
+        m["sessao_ativa"] = sessao_ativa
     return {"mesas": mesas}
 
 

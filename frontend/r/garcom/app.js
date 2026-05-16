@@ -110,16 +110,26 @@ function renderMesas() {
     const sess = m.sessao_ativa;
     const total = Number(sess?.total_consumido || 0);
     const aberta = sess?.aberta_em ? tempoAberta(sess.aberta_em) : '';
-    return `<div class="mesa-card ${m.status}" onclick="${sess ? `abrirMesa('${m.id}','${sess.id}',${m.numero})` : ''}">
+    const alerta = alertaMesa(sess);
+    return `<div class="mesa-card ${m.status} ${alerta.classe}" onclick="${sess ? `abrirMesa('${m.id}','${sess.id}',${m.numero})` : ''}">
       <div>
         <div class="mesa-num">${m.numero}</div>
         <div class="mesa-status">${m.status === 'ocupada' ? 'Mesa com atendimento' : 'Mesa livre'}</div>
       </div>
       <div>
         ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div><div class="mesa-note">${aberta}</div>` : '<div class="mesa-note">Sem conta aberta</div>'}
+        ${alerta.texto ? `<div class="mesa-alerta">${alerta.texto}</div>` : ''}
       </div>
     </div>`;
   }).join('') : '<div class="empty">Nenhuma mesa neste filtro.</div>';
+}
+
+function alertaMesa(sess) {
+  if (!sess?.ultima_atividade_em) return { classe: '', texto: '' };
+  const min = Math.floor((Date.now() - new Date(sess.ultima_atividade_em)) / 60000);
+  if (min >= 60) return { classe: 'mesa-alerta-critico', texto: `Sem novo pedido há ${min}min` };
+  if (min >= 30) return { classe: 'mesa-alerta-atencao', texto: `Sem novo pedido há ${min}min` };
+  return { classe: '', texto: '' };
 }
 
 function filtrarMesas(btn, filtro) {

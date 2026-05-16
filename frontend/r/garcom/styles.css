@@ -66,6 +66,11 @@ body {
 .mesa-card:hover { transform:translateY(-2px); border-color:var(--color-primary); }
 .mesa-card.ocupada { background:linear-gradient(180deg, rgba(245,158,11,.11), rgba(255,255,255,.035)); }
 .mesa-card.livre { opacity:.78; }
+.mesa-card.mesa-alerta-atencao { border-color:#ef4444; animation:mesaBlink 1.5s ease-in-out infinite; }
+.mesa-card.mesa-alerta-critico { border-color:#ff1f1f; animation:mesaBlinkStrong .85s ease-in-out infinite; }
+.mesa-alerta { margin-top:8px; color:#fecaca; font-size:11px; font-family:var(--mono); font-weight:700; }
+@keyframes mesaBlink { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.12);} 50%{box-shadow:0 0 0 4px rgba(239,68,68,.35); background:rgba(127,29,29,.18);} }
+@keyframes mesaBlinkStrong { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.2);} 50%{box-shadow:0 0 0 6px rgba(239,68,68,.55); background:rgba(127,29,29,.34);} }
 .mesa-num { font-size:34px; font-family:var(--mono); font-weight:700; }
 .mesa-status { font-size:12px; color:var(--muted); }
 .mesa-status strong { color:var(--color-text); }

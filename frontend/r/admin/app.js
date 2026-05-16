@@ -157,10 +157,12 @@ async function carregarMesas() {
       const total = Number(sess?.total_consumido || 0);
       const dur   = sess ? Math.floor((Date.now() - new Date(sess.aberta_em)) / 60000) : 0;
       const durStr = dur < 60 ? dur + 'min' : Math.floor(dur/60) + 'h' + (dur%60 > 0 ? dur%60 + 'm' : '');
-      return `<div class="mesa-card ${m.status}" onclick="${sess ? `abrirConta('${m.id}','${sess.id}',${m.numero},${total})` : ''}">
+      const alerta = alertaMesa(sess);
+      return `<div class="mesa-card ${m.status} ${alerta.classe}" onclick="${sess ? `abrirConta('${m.id}','${sess.id}',${m.numero},${total})` : ''}">
         <div class="mesa-num">${m.numero}</div>
         <div class="mesa-status-badge ${m.status}">${m.status === 'livre' ? '● Livre' : m.status === 'ocupada' ? '● Ocupada' : '● Reservada'}</div>
         <div class="mesa-info">${sess ? `R$ ${fmt(total)} · ${durStr}` : 'Mesa livre'}</div>
+        ${alerta.texto ? `<div class="mesa-alerta">${alerta.texto}</div>` : ''}
         <div class="mesa-actions" onclick="event.stopPropagation()">
           ${sess ? `<button class="btn btn-sm btn-success" onclick="abrirConta('${m.id}','${sess.id}',${m.numero},${total})">Ver conta →</button>` : ''}
         </div>
@@ -169,6 +171,14 @@ async function carregarMesas() {
   } catch (e) {
     showToast(e.message, 'error');
   }
+}
+
+function alertaMesa(sess) {
+  if (!sess?.ultima_atividade_em) return { classe: '', texto: '' };
+  const min = Math.floor((Date.now() - new Date(sess.ultima_atividade_em)) / 60000);
+  if (min >= 60) return { classe: 'mesa-alerta-critico', texto: `Sem novo pedido há ${min}min` };
+  if (min >= 30) return { classe: 'mesa-alerta-atencao', texto: `Sem novo pedido há ${min}min` };
+  return { classe: '', texto: '' };
 }
 
 async function abrirConta(mesaId, sessaoId, numero, total) {
