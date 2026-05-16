@@ -19,6 +19,26 @@
   status = 200
 
 [[redirects]]
+  from = "/r/:slug/gerente"
+  to   = "/r/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/gerente/"
+  to   = "/r/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/garcom"
+  to   = "/r/admin/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/r/:slug/garcom/"
+  to   = "/r/admin/index.html"
+  status = 200
+
+[[redirects]]
   from = "/r/:slug/cozinha"
   to   = "/r/cozinha/index.html"
   status = 200
