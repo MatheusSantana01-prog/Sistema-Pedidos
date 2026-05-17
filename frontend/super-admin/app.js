@@ -228,14 +228,18 @@ function renderDetalhesRestaurante() {
   const r = d.restaurant;
   const c = d.control || {};
   const u = d.usage || {};
+  const rolesAtivos = new Set((d.users || [])
+    .filter(m => m.is_active !== false && m.usuarios && m.usuarios.ativo !== false)
+    .map(m => m.role));
   document.getElementById('detalhes-title').textContent = r.name;
   document.getElementById('detalhes-subtitle').textContent = `/r/${r.slug} • ${r.plan} • ${r.is_active ? 'ativo' : 'inativo'}`;
   document.getElementById('detalhes-body').innerHTML = `
     <div class="detail-actions">
-      <a class="btn btn-sm" href="${escapeAttr(d.links.admin)}" target="_blank" rel="noopener">Admin</a>
-      <a class="btn btn-sm" href="${escapeAttr(d.links.caixa)}" target="_blank" rel="noopener">Caixa</a>
-      <a class="btn btn-sm" href="${escapeAttr(d.links.tv)}" target="_blank" rel="noopener">TV</a>
-      <a class="btn btn-sm" href="${escapeAttr(d.links.garcom)}" target="_blank" rel="noopener">Garçom</a>
+      ${profileLink('Admin', d.links.admin, rolesAtivos.has('owner') || rolesAtivos.has('manager'))}
+      ${profileLink('Caixa', d.links.caixa, rolesAtivos.has('cashier'))}
+      ${profileLink('TV', d.links.tv, rolesAtivos.has('tv'))}
+      ${profileLink('Garçom', d.links.garcom, rolesAtivos.has('waiter'))}
+      ${profileLink('Cozinha', d.links.cozinha, rolesAtivos.has('kitchen'))}
       <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${escapeJs(r.name)}')">QR Codes</button>
       <button class="btn btn-sm btn-primary" onclick="entrarComoDono('${r.id}')">Entrar como dono</button>
       <button class="btn btn-sm" onclick="exportarRestauranteAtual()">Exportar dados</button>
@@ -326,6 +330,13 @@ function renderDetalhesRestaurante() {
       <button class="btn" onclick="fecharModal('modal-detalhes')">Fechar</button>
       <button class="btn btn-primary" onclick="salvarControleRestaurante('${r.id}')">Salvar controle</button>
     </div>`;
+}
+
+function profileLink(label, url, enabled) {
+  if (enabled) {
+    return `<a class="btn btn-sm" href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+  }
+  return `<span class="btn btn-sm btn-disabled" title="Crie um usuário ativo deste perfil para liberar o acesso">${escapeHtml(label)} · sem usuário</span>`;
 }
 
 function statMini(label, value) {

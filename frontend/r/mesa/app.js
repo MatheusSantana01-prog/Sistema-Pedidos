@@ -7,6 +7,8 @@ let carrinho     = [];
 let prodAtual    = null;
 let modsSelecionadas = {};
 let pollingConta = null;
+let pollingCardapio = null;
+let cardapioHash = '';
 let notaFeedback = 5;
 let categoriaAtual = null;
 
@@ -52,8 +54,10 @@ async function init() {
     if (!SESSAO_ID) throw new Error('Sessão da mesa não foi criada');
 
     document.getElementById('app').style.display = 'block';
+    atualizarAcoesMesa();
     carregarCardapio();
     iniciarPollingConta();
+    iniciarPollingCardapio();
   } catch (e) {
     document.body.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;background:var(--color-bg);color:var(--color-text);font-family:sans-serif;">
@@ -66,13 +70,17 @@ async function init() {
 
 /* ── CARDÁPIO ────────────────────────────────────────── */
 async function carregarCardapio() {
+  return atualizarCardapio(false);
+}
+
+async function atualizarCardapio(silent = true) {
   try {
     const slug = getCurrentRestaurantSlug();
     const { cardapio } = await apiPublic('GET', `/api/public/restaurants/${slug}/menu`);
-    categorias = (cardapio || [])
+    const novasCategorias = (cardapio || [])
       .map(c => ({ ...c, nome: c.nome || 'Categoria', icone: c.icone || '', produtos: c.produtos || [] }))
       .filter(c => c.produtos.length);
-    todosProdutos = categorias.flatMap(c => c.produtos || []).map(p => ({
+    const novosProdutos = novasCategorias.flatMap(c => c.produtos || []).map(p => ({
       ...p,
       nome: p.nome || 'Produto',
       descricao: p.descricao || '',
@@ -80,13 +88,71 @@ async function carregarCardapio() {
       foto_url: p.foto_url || '',
       ings: p.ings || []
     }));
+    const novoHash = hashCardapio(novasCategorias);
+    const mudou = cardapioHash && novoHash !== cardapioHash;
+    categorias = novasCategorias;
+    todosProdutos = novosProdutos;
+    cardapioHash = novoHash;
+    if (mudou) reconciliarCarrinhoComCardapio();
     renderCats();
     renderHero();
     renderDestaques();
-    renderProdutos(categorias);
+    renderProdutos(categoriaAtual ? categorias.filter(c => c.id === categoriaAtual) : categorias);
+    if (mudou && !silent) showToast('Cardápio atualizado', 'success');
   } catch (e) {
-    showToast('Erro ao carregar cardápio', 'error');
+    if (!silent) showToast('Erro ao carregar cardápio', 'error');
   }
+}
+
+function hashCardapio(cats) {
+  return JSON.stringify((cats || []).map(c => ({
+    id: c.id,
+    nome: c.nome,
+    produtos: (c.produtos || []).map(p => ({
+      id: p.id,
+      nome: p.nome,
+      preco: Number(p.preco || 0),
+      disponivel: p.disponivel !== false,
+      destaque: p.destaque === true,
+      foto_url: p.foto_url || '',
+      descricao: p.descricao || '',
+    })),
+  })));
+}
+
+function reconciliarCarrinhoComCardapio() {
+  const disponiveis = new Map(todosProdutos.filter(p => p.disponivel !== false).map(p => [p.id, p]));
+  const antes = carrinho.length;
+  carrinho = carrinho
+    .filter(item => disponiveis.has(item.produto_id))
+    .map(item => {
+      const prod = disponiveis.get(item.produto_id);
+      return {
+        ...item,
+        nome_produto: prod.nome,
+        preco_unitario: prod.preco,
+        subtotal: prod.preco * item.quantidade,
+      };
+    });
+  if (prodAtual && !disponiveis.has(prodAtual.id)) {
+    fecharModal('modal-produto');
+    prodAtual = null;
+  }
+  if (carrinho.length !== antes) showToast('Um item indisponível foi removido do carrinho', 'error');
+  atualizarFAB();
+}
+
+async function atualizarAcoesMesa() {
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const data = await apiPublic('GET', `/api/public/restaurants/${slug}`);
+    RESTAURANT = { ...RESTAURANT, ...data, settings: data.settings || RESTAURANT?.settings || {} };
+  } catch (_) {}
+  const settings = RESTAURANT?.settings || {};
+  const btnGarcom = document.getElementById('btn-chamar-garcom');
+  const btnConta = document.getElementById('btn-pedir-conta');
+  if (btnGarcom) btnGarcom.style.display = settings.allow_waiter_call === false ? 'none' : '';
+  if (btnConta) btnConta.style.display = settings.allow_table_close_request === false ? 'none' : '';
 }
 
 function renderHero() {
@@ -117,10 +183,10 @@ function renderHero() {
 function renderCats() {
   const el = document.getElementById('cats');
   const total = todosProdutos.filter(p => p.disponivel !== false).length;
-  el.innerHTML = `<button class="cat-pill active" onclick="filtrarCat(this,null)"><span>Tudo</span><small>${total}</small></button>`;
+  el.innerHTML = `<button class="cat-pill ${categoriaAtual ? '' : 'active'}" onclick="filtrarCat(this,null)"><span>Tudo</span><small>${total}</small></button>`;
   categorias.forEach(c => {
     const count = (c.produtos || []).filter(p => p.disponivel !== false).length;
-    el.innerHTML += `<button class="cat-pill" onclick="filtrarCat(this,'${escapeAttr(c.id)}')"><span>${escapeHtml(c.icone||'')} ${escapeHtml(c.nome)}</span><small>${count}</small></button>`;
+    el.innerHTML += `<button class="cat-pill ${categoriaAtual === c.id ? 'active' : ''}" onclick="filtrarCat(this,'${escapeAttr(c.id)}')"><span>${escapeHtml(c.icone||'')} ${escapeHtml(c.nome)}</span><small>${count}</small></button>`;
   });
 }
 
@@ -353,6 +419,11 @@ function removerItem(idx) {
 
 async function enviarPedido() {
   if (!carrinho.length) return;
+  await atualizarCardapio(true);
+  if (!carrinho.length) {
+    fecharModal('modal-carrinho');
+    return;
+  }
   const btn   = document.querySelector('.btn-enviar');
   const obsG  = document.getElementById('obs-geral').value.trim();
   const total = carrinho.reduce((a, i) => a + i.subtotal, 0);
@@ -506,6 +577,15 @@ function iniciarPollingConta() {
     pollingConta = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
   }
   pollingConta = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
+}
+
+function iniciarPollingCardapio() {
+  async function verificar() {
+    await atualizarAcoesMesa();
+    await atualizarCardapio(true);
+    pollingCardapio = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
+  }
+  pollingCardapio = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
 }
 
 function mostrarContaFechada() {

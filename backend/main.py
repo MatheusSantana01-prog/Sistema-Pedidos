@@ -857,6 +857,14 @@ def criar_chamado_mesa(slug: str, table_token: str, body: ChamadoMesaInput, requ
     if not mesa.data:
         raise HTTPException(404, "Mesa não encontrada")
 
+    settings = _first(_rows(sb.table("restaurant_settings").select(
+        "allow_waiter_call,allow_table_close_request"
+    ).eq("restaurant_id", rid).limit(1).execute())) or {}
+    if body.tipo == "garcom" and settings.get("allow_waiter_call") is False:
+        raise HTTPException(403, "Este restaurante desativou chamada de garçom pela mesa")
+    if body.tipo == "conta" and settings.get("allow_table_close_request") is False:
+        raise HTTPException(403, "Este restaurante desativou pedido de fechamento pela mesa")
+
     sessao = sb.table("sessao_mesa").select("id").eq("mesa_id", mesa.data["id"]).eq("restaurant_id", rid).eq("status", "aberta").limit(1).execute()
     dados = {
         "tipo": body.tipo,
@@ -1649,7 +1657,8 @@ def atualizar_restaurante(body: AtualizarRestauranteInput, request: Request,
     enforce_platform_control(rid, "admin")
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
     payload["updated_at"] = utcnow()
-    resp = sb.table("restaurants").update(payload).eq("id", rid).select("*").execute()
+    sb.table("restaurants").update(payload).eq("id", rid).execute()
+    resp = sb.table("restaurants").select("*").eq("id", rid).execute()
     log_acao(u, "atualizar_restaurante", "restaurants", rid, None, payload, request)
     return {"restaurant": _row(resp)}
 
@@ -1661,7 +1670,8 @@ def atualizar_settings(body: AtualizarSettingsInput, request: Request,
     enforce_platform_control(rid, "admin")
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
     payload["updated_at"] = utcnow()
-    resp = sb.table("restaurant_settings").update(payload).eq("restaurant_id", rid).select("*").execute()
+    sb.table("restaurant_settings").update(payload).eq("restaurant_id", rid).execute()
+    resp = sb.table("restaurant_settings").select("*").eq("restaurant_id", rid).execute()
     log_acao(u, "atualizar_settings", "restaurant_settings", rid, None, payload, request)
     return {"settings": _row(resp)}
 

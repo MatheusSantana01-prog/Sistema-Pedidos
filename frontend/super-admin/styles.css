@@ -13,6 +13,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .btn-primary:hover{filter:brightness(1.1);}
 .btn-sm{padding:5px 10px;font-size:12px;}
 .btn-danger{background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red);}
+.btn-disabled{opacity:.45;cursor:not-allowed;color:var(--muted);background:rgba(255,255,255,.03);}
 .login-erro{color:var(--red);font-size:12px;margin-bottom:10px;display:none;}
 .login-erro.show{display:block;}
 /* TOPBAR */
