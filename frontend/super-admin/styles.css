@@ -105,6 +105,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .tabela-empty{padding:32px;text-align:center;color:var(--muted);font-size:13px;}
 .mono{font-family:var(--mono);}
 .detail-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.plan-banner{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;border:1px solid var(--border2);background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border-radius:8px;padding:14px;margin-bottom:16px;}
+.plan-banner.recommended{border-color:rgba(34,197,94,.45);background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(255,255,255,.02));}
+.plan-banner span,.plan-hint{font-size:11px;color:var(--muted);}
+.plan-banner b{display:block;font-size:18px;margin:3px 0;color:var(--text);}
+.plan-banner small{display:block;color:var(--muted);font-size:12px;line-height:1.4;}
+.plan-banner-limits{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.plan-banner-limits span{border:1px solid var(--border2);border-radius:999px;padding:5px 8px;background:rgba(0,0,0,.14);color:var(--text);}
+.plan-hint{margin-top:6px;line-height:1.4;}
 .detail-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
 .detail-stat{border:1px solid var(--border);border-radius:8px;padding:12px;background:rgba(255,255,255,.025);}
 .detail-stat span{display:block;font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
@@ -120,6 +128,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;}
 .module-toggle{border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;color:var(--text);background:var(--bg);cursor:pointer;}
 .module-toggle input{accent-color:var(--primary);}
+.module-toggle.future{opacity:.75;background:rgba(124,58,237,.08);}
+.module-toggle small{float:right;font-size:10px;color:var(--primary);font-weight:700;}
 .health-list{display:grid;gap:8px;}
 .health-row{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg);}
 .health-row b{display:block;font-size:13px;}

@@ -98,6 +98,100 @@ PLAN_LIMITS = {
     "enterprise": {"users": 9999, "tables": 9999, "products": 9999},
 }
 
+PLAN_ALIASES = {
+    "basic": "starter",
+    "basico": "starter",
+    "básico": "starter",
+    "starter": "starter",
+    "pro": "pro",
+    "premium": "enterprise",
+    "enterprise": "enterprise",
+}
+
+PLAN_MODULES = {
+    "starter": {
+        "financeiro": True,
+        "estoque": False,
+        "cupons": False,
+        "tv": False,
+        "garcom": False,
+        "relatorios": False,
+        "api_integrations": False,
+        "ifood": False,
+        "whatsapp": False,
+        "multiunit": False,
+        "backups": False,
+        "advanced_reports": False,
+        "priority_support": False,
+        "custom_branding": False,
+    },
+    "pro": {
+        "financeiro": True,
+        "estoque": False,
+        "cupons": False,
+        "tv": True,
+        "garcom": True,
+        "relatorios": True,
+        "api_integrations": False,
+        "ifood": False,
+        "whatsapp": False,
+        "multiunit": False,
+        "backups": False,
+        "advanced_reports": False,
+        "priority_support": False,
+        "custom_branding": True,
+    },
+    "enterprise": {
+        "financeiro": True,
+        "estoque": True,
+        "cupons": True,
+        "tv": True,
+        "garcom": True,
+        "relatorios": True,
+        "api_integrations": False,
+        "ifood": False,
+        "whatsapp": False,
+        "multiunit": False,
+        "backups": True,
+        "advanced_reports": True,
+        "priority_support": True,
+        "custom_branding": True,
+    },
+}
+
+PLAN_MARKETING = {
+    "starter": {
+        "label": "Básico",
+        "headline": "Comece com QR Code, pedidos digitais e operação essencial.",
+        "positioning": "Para restaurante pequeno sair do papel, WhatsApp e comanda manual.",
+        "recommended": False,
+    },
+    "pro": {
+        "label": "Pro",
+        "headline": "Plano recomendado para operar salão, cozinha, caixa e gestão.",
+        "positioning": "Para reduzir erro no movimento e profissionalizar o atendimento.",
+        "recommended": True,
+    },
+    "enterprise": {
+        "label": "Premium",
+        "headline": "Escala, suporte e integrações premium em evolução.",
+        "positioning": "Para operações maiores, redes e integrações sob contrato.",
+        "recommended": False,
+    },
+}
+
+FUTURE_MODULES = {
+    "api_integrations": "API para integrações",
+    "ifood": "Integração iFood",
+    "whatsapp": "Integração WhatsApp",
+    "multiunit": "Multiunidade",
+}
+
+ROLE_MODULE_REQUIREMENTS = {
+    "waiter": "garcom",
+    "tv": "tv",
+}
+
 TEMPLATE_CATEGORIES = {
     "restaurante": [
         {"nome": "Entradas", "icone": "🥗", "ordem": 1},
@@ -320,6 +414,10 @@ def _money(value) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+def normalize_plan(plan: str | None) -> str:
+    key = (plan or "starter").strip().lower()
+    return PLAN_ALIASES.get(key, key)
+
 def _platform_control_defaults() -> dict:
     return {
         "billing_status": "em_dia",
@@ -334,14 +432,9 @@ def _platform_control_defaults() -> dict:
         "block_mode": "none",
         "broadcast_message": "",
         "limits": PLAN_LIMITS["starter"].copy(),
-        "modules": {
-            "financeiro": True,
-            "estoque": False,
-            "cupons": False,
-            "tv": True,
-            "garcom": True,
-            "relatorios": True,
-        },
+        "modules": PLAN_MODULES["starter"].copy(),
+        "future_modules": FUTURE_MODULES.copy(),
+        "plan_marketing": PLAN_MARKETING["starter"].copy(),
     }
 
 def get_platform_control(restaurant_id: str) -> dict:
@@ -354,9 +447,11 @@ def get_platform_control(restaurant_id: str) -> dict:
         except json.JSONDecodeError:
             saved = None
     if isinstance(saved, dict):
-        data.update({k: v for k, v in saved.items() if k not in {"limits", "modules"}})
+        data.update({k: v for k, v in saved.items() if k not in {"limits", "modules", "future_modules", "plan_marketing"}})
         data["limits"].update(saved.get("limits") or {})
         data["modules"].update(saved.get("modules") or {})
+        data["future_modules"].update(saved.get("future_modules") or {})
+        data["plan_marketing"].update(saved.get("plan_marketing") or {})
     return data
 
 def save_platform_control(restaurant_id: str, control: dict):
@@ -373,10 +468,23 @@ def save_platform_control(restaurant_id: str, control: dict):
     else:
         sb.table("configuracoes").insert(payload).execute()
 
-def aplicar_limites_plano(control: dict, plan: str) -> dict:
-    limits = PLAN_LIMITS.get(plan or "starter", PLAN_LIMITS["starter"]).copy()
-    control["limits"] = {**limits, **(control.get("limits") or {})}
+def aplicar_limites_plano(control: dict, plan: str, force: bool = False) -> dict:
+    plan = normalize_plan(plan)
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"]).copy()
+    modules = PLAN_MODULES.get(plan, PLAN_MODULES["starter"]).copy()
+    control["limits"] = limits if force else {**limits, **(control.get("limits") or {})}
+    control["modules"] = modules if force else {**modules, **(control.get("modules") or {})}
+    control["future_modules"] = FUTURE_MODULES.copy()
+    control["plan_marketing"] = PLAN_MARKETING.get(plan, PLAN_MARKETING["starter"]).copy()
     return control
+
+def validar_role_no_plano(restaurant_id: str, role: str):
+    required_module = ROLE_MODULE_REQUIREMENTS.get(role)
+    if not required_module:
+        return
+    control = get_platform_control(restaurant_id)
+    if (control.get("modules") or {}).get(required_module) is False:
+        raise HTTPException(403, f"O perfil {role} exige o módulo {required_module}, disponível em plano superior")
 
 def platform_links(slug: str) -> dict:
     base_url = "" if FRONTEND_URL == "*" else FRONTEND_URL.rstrip("/")
@@ -604,6 +712,7 @@ class CriarRestauranteInput(BaseModel):
     @field_validator("plan")
     @classmethod
     def val_plan(cls, v):
+        v = normalize_plan(v)
         if v not in PLAN_LIMITS:
             raise ValueError(f"Plano inválido: {list(PLAN_LIMITS.keys())}")
         return v
@@ -1580,6 +1689,7 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
                   u: dict = Depends(authorize(["owner"]))):
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "users")
+    validar_role_no_plano(rid, body.role)
 
     # Verificar email duplicado
     existe = sb.table("usuarios").select("id").eq("email", body.email).execute()
@@ -1669,6 +1779,9 @@ def atualizar_settings(body: AtualizarSettingsInput, request: Request,
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "admin")
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
+    control = get_platform_control(rid)
+    if (payload.get("allow_waiter_call") is True or payload.get("allow_table_close_request") is True) and (control.get("modules") or {}).get("garcom") is False:
+        raise HTTPException(403, "Chamadas pela mesa estão disponíveis no plano Pro ou Premium")
     payload["updated_at"] = utcnow()
     sb.table("restaurant_settings").update(payload).eq("restaurant_id", rid).execute()
     resp = sb.table("restaurant_settings").select("*").eq("restaurant_id", rid).execute()
@@ -1807,6 +1920,7 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
     if existe.data:
         raise HTTPException(400, f"Slug '{body.slug}' já está em uso")
 
+    body.plan = normalize_plan(body.plan)
     plan_limits = PLAN_LIMITS.get(body.plan, PLAN_LIMITS["starter"])
     if body.initial_table_count > plan_limits["tables"]:
         raise HTTPException(400, f"Quantidade inicial de mesas acima do limite do plano ({plan_limits['tables']})")
@@ -1818,14 +1932,15 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
         control["segment"] = body.template
         save_platform_control(rest["id"], control)
 
+        plano_modules = PLAN_MODULES.get(body.plan, PLAN_MODULES["starter"])
         # Criar settings padrão
         sb.table("restaurant_settings").insert({
             "restaurant_id": rest["id"],
             "service_fee_enabled": False,
             "service_fee_percent": 10,
             "allow_customer_notes": True,
-            "allow_waiter_call": True,
-            "allow_table_close_request": True,
+            "allow_waiter_call": bool(plano_modules.get("garcom")),
+            "allow_table_close_request": bool(plano_modules.get("garcom")),
             "accept_pix": True,
             "accept_card": True,
             "accept_cash": True,
@@ -2069,8 +2184,9 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
         raise HTTPException(404, "Restaurante não encontrado")
 
     restaurant_patch = {}
-    if body.get("plan") in {"starter", "pro", "enterprise"}:
-        restaurant_patch["plan"] = body["plan"]
+    requested_plan = normalize_plan(body.get("plan")) if body.get("plan") else None
+    if requested_plan in {"starter", "pro", "enterprise"}:
+        restaurant_patch["plan"] = requested_plan
     if isinstance(body.get("is_active"), bool):
         restaurant_patch["is_active"] = body["is_active"]
     if restaurant_patch:
@@ -2078,6 +2194,8 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
         sb.table("restaurants").update(restaurant_patch).eq("id", restaurant_id).execute()
 
     control = get_platform_control(restaurant_id)
+    if requested_plan:
+        control = aplicar_limites_plano(control, requested_plan, force=True)
     for key in ("billing_status", "trial_until", "due_date", "segment", "city", "internal_notes", "support_status", "support_priority", "support_notes", "block_mode", "broadcast_message"):
         if key in body:
             control[key] = body.get(key)
@@ -2086,6 +2204,12 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
     if isinstance(body.get("modules"), dict):
         control["modules"].update(body["modules"])
     save_platform_control(restaurant_id, control)
+    if requested_plan and (control.get("modules") or {}).get("garcom") is False:
+        sb.table("restaurant_settings").update({
+            "allow_waiter_call": False,
+            "allow_table_close_request": False,
+            "updated_at": utcnow(),
+        }).eq("restaurant_id", restaurant_id).execute()
 
     log_acao(u, "super_atualizar_controle", "configuracoes", restaurant_id, None, body, request)
     return {"mensagem": "Controle atualizado", "control": control, "restaurant_patch": restaurant_patch}
@@ -2381,6 +2505,7 @@ def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
     rest = sb.table("restaurants").select("id").eq("id", restaurant_id).execute()
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
+    validar_role_no_plano(restaurant_id, body.role)
 
     existe = sb.table("usuarios").select("id").eq("email", body.email).execute()
     if existe.data:

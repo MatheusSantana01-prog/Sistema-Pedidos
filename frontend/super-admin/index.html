@@ -121,11 +121,12 @@
         </select>
       </div>
       <div class="form-row"><label class="form-label">Plano</label>
-        <select class="form-input" id="r-plano">
-          <option value="starter">Starter</option>
-          <option value="pro">Pro</option>
-          <option value="enterprise">Enterprise</option>
+        <select class="form-input" id="r-plano" onchange="aplicarPlanoComercial()">
+          <option value="starter">Básico</option>
+          <option value="pro">Pro - recomendado</option>
+          <option value="enterprise">Premium</option>
         </select>
+        <div class="plan-hint" id="r-plano-hint">QR Code, pedidos digitais e operação essencial.</div>
       </div>
       <div class="form-row"><label class="form-label">Mesas iniciais</label><input class="form-input" id="r-mesas" type="number" min="0" max="100" value="10"></div>
       <label class="check-row"><input type="checkbox" id="r-categorias" checked> Criar categorias iniciais</label>

@@ -2,6 +2,46 @@ let RESTAURANTES = [];
 let mostrarInativos = false;
 let DETALHE_ATUAL = null;
 
+const PLANOS = {
+  starter: {
+    label: 'Básico',
+    headline: 'QR Code, pedidos digitais e operação essencial.',
+    limits: { users: 5, tables: 20, products: 100 },
+    modules: { financeiro: true, estoque: false, cupons: false, tv: false, garcom: false, relatorios: false, custom_branding: false, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+  },
+  pro: {
+    label: 'Pro',
+    headline: 'Plano recomendado para salão, cozinha, caixa e atendimento.',
+    limits: { users: 15, tables: 60, products: 400 },
+    modules: { financeiro: true, estoque: false, cupons: false, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+  },
+  enterprise: {
+    label: 'Premium',
+    headline: 'Escala, suporte e integrações premium em evolução.',
+    limits: { users: 9999, tables: 9999, products: 9999 },
+    modules: { financeiro: true, estoque: true, cupons: true, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: true, advanced_reports: true, priority_support: true, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+  },
+};
+
+const MODULE_LABELS = {
+  financeiro: 'Financeiro e caixa',
+  estoque: 'Estoque',
+  cupons: 'Cupons',
+  tv: 'TV de pedidos',
+  garcom: 'Garçom e chamadas',
+  relatorios: 'Relatórios',
+  custom_branding: 'Personalização avançada',
+  backups: 'Backups automáticos',
+  advanced_reports: 'Relatórios avançados',
+  priority_support: 'Suporte prioritário',
+  api_integrations: 'API para integrações',
+  ifood: 'iFood',
+  whatsapp: 'WhatsApp',
+  multiunit: 'Multiunidade',
+};
+
+const FUTURE_MODULES = new Set(['api_integrations', 'ifood', 'whatsapp', 'multiunit']);
+
 /* ── LOGIN ──────────────────────────────────────────── */
 async function fazerLogin() {
   const email = document.getElementById('l-email').value.trim();
@@ -77,7 +117,7 @@ async function carregarRestaurantes() {
             <div class="rest-slug">/r/${r.slug}</div>
             <div class="rest-badges">
               <span class="badge ${r.is_active ? 'badge-active' : 'badge-inactive'}">${r.is_active ? '● Ativo' : '● Inativo'}</span>
-              <span class="badge badge-plan">${r.plan}</span>
+              <span class="badge badge-plan">${planLabel(r.plan)}</span>
               <span class="badge" style="background:rgba(255,255,255,.05);color:var(--muted)">${new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
             </div>
           </div>
@@ -228,12 +268,26 @@ function renderDetalhesRestaurante() {
   const r = d.restaurant;
   const c = d.control || {};
   const u = d.usage || {};
+  const planMeta = PLANOS[r.plan] || PLANOS.starter;
   const rolesAtivos = new Set((d.users || [])
     .filter(m => m.is_active !== false && m.usuarios && m.usuarios.ativo !== false)
     .map(m => m.role));
   document.getElementById('detalhes-title').textContent = r.name;
-  document.getElementById('detalhes-subtitle').textContent = `/r/${r.slug} • ${r.plan} • ${r.is_active ? 'ativo' : 'inativo'}`;
+  document.getElementById('detalhes-subtitle').textContent = `/r/${r.slug} • ${planLabel(r.plan)} • ${r.is_active ? 'ativo' : 'inativo'}`;
   document.getElementById('detalhes-body').innerHTML = `
+    <div class="plan-banner ${r.plan === 'pro' ? 'recommended' : ''}">
+      <div>
+        <span>${r.plan === 'pro' ? 'Mais indicado' : 'Plano atual'}</span>
+        <b>${planLabel(r.plan)}</b>
+        <small>${escapeHtml(c.plan_marketing?.headline || planMeta.headline)}</small>
+      </div>
+      <div class="plan-banner-limits">
+        <span>${u.active_users}/${c.limits?.users || '-'} usuários</span>
+        <span>${u.tables}/${c.limits?.tables || '-'} mesas</span>
+        <span>${u.products}/${c.limits?.products || '-'} produtos</span>
+      </div>
+    </div>
+
     <div class="detail-actions">
       ${profileLink('Admin', d.links.admin, rolesAtivos.has('owner') || rolesAtivos.has('manager'))}
       ${profileLink('Caixa', d.links.caixa, rolesAtivos.has('cashier'))}
@@ -258,7 +312,7 @@ function renderDetalhesRestaurante() {
       <div class="detail-panel">
         <div class="detail-panel-title">Controle comercial</div>
         <div class="form-grid">
-          ${selectField('ctrl-plan', 'Plano', r.plan, [['starter','Starter'],['pro','Pro'],['enterprise','Enterprise']])}
+          ${selectField('ctrl-plan', 'Plano', r.plan, [['starter','Básico'],['pro','Pro - recomendado'],['enterprise','Premium']])}
           ${selectField('ctrl-billing', 'Status financeiro', c.billing_status, [['em_dia','Em dia'],['teste_gratis','Teste grátis'],['vencido','Vencido'],['bloqueado','Bloqueado']])}
           ${inputField('ctrl-due', 'Vencimento', c.due_date || '', 'date')}
           ${inputField('ctrl-trial', 'Teste até', c.trial_until || '', 'date')}
@@ -270,19 +324,12 @@ function renderDetalhesRestaurante() {
       <div class="detail-panel">
         <div class="detail-panel-title">Limites e módulos</div>
         <div class="form-grid compact">
-          ${inputField('limit-users', 'Usuários', c.limits?.users ?? 5, 'number')}
-          ${inputField('limit-tables', 'Mesas', c.limits?.tables ?? 20, 'number')}
-          ${inputField('limit-products', 'Produtos', c.limits?.products ?? 100, 'number')}
+          ${inputField('limit-users', 'Usuários', c.limits?.users ?? planMeta.limits.users, 'number')}
+          ${inputField('limit-tables', 'Mesas', c.limits?.tables ?? planMeta.limits.tables, 'number')}
+          ${inputField('limit-products', 'Produtos', c.limits?.products ?? planMeta.limits.products, 'number')}
           ${selectField('ctrl-block', 'Bloqueio', c.block_mode, [['none','Sem bloqueio'],['orders','Bloquear pedidos'],['admin','Bloquear admin'],['users','Bloquear usuários'],['full','Bloqueio total']])}
         </div>
-        <div class="module-grid">
-          ${moduleToggle('mod-financeiro', 'Financeiro', c.modules?.financeiro)}
-          ${moduleToggle('mod-estoque', 'Estoque', c.modules?.estoque)}
-          ${moduleToggle('mod-cupons', 'Cupons', c.modules?.cupons)}
-          ${moduleToggle('mod-tv', 'TV', c.modules?.tv)}
-          ${moduleToggle('mod-garcom', 'Garçom', c.modules?.garcom)}
-          ${moduleToggle('mod-relatorios', 'Relatórios', c.modules?.relatorios)}
-        </div>
+        ${renderModules(c.modules || planMeta.modules)}
       </div>
 
       <div class="detail-panel">
@@ -330,6 +377,7 @@ function renderDetalhesRestaurante() {
       <button class="btn" onclick="fecharModal('modal-detalhes')">Fechar</button>
       <button class="btn btn-primary" onclick="salvarControleRestaurante('${r.id}')">Salvar controle</button>
     </div>`;
+  document.getElementById('ctrl-plan')?.addEventListener('change', aplicarPlanoControle);
 }
 
 function profileLink(label, url, enabled) {
@@ -355,6 +403,21 @@ function selectField(id, label, value, options) {
 
 function moduleToggle(id, label, checked) {
   return `<label class="module-toggle"><input type="checkbox" id="${id}" ${checked ? 'checked' : ''}> ${label}</label>`;
+}
+
+function renderModules(modules) {
+  const keys = ['financeiro', 'tv', 'garcom', 'relatorios', 'custom_branding', 'estoque', 'cupons', 'backups', 'advanced_reports', 'priority_support', 'api_integrations', 'ifood', 'whatsapp', 'multiunit'];
+  return `<div class="module-grid">
+    ${keys.map(key => {
+      const checkedValue = modules?.[key] === true;
+      const future = FUTURE_MODULES.has(key);
+      return `<label class="module-toggle ${future ? 'future' : ''}">
+        <input type="checkbox" id="mod-${key}" ${checkedValue ? 'checked' : ''} ${future ? 'disabled' : ''}>
+        <span>${escapeHtml(MODULE_LABELS[key] || key)}</span>
+        ${future ? '<small>Em breve</small>' : ''}
+      </label>`;
+    }).join('')}
+  </div>`;
 }
 
 async function salvarControleRestaurante(restId) {
@@ -383,6 +446,14 @@ async function salvarControleRestaurante(restId) {
       tv: checked('mod-tv'),
       garcom: checked('mod-garcom'),
       relatorios: checked('mod-relatorios'),
+      custom_branding: checked('mod-custom_branding'),
+      backups: checked('mod-backups'),
+      advanced_reports: checked('mod-advanced_reports'),
+      priority_support: checked('mod-priority_support'),
+      api_integrations: false,
+      ifood: false,
+      whatsapp: false,
+      multiunit: false,
     },
   };
   try {
@@ -438,6 +509,8 @@ function abrirModalNovoRest() {
   });
   document.getElementById('r-template').value = 'restaurante';
   document.getElementById('r-mesas').value = 10;
+  document.getElementById('r-plano').value = 'starter';
+  aplicarPlanoComercial();
   document.getElementById('r-categorias').checked = true;
   document.getElementById('modal-rest').classList.add('show');
 }
@@ -456,6 +529,39 @@ function aplicarTemplateRestaurante() {
   document.getElementById('r-mesas').value = p.mesas;
   document.getElementById('r-plano').value = p.plano;
   document.getElementById('r-cor').value = p.cor;
+  aplicarPlanoComercial();
+}
+
+function aplicarPlanoComercial() {
+  const plano = document.getElementById('r-plano')?.value || 'starter';
+  const meta = PLANOS[plano] || PLANOS.starter;
+  const hint = document.getElementById('r-plano-hint');
+  const mesas = document.getElementById('r-mesas');
+  if (hint) {
+    const limite = meta.limits.tables >= 9999 ? 'mesas sob contrato' : `até ${meta.limits.tables} mesas`;
+    hint.textContent = `${meta.headline} ${limite}, ${meta.limits.users >= 9999 ? 'usuários sob contrato' : `até ${meta.limits.users} usuários`}.`;
+  }
+  if (mesas && Number(mesas.value || 0) > meta.limits.tables && meta.limits.tables < 9999) {
+    mesas.value = meta.limits.tables;
+  }
+}
+
+function aplicarPlanoControle() {
+  const plano = document.getElementById('ctrl-plan')?.value || 'starter';
+  const meta = PLANOS[plano] || PLANOS.starter;
+  const limits = meta.limits || {};
+  const modules = meta.modules || {};
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  };
+  setValue('limit-users', limits.users);
+  setValue('limit-tables', limits.tables);
+  setValue('limit-products', limits.products);
+  Object.keys(MODULE_LABELS).forEach(key => {
+    const el = document.getElementById('mod-' + key);
+    if (el && !FUTURE_MODULES.has(key)) el.checked = modules[key] === true;
+  });
 }
 
 function gerarSlug() {
@@ -674,6 +780,10 @@ function resumoLog(value) {
   if (typeof value === 'string') return value;
   const text = JSON.stringify(value);
   return text.length > 120 ? text.slice(0, 120) + '...' : text;
+}
+
+function planLabel(plan) {
+  return PLANOS[plan]?.label || plan || 'Básico';
 }
 
 function showToast(msg, tipo='') {
