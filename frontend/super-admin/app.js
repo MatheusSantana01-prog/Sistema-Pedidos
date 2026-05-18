@@ -88,7 +88,7 @@ function irPara(pagina, tabEl) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + pagina).classList.add('active');
   tabEl.classList.add('active');
-  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, metricas: carregarMetricas, auditoria: carregarAuditoria, validacao: () => {} };
+  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, metricas: carregarMetricas, operacao: carregarOperacao, auditoria: carregarAuditoria, validacao: () => {} };
   if (loaders[pagina]) loaders[pagina]();
 }
 
@@ -488,14 +488,7 @@ async function exportarRestauranteAtual() {
   if (!DETALHE_ATUAL) return;
   try {
     const exportData = await apiCall('GET', `/api/super-admin/restaurants/${DETALHE_ATUAL.restaurant.id}/export`);
-    const data = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${String(DETALHE_ATUAL.restaurant.slug || 'restaurante').replace(/[^a-z0-9-]/gi, '-')}-export-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    baixarJson(exportData, `${String(DETALHE_ATUAL.restaurant.slug || 'restaurante').replace(/[^a-z0-9-]/gi, '-')}-export-${new Date().toISOString().slice(0,10)}.json`);
     showToast('Exportação gerada', 'success');
   } catch(e) {
     showToast(e.message, 'error');
@@ -688,6 +681,81 @@ async function carregarMetricas() {
   }
 }
 
+async function carregarOperacao() {
+  const el = document.getElementById('operacao-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await apiCall('GET', '/api/super-admin/operations');
+    const s = data.summary || {};
+    el.innerHTML = `
+      <div class="ops-head">
+        <div>
+          <div class="ops-version">Backend ${escapeHtml(data.version || '-')} · ${fmtDate(data.generated_at)}</div>
+          <h3>Saúde operacional da plataforma</h3>
+        </div>
+        <button class="btn btn-sm" onclick="executarValidacao();irPara('validacao', document.querySelector('[onclick*=validacao]'))">Rodar validação</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Clientes ativos</div><div class="stat-val green">${escapeHtml(s.restaurants_active ?? 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Pedidos 24h</div><div class="stat-val purple">${escapeHtml(s.orders_24h ?? 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Pedidos abertos</div><div class="stat-val amber">${escapeHtml(s.orders_open ?? 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Receita 24h</div><div class="stat-val">R$ ${fmtMoney(s.revenue_24h)}</div></div>
+      </div>
+      <div class="ops-grid">
+        <div class="detail-panel">
+          <div class="detail-panel-title">Alertas</div>
+          <div class="ops-alerts">
+            ${(data.alerts || []).map(a => `
+              <div class="ops-alert ${escapeAttr((a.level || '').toLowerCase())}">
+                <b>${escapeHtml(a.title)}</b>
+                <span>${escapeHtml(a.detail)}</span>
+              </div>`).join('') || '<div class="muted-line">Sem alertas</div>'}
+          </div>
+        </div>
+        <div class="detail-panel">
+          <div class="detail-panel-title">Pedidos abertos</div>
+          <div class="mini-table">
+            ${(data.open_orders || []).map(p => `<div>
+              <span>#${escapeHtml(p.numero)} · ${escapeHtml(p.status)} · R$ ${fmtMoney(p.total)}</span>
+              <small>${escapeHtml(p.restaurants?.name || '-')} · Mesa ${escapeHtml(p.mesas?.numero || '-')} · ${fmtDate(p.created_at)}</small>
+            </div>`).join('') || '<div class="muted-line">Nenhum pedido aberto</div>'}
+          </div>
+        </div>
+        <div class="detail-panel">
+          <div class="detail-panel-title">Mesas antigas</div>
+          <div class="mini-table">
+            ${(data.old_tables || []).map(m => `<div>
+              <span>${escapeHtml(m.restaurants?.name || '-')} · Mesa ${escapeHtml(m.mesas?.numero || '-')}</span>
+              <small>Aberta em ${fmtDate(m.aberta_em)} · R$ ${fmtMoney(m.total_consumido)}</small>
+            </div>`).join('') || '<div class="muted-line">Nenhuma mesa antiga</div>'}
+          </div>
+        </div>
+        <div class="detail-panel">
+          <div class="detail-panel-title">Erros recentes</div>
+          <div class="mini-table">
+            ${(data.recent_errors || []).map(e => `<div>
+              <span>${escapeHtml(e.acao)} · ${escapeHtml(e.tabela || '-')}</span>
+              <small>${escapeHtml(e.restaurants?.name || 'Plataforma')} · ${fmtDate(e.created_at)} · ${escapeHtml(resumoLog(e.valor_novo))}</small>
+            </div>`).join('') || '<div class="muted-line">Nenhum erro registrado</div>'}
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="tabela-empty">Erro ao carregar operação: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function exportarBackupPlataforma() {
+  try {
+    showToast('Gerando backup...', 'success');
+    const backup = await apiCall('GET', '/api/super-admin/backup');
+    baixarJson(backup, `plataforma-backup-${new Date().toISOString().slice(0,10)}.json`);
+    showToast('Backup exportado', 'success');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
 async function carregarAuditoria() {
   const el = document.getElementById('auditoria-content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -773,6 +841,17 @@ function fmtMoney(value) {
 function fmtDate(value) {
   if (!value) return '-';
   return new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function baixarJson(data, filename) {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function resumoLog(value) {

@@ -2312,6 +2312,119 @@ def exportar_restaurante(restaurant_id: str, u: dict = Depends(require_super_adm
     }
 
 
+@app.get("/api/super-admin/operations", tags=["super-admin"])
+def operacao_plataforma(u: dict = Depends(require_super_admin)):
+    now = datetime.utcnow()
+    since_24h = (now - timedelta(hours=24)).isoformat()
+    since_7d = (now - timedelta(days=7)).isoformat()
+    stale_cutoff = (now - timedelta(minutes=45)).isoformat()
+    occupied_cutoff = (now - timedelta(hours=2)).isoformat()
+
+    rests = _rows(sb.table("restaurants").select("id,name,slug,plan,is_active,created_at").execute())
+    memberships = _rows(sb.table("restaurant_memberships").select(
+        "usuario_id,is_active,usuarios(id,ativo),restaurants(id,is_active)"
+    ).execute())
+    pedidos_24h = _rows(sb.table("pedidos").select("id,total,status,created_at,restaurants(name,slug)").gte("created_at", since_24h).execute())
+    pedidos_7d = _rows(sb.table("pedidos").select("id,total,status,created_at").gte("created_at", since_7d).execute())
+    pedidos_abertos = _rows(sb.table("pedidos").select(
+        "id,numero,status,created_at,total,restaurants(name,slug),mesas(numero)"
+    ).in_("status", list(OPEN_ORDER_STATUSES)).order("created_at").limit(80).execute())
+    mesas_ocupadas = _rows(sb.table("sessao_mesa").select(
+        "id,aberta_em,total_consumido,restaurants(name,slug),mesas(numero)"
+    ).eq("status", "aberta").order("aberta_em").limit(80).execute())
+    erros = _rows(sb.table("audit_log").select(
+        "id,created_at,acao,tabela,usuario_nome,perfil,valor_novo,restaurants(name,slug)"
+    ).in_("acao", ["erro_backend", "frontend_error"]).order("created_at", desc=True).limit(20).execute())
+    logs = _rows(sb.table("audit_log").select(
+        "id,created_at,acao,tabela,usuario_nome,perfil,restaurants(name,slug)"
+    ).order("created_at", desc=True).limit(20).execute())
+
+    active_users = len({
+        m.get("usuario_id")
+        for m in memberships
+        if m.get("usuario_id")
+        and m.get("is_active") is not False
+        and (m.get("usuarios") or {}).get("ativo") is not False
+        and (m.get("restaurants") or {}).get("is_active") is not False
+    })
+    revenue_24h = round(sum(_money(p.get("total")) for p in pedidos_24h if p.get("status") != "cancelado"), 2)
+    revenue_7d = round(sum(_money(p.get("total")) for p in pedidos_7d if p.get("status") != "cancelado"), 2)
+    stale_orders = [p for p in pedidos_abertos if str(p.get("created_at") or "") < stale_cutoff]
+    old_tables = [m for m in mesas_ocupadas if str(m.get("aberta_em") or "") < occupied_cutoff]
+
+    alerts = []
+    def add_alert(level: str, title: str, detail: str, href: str | None = None):
+        alerts.append({"level": level, "title": title, "detail": detail, "href": href})
+
+    if stale_orders:
+        add_alert("WARN", "Pedidos abertos há mais de 45min", f"{len(stale_orders)} pedido(s) precisam de atenção")
+    if old_tables:
+        add_alert("INFO", "Mesas ocupadas há mais de 2h", f"{len(old_tables)} mesa(s) abertas por muito tempo")
+    if erros:
+        add_alert("WARN", "Erros recentes registrados", f"{len(erros)} erro(s) nos últimos logs")
+    inactive_count = len([r for r in rests if r.get("is_active") is False])
+    if inactive_count:
+        add_alert("INFO", "Restaurantes inativos", f"{inactive_count} cliente(s) aparecem como inativos")
+    if not alerts:
+        add_alert("OK", "Operação sem alertas críticos", "Nenhum alerta automático no momento")
+
+    return {
+        "version": APP_VERSION,
+        "generated_at": utcnow(),
+        "summary": {
+            "restaurants_total": len(rests),
+            "restaurants_active": len([r for r in rests if r.get("is_active") is not False]),
+            "users_active": active_users,
+            "orders_24h": len(pedidos_24h),
+            "orders_open": len(pedidos_abertos),
+            "occupied_tables": len(mesas_ocupadas),
+            "revenue_24h": revenue_24h,
+            "revenue_7d": revenue_7d,
+            "errors_recent": len(erros),
+        },
+        "alerts": alerts,
+        "open_orders": pedidos_abertos[:20],
+        "old_tables": old_tables[:20],
+        "recent_errors": erros,
+        "recent_logs": logs,
+    }
+
+
+@app.get("/api/super-admin/backup", tags=["super-admin"])
+def backup_plataforma(u: dict = Depends(require_super_admin)):
+    def rows(table: str, select: str = "*"):
+        return _rows(sb.table(table).select(select).execute())
+
+    restaurants = rows("restaurants")
+    restaurant_ids = [r.get("id") for r in restaurants if r.get("id")]
+    pedidos = rows("pedidos")
+    pedido_ids = [p.get("id") for p in pedidos if p.get("id")]
+    itens = _rows(sb.table("pedido_itens").select("*").in_("pedido_id", pedido_ids).execute()) if pedido_ids else []
+
+    return {
+        "backup_type": "platform_snapshot",
+        "generated_at": utcnow(),
+        "version": APP_VERSION,
+        "counts": {
+            "restaurants": len(restaurants),
+            "orders": len(pedidos),
+            "order_items": len(itens),
+        },
+        "restaurants": restaurants,
+        "restaurant_settings": rows("restaurant_settings"),
+        "platform_control": rows("configuracoes"),
+        "memberships": rows("restaurant_memberships"),
+        "users": rows("usuarios", "id,nome,email,ativo,perfil,ultimo_acesso"),
+        "tables": rows("mesas"),
+        "categories": rows("categorias"),
+        "products": rows("produtos"),
+        "sessions": rows("sessao_mesa"),
+        "orders": pedidos,
+        "order_items": itens,
+        "cash_closures": rows("fechamento_caixa"),
+    }
+
+
 @app.post("/api/super-admin/restaurants/{restaurant_id}/repair-seed", tags=["super-admin"])
 def reparar_seed_restaurante(restaurant_id: str, body: dict, request: Request,
                              u: dict = Depends(require_super_admin)):

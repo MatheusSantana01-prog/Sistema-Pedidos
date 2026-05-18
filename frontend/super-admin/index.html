@@ -41,6 +41,7 @@
     <div class="nav-tab active" onclick="irPara('restaurantes',this)">🏪 Restaurantes</div>
     <div class="nav-tab" onclick="irPara('usuarios',this)">👥 Usuários</div>
     <div class="nav-tab" onclick="irPara('metricas',this)">📊 Métricas</div>
+    <div class="nav-tab" onclick="irPara('operacao',this)">🛡️ Operação</div>
     <div class="nav-tab" onclick="irPara('auditoria',this)">🧾 Auditoria</div>
     <div class="nav-tab" onclick="irPara('validacao',this)">✅ Validação</div>
   </div>
@@ -76,6 +77,18 @@
     <div class="page" id="page-metricas">
       <div class="section-head"><div class="section-title">Métricas da plataforma</div></div>
       <div id="metricas-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- OPERAÇÃO -->
+    <div class="page" id="page-operacao">
+      <div class="section-head">
+        <div class="section-title">Central de operação</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="carregarOperacao()">↻ Atualizar</button>
+          <button class="btn btn-sm btn-primary" onclick="exportarBackupPlataforma()">Exportar backup</button>
+        </div>
+      </div>
+      <div id="operacao-content"><div class="tabela-empty">Carregando operação...</div></div>
     </div>
 
     <!-- AUDITORIA -->
