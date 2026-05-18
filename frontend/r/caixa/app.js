@@ -59,10 +59,10 @@ async function carregarMesas() {
       const sess  = m.sessao_ativa;
       const total = Number(sess?.total_consumido || 0);
       const isSel = mesaSelecionada?.id === m.id;
-      return `<button class="mesa-btn ${m.status} ${isSel?'selecionada':''}"
-        onclick="selecionarMesa(this,'${m.id}','${sess?.id||''}',${m.numero},${total},'${m.status}')">
-        <div class="mesa-num">${m.numero}</div>
-        <div class="mesa-status ${m.status}">${m.status === 'ocupada' ? '● Ocupada' : '● Livre'}</div>
+      return `<button class="mesa-btn ${escapeAttr(m.status)} ${isSel?'selecionada':''}"
+        onclick="selecionarMesa(this,'${escapeAttr(m.id)}','${escapeAttr(sess?.id||'')}',${Number(m.numero || 0)},${total},'${escapeAttr(m.status)}')">
+        <div class="mesa-num">${escapeHtml(m.numero)}</div>
+        <div class="mesa-status ${escapeAttr(m.status)}">${m.status === 'ocupada' ? '● Ocupada' : '● Livre'}</div>
         ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div>` : ''}
       </button>`;
     }).join('');
@@ -118,12 +118,12 @@ async function carregarConta(numero, sessaoId) {
     document.getElementById('conta-body').innerHTML = pedidos.map(p => `
       <div class="pedido-bloco">
         <div class="pedido-head">
-          <span class="pedido-num">#${p.numero}</span>
-          <span class="pedido-status ${p.status}">${{pendente:'Aguardando',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue'}[p.status]||p.status}</span>
+          <span class="pedido-num">#${escapeHtml(p.numero)}</span>
+          <span class="pedido-status ${escapeAttr(p.status)}">${escapeHtml({pendente:'Aguardando',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue'}[p.status]||p.status)}</span>
         </div>
         ${(p.itens||[]).map(it => `
           <div class="pedido-item">
-            <span>${it.quantidade}× ${it.nome_produto}</span>
+            <span>${escapeHtml(it.quantidade)}× ${escapeHtml(it.nome_produto)}</span>
             <span class="pedido-item-preco">R$ ${fmt(it.subtotal)}</span>
           </div>`).join('')}
       </div>`).join('');
@@ -227,6 +227,16 @@ async function fecharConta() {
 }
 
 function fmt(n) { return Number(n).toFixed(2).replace('.', ','); }
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
 
 function showToast(msg, tipo='') {
   const t = document.getElementById('toast');

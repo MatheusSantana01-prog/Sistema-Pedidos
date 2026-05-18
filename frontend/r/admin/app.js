@@ -289,12 +289,12 @@ async function abrirConta(mesaId, sessaoId, numero, total) {
       ${pedidos.map(p => `
         <div style="background:var(--color-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden;">
           <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);">
-            <span style="font-family:var(--mono);font-size:12px;font-weight:600">#${p.numero}</span>
-            <span class="status-pill ${p.status}">${statusLabel(p.status)}</span>
+            <span style="font-family:var(--mono);font-size:12px;font-weight:600">#${escapeHtml(p.numero)}</span>
+            <span class="status-pill ${escapeAttr(p.status)}">${escapeHtml(statusLabel(p.status))}</span>
           </div>
           ${(p.itens||[]).map(it => `
             <div style="display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border);font-size:13px;">
-              <span>${it.quantidade}× ${it.nome_produto}</span>
+              <span>${escapeHtml(it.quantidade)}× ${escapeHtml(it.nome_produto)}</span>
               <span style="font-family:var(--mono);color:var(--muted)">R$ ${fmt(it.subtotal)}</span>
             </div>`).join('')}
         </div>`).join('')}
@@ -426,15 +426,15 @@ async function carregarPedidos() {
           const lbls  = {confirmado:'Confirmar',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue'};
           const acoes = next[p.status]
             ? `<div style="display:flex;gap:6px;">
-                <button class="btn btn-sm" onclick="avancarPedido('${p.id}','${next[p.status]}',this)">${lbls[next[p.status]]}</button>
-                <button class="btn btn-sm btn-danger" onclick="cancelarPedido('${p.id}',this)">✕</button>
+                <button class="btn btn-sm" onclick="avancarPedido('${escapeAttr(p.id)}','${escapeAttr(next[p.status])}',this)">${escapeHtml(lbls[next[p.status]])}</button>
+                <button class="btn btn-sm btn-danger" onclick="cancelarPedido('${escapeAttr(p.id)}',this)">✕</button>
                </div>` : '—';
           return `<tr>
-            <td class="tabela-num">#${p.numero}</td>
-            <td>Mesa ${p.mesas?.numero||'—'}</td>
+            <td class="tabela-num">#${escapeHtml(p.numero)}</td>
+            <td>Mesa ${escapeHtml(p.mesas?.numero || '—')}</td>
             <td>${itens} item(s)</td>
             <td class="tabela-num">R$ ${fmt(p.total)}</td>
-            <td><span class="status-pill ${p.status}">${statusLabel(p.status)}</span></td>
+            <td><span class="status-pill ${escapeAttr(p.status)}">${escapeHtml(statusLabel(p.status))}</span></td>
             <td style="color:var(--muted);font-size:12px">${hora}</td>
             <td>${acoes}</td>
           </tr>`;
@@ -601,7 +601,7 @@ async function carregarFinanceiro() {
           <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;">Produtos mais vendidos</div>
           ${(d.top_produtos||[]).map(p =>
             `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-              <span>${p.nome}</span>
+              <span>${escapeHtml(p.nome)}</span>
               <span style="font-family:var(--mono);font-weight:600">${p.quantidade} un · R$ ${fmt(p.total)}</span>
             </div>`).join('') || '<div class="tabela-empty">Sem vendas no período</div>'}
         </div>
@@ -682,7 +682,7 @@ async function carregarConfiguracoes() {
         <div class="config-card">
           <div class="config-title">Identidade visual</div>
           <div class="form-row"><label class="form-label">Nome do restaurante</label>
-            <input class="form-input" id="cfg-nome" value="${restaurant.name||''}"></div>
+            <input class="form-input" id="cfg-nome" value="${escapeAttr(restaurant.name || '')}"></div>
           <div class="form-row"><label class="form-label">Logo (URL)</label>
             <input class="form-input" id="cfg-logo" value="${restaurant.logo_url||''}" placeholder="https://..."></div>
           <div class="color-picker-row">
@@ -813,12 +813,12 @@ async function carregarAuditoria() {
       : logs.map(l => `
           <div class="audit-row">
             <div class="audit-time">${new Date(l.created_at).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}</div>
-            <div class="audit-user">${l.usuario_nome||'—'}</div>
-            <div class="audit-perfil"><span class="role-badge">${l.perfil||'—'}</span></div>
-            <div class="audit-acao"><strong>${LABELS[l.acao]||l.acao}</strong>${l.tabela?` · ${l.tabela}`:''}</div>
+            <div class="audit-user">${escapeHtml(l.usuario_nome || '—')}</div>
+            <div class="audit-perfil"><span class="role-badge">${escapeHtml(l.perfil || '—')}</span></div>
+            <div class="audit-acao"><strong>${escapeHtml(LABELS[l.acao] || l.acao)}</strong>${l.tabela ? ` · ${escapeHtml(l.tabela)}` : ''}</div>
           </div>`).join('');
   } catch (e) {
-    document.getElementById('auditoria-lista').innerHTML = '<div class="tabela-empty">Erro: ' + e.message + '</div>';
+    document.getElementById('auditoria-lista').innerHTML = '<div class="tabela-empty">Erro: ' + escapeHtml(e.message) + '</div>';
   }
 }
 

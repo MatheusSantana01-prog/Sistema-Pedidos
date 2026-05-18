@@ -94,13 +94,13 @@ async function carregarChamados(showErrors = true) {
     const { chamados } = await apiCall('GET', '/api/admin/service-requests?limite=30');
     const abertos = (chamados || []).filter(c => c.status !== 'atendido');
     document.getElementById('calls-list').innerHTML = abertos.length ? abertos.map(c => `
-      <div class="call-card ${c.tipo}">
+      <div class="call-card ${escapeAttr(c.tipo)}">
         <div>
-          <strong>Mesa ${c.mesa_numero || '—'}</strong>
-          <span>${labelChamado(c.tipo)} · ${tempoAberta(c.created_at)}</span>
-          ${c.mensagem ? `<small>${c.mensagem}</small>` : ''}
+          <strong>Mesa ${escapeHtml(c.mesa_numero || '—')}</strong>
+          <span>${escapeHtml(labelChamado(c.tipo))} · ${escapeHtml(tempoAberta(c.created_at))}</span>
+          ${c.mensagem ? `<small>${escapeHtml(c.mensagem)}</small>` : ''}
         </div>
-        <button onclick="atenderChamado('${c.id}',this)">Atender</button>
+        <button onclick="atenderChamado('${escapeAttr(c.id)}',this)">Atender</button>
       </div>`).join('') : '<div class="empty">Nenhum chamado aberto.</div>';
   } catch (e) {
     if (showErrors) showToast(e.message, 'error');
@@ -148,17 +148,17 @@ function renderMesas() {
     const aberta = sess?.aberta_em ? tempoAberta(sess.aberta_em) : '';
     const alerta = alertaMesa(sess);
     const estado = m.estado_operacional || m.status;
-    return `<div class="mesa-card ${m.status} ${estado} ${alerta.classe}" onclick="${sess ? `abrirMesa('${m.id}','${sess.id}',${m.numero})` : ''}">
+    return `<div class="mesa-card ${escapeAttr(m.status)} ${escapeAttr(estado)} ${escapeAttr(alerta.classe)}" onclick="${sess ? `abrirMesa('${escapeAttr(m.id)}','${escapeAttr(sess.id)}',${Number(m.numero || 0)})` : ''}">
       <div>
-        <div class="mesa-num">${m.numero}</div>
-        <div class="mesa-status">${labelEstadoMesa(m)}</div>
+        <div class="mesa-num">${escapeHtml(m.numero)}</div>
+        <div class="mesa-status">${escapeHtml(labelEstadoMesa(m))}</div>
       </div>
       <div>
-        ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div><div class="mesa-note">${mesaOrigem(sess)} · ${aberta}</div>` : '<div class="mesa-note">Sem conta aberta</div>'}
-        ${alerta.texto ? `<div class="mesa-alerta">${alerta.texto}</div>` : ''}
+        ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div><div class="mesa-note">${escapeHtml(mesaOrigem(sess))} · ${escapeHtml(aberta)}</div>` : '<div class="mesa-note">Sem conta aberta</div>'}
+        ${alerta.texto ? `<div class="mesa-alerta">${escapeHtml(alerta.texto)}</div>` : ''}
         <div class="mesa-actions" onclick="event.stopPropagation()">
-          ${!sess ? `<button onclick="ocuparMesa('${m.id}',${m.numero},this)">Ocupar</button>` : ''}
-          ${sess && (sess.pedidos_count || 0) === 0 ? `<button class="danger" onclick="liberarSemConsumo('${m.id}',${m.numero},this)">Liberar sem consumo</button>` : ''}
+          ${!sess ? `<button onclick="ocuparMesa('${escapeAttr(m.id)}',${Number(m.numero || 0)},this)">Ocupar</button>` : ''}
+          ${sess && (sess.pedidos_count || 0) === 0 ? `<button class="danger" onclick="liberarSemConsumo('${escapeAttr(m.id)}',${Number(m.numero || 0)},this)">Liberar sem consumo</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -237,12 +237,12 @@ async function abrirMesa(mesaId, sessaoId, numero) {
       ${pedidos.map(p => `
         <div class="pedido-card">
           <div class="pedido-head">
-            <span>#${p.numero || '—'} · ${statusLabel(p.status)}</span>
+            <span>#${escapeHtml(p.numero || '—')} · ${escapeHtml(statusLabel(p.status))}</span>
             <span>R$ ${fmt(p.total || 0)}</span>
           </div>
           ${(p.itens || []).map(it => `
             <div class="pedido-item">
-              <span>${it.quantidade}x ${it.nome_produto}</span>
+              <span>${escapeHtml(it.quantidade)}x ${escapeHtml(it.nome_produto)}</span>
               <span>R$ ${fmt(it.subtotal || 0)}</span>
             </div>`).join('')}
         </div>`).join('')}
@@ -275,13 +275,13 @@ function renderCardapio() {
   })).filter(c => c.produtos.length);
 
   document.getElementById('cardapio-lista').innerHTML = cats.length ? cats.map(c => `
-    <div class="cat-title">${c.icone || ''} ${c.nome || 'Categoria'}</div>
+    <div class="cat-title">${escapeHtml(c.icone || '')} ${escapeHtml(c.nome || 'Categoria')}</div>
     ${c.produtos.map(p => `
       <div class="product-row ${p.disponivel === false ? 'off' : ''}">
-        <img src="${imageForProduct(p)}" alt="${p.nome || 'Produto'}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
+        <img src="${safeUrl(imageForProduct(p), FOOD_IMAGES.default)}" alt="${escapeAttr(p.nome || 'Produto')}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
         <div>
-          <div class="product-name">${p.nome || 'Produto'}</div>
-          ${p.descricao ? `<div class="product-desc">${p.descricao}</div>` : ''}
+          <div class="product-name">${escapeHtml(p.nome || 'Produto')}</div>
+          ${p.descricao ? `<div class="product-desc">${escapeHtml(p.descricao)}</div>` : ''}
         </div>
         <div class="product-price">${p.disponivel === false ? 'Indisponível' : 'R$ ' + fmt(p.preco || 0)}</div>
       </div>`).join('')}
@@ -327,6 +327,16 @@ function showToast(msg, tipo = '') {
 
 function fmt(v) {
   return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
 }
 
 init();

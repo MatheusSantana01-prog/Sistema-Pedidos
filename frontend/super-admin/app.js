@@ -102,7 +102,7 @@ async function carregarRestaurantes() {
     // Popular select do modal de usuário
     const sel = document.getElementById('u-restaurant');
     if (sel) {
-      sel.innerHTML = RESTAURANTES.map(r => `<option value="${r.id}">${r.name} (${r.slug})</option>`).join('');
+      sel.innerHTML = RESTAURANTES.map(r => `<option value="${escapeAttr(r.id)}">${escapeHtml(r.name)} (${escapeHtml(r.slug)})</option>`).join('');
     }
 
     const visiveis = mostrarInativos ? RESTAURANTES : RESTAURANTES.filter(r => r.is_active);
@@ -113,8 +113,8 @@ async function carregarRestaurantes() {
         <div class="rest-card">
           <div class="rest-color" style="background:${r.primary_color||'#ff4d1c'}"></div>
           <div class="rest-info">
-            <div class="rest-nome">${r.name}</div>
-            <div class="rest-slug">/r/${r.slug}</div>
+            <div class="rest-nome">${escapeHtml(r.name)}</div>
+            <div class="rest-slug">/r/${escapeHtml(r.slug)}</div>
             <div class="rest-badges">
               <span class="badge ${r.is_active ? 'badge-active' : 'badge-inactive'}">${r.is_active ? '● Ativo' : '● Inativo'}</span>
               <span class="badge badge-plan">${planLabel(r.plan)}</span>
@@ -123,12 +123,12 @@ async function carregarRestaurantes() {
           </div>
           <div class="rest-actions">
             <button class="btn btn-sm btn-primary" onclick="abrirDetalhesRestaurante('${r.id}')">Detalhes</button>
-            <a class="btn btn-sm" href="/r/${r.slug}/admin" target="_blank" rel="noopener">Admin</a>
-            <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${r.name}')">QR Codes</button>
+            <a class="btn btn-sm" href="/r/${escapeAttr(r.slug)}/admin" target="_blank" rel="noopener">Admin</a>
+            <button class="btn btn-sm" onclick="verQRCodes('${escapeJs(r.id)}','${escapeJs(r.name)}')">QR Codes</button>
             <button class="btn btn-sm ${r.is_active?'btn-danger':''}" onclick="toggleAtivo('${r.id}',${r.is_active})">
               ${r.is_active ? 'Desativar' : 'Ativar'}
             </button>
-            <button class="btn btn-sm btn-danger" onclick="deletarRestaurante('${r.id}','${r.name}')">Deletar</button>
+            <button class="btn btn-sm btn-danger" onclick="deletarRestaurante('${escapeJs(r.id)}','${escapeJs(r.name)}')">Deletar</button>
           </div>
         </div>`).join('');
   } catch(e) {
@@ -294,8 +294,8 @@ function renderDetalhesRestaurante() {
       ${profileLink('TV', d.links.tv, rolesAtivos.has('tv'))}
       ${profileLink('Garçom', d.links.garcom, rolesAtivos.has('waiter'))}
       ${profileLink('Cozinha', d.links.cozinha, rolesAtivos.has('kitchen'))}
-      <button class="btn btn-sm" onclick="verQRCodes('${r.id}','${escapeJs(r.name)}')">QR Codes</button>
-      <button class="btn btn-sm btn-primary" onclick="entrarComoDono('${r.id}')">Entrar como dono</button>
+      <button class="btn btn-sm" onclick="verQRCodes('${escapeJs(r.id)}','${escapeJs(r.name)}')">QR Codes</button>
+      <button class="btn btn-sm btn-primary" onclick="entrarComoDono('${escapeJs(r.id)}')">Entrar como dono</button>
       <button class="btn btn-sm" onclick="exportarRestauranteAtual()">Exportar dados</button>
     </div>
 
@@ -493,7 +493,7 @@ async function exportarRestauranteAtual() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${DETALHE_ATUAL.restaurant.slug}-export-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `${String(DETALHE_ATUAL.restaurant.slug || 'restaurante').replace(/[^a-z0-9-]/gi, '-')}-export-${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('Exportação gerada', 'success');
@@ -638,10 +638,10 @@ async function carregarUsuarios() {
     document.getElementById('usuarios-tbody').innerHTML = !rows.length
       ? '<tr><td colspan="5" class="tabela-empty">Nenhum usuário</td></tr>'
       : rows.map(m => `<tr>
-          <td>${m.usuarios?.nome||'—'}</td>
-          <td class="mono" style="font-size:12px">${m.usuarios?.email||'—'}</td>
-          <td style="font-size:12px;color:var(--muted)">${m.restaurants?.name||'—'}</td>
-          <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(124,58,237,.1);color:var(--primary)">${m.role}</span></td>
+          <td>${escapeHtml(m.usuarios?.nome || '—')}</td>
+          <td class="mono" style="font-size:12px">${escapeHtml(m.usuarios?.email || '—')}</td>
+          <td style="font-size:12px;color:var(--muted)">${escapeHtml(m.restaurants?.name || '—')}</td>
+          <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(124,58,237,.1);color:var(--primary)">${escapeHtml(m.role)}</span></td>
           <td><span style="font-size:10px;color:${m.is_active?'var(--green)':'var(--red)'}">${m.is_active?'✓ Ativo':'✗ Inativo'}</span></td>
         </tr>`).join('');
   } catch(e) {

@@ -8,7 +8,7 @@ async function init() {
 
   // Ticker com nome do restaurante
   document.querySelectorAll('.ticker-item').forEach(el => {
-    el.innerHTML = el.innerHTML.replace('SaaS Restaurante', RESTAURANT.name);
+    el.textContent = el.textContent.replace('SaaS Restaurante', RESTAURANT.name || 'Restaurante');
   });
 
   if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) iniciarTV();
@@ -115,16 +115,16 @@ function renderCol(colId, pedidos, tipo) {
     const action = actionForPedido(p);
     return `<div class="card-tv ${tipo}">
       <div class="card-tv-head">
-        <div class="card-mesa ${tipo}">${mesa}</div>
+        <div class="card-mesa ${tipo}">${escapeHtml(mesa)}</div>
         <div>
-          <div class="card-num">#${p.numero}</div>
+          <div class="card-num">#${escapeHtml(p.numero)}</div>
           <div class="card-tempo ${tcls}">${ttxt}</div>
         </div>
       </div>
-      ${action ? `<div class="card-tv-actions card-tv-actions-top"><button class="btn-tv-action ${action.cls}" onclick="avancarTV('${p.id}','${action.next}',this)">${action.label}</button></div>` : ''}
+      ${action ? `<div class="card-tv-actions card-tv-actions-top"><button class="btn-tv-action ${escapeAttr(action.cls)}" onclick="avancarTV('${escapeAttr(p.id)}','${escapeAttr(action.next)}',this)">${escapeHtml(action.label)}</button></div>` : ''}
       <div class="card-itens">
         ${(p.pedido_itens||[]).map(it =>
-          `<div class="item-tv"><span class="item-tv-qty">${it.quantidade}×</span>${it.nome_produto}</div>`
+          `<div class="item-tv"><span class="item-tv-qty">${escapeHtml(it.quantidade)}×</span>${escapeHtml(it.nome_produto)}</div>`
         ).join('')}
       </div>
     </div>`;
@@ -142,12 +142,12 @@ function renderEntregues(colId, pedidos) {
     const hora = new Date(p.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     return `<div class="card-tv entregue">
       <div class="card-tv-head">
-        <div class="card-mesa entregue">${mesa}</div>
-        <div><div class="card-num">#${p.numero}</div><div class="card-num">${hora}</div></div>
+        <div class="card-mesa entregue">${escapeHtml(mesa)}</div>
+        <div><div class="card-num">#${escapeHtml(p.numero)}</div><div class="card-num">${hora}</div></div>
       </div>
       <div class="card-itens">
         ${(p.pedido_itens||[]).map(it =>
-          `<div class="item-tv"><span class="item-tv-qty">${it.quantidade}×</span>${it.nome_produto}</div>`
+          `<div class="item-tv"><span class="item-tv-qty">${escapeHtml(it.quantidade)}×</span>${escapeHtml(it.nome_produto)}</div>`
         ).join('')}
       </div>
     </div>`;
@@ -195,6 +195,16 @@ function showStatus(msg, tipo) {
   el.className = 'tv-status-msg show ' + (tipo || '');
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
 }
 
 init();
