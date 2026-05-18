@@ -1928,7 +1928,7 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
     payload = body.model_dump(exclude={"initial_table_count", "create_default_categories", "create_sample_products", "template"})
     rest = insert_restaurant(payload)
     try:
-        control = aplicar_limites_plano(_platform_control_defaults(), body.plan)
+        control = aplicar_limites_plano(_platform_control_defaults(), body.plan, force=True)
         control["segment"] = body.template
         save_platform_control(rest["id"], control)
 
