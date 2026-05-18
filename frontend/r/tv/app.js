@@ -75,13 +75,12 @@ async function carregar() {
     const preparando = lista.filter(p => ['pendente','confirmado','em_preparo'].includes(p.status));
     const pronto     = lista.filter(p => p.status === 'pronto');
 
-    // Entregues é opcional: usuário cozinha pode não ter permissão para /api/admin/orders.
+    // Entregues exige permissão de admin. TV/cozinha não devem gerar 403 no console.
     let entregues = [];
-    try {
+    const role = getUsuario()?.role;
+    if (['manager', 'owner'].includes(role)) {
       const entreguesResp = await apiCall('GET', '/api/admin/orders?status_filtro=entregue&limite=10');
       entregues = entreguesResp.pedidos || [];
-    } catch (e) {
-      console.warn('[tv] entregues indisponível para este usuário:', e.message);
     }
 
     document.getElementById('cnt-preparando').textContent = preparando.length;
