@@ -617,9 +617,10 @@ async function carregarUsuarios() {
   try {
     const { usuarios } = await apiCall('GET', '/api/admin/users');
     const atual = getUsuario();
-    document.getElementById('usuarios-lista').innerHTML = !usuarios.length
+    const usuariosAtivos = (usuarios || []).filter(m => m?.is_active !== false && m?.usuarios?.ativo !== false && m?.usuarios?.id);
+    document.getElementById('usuarios-lista').innerHTML = !usuariosAtivos.length
       ? '<div class="tabela-empty">Nenhum usuário</div>'
-      : usuarios.map(m => {
+      : usuariosAtivos.map(m => {
           const u = m.usuarios || {};
           const podeRemover = temRole('owner') && u.id !== atual?.id;
           return `<div class="usuario-row">
@@ -661,6 +662,7 @@ async function salvarUsuario() {
 async function removerUsuario(usuarioId, btn) {
   if (!confirm('Remover este usuário deste restaurante?')) return;
   btn.disabled = true;
+  btn.textContent = 'Removendo...';
   try {
     await apiCall('DELETE', `/api/admin/users/${usuarioId}`);
     showToast('Usuário removido', 'success');
@@ -668,6 +670,7 @@ async function removerUsuario(usuarioId, btn) {
   } catch (e) {
     showToast(e.message, 'error');
     btn.disabled = false;
+    btn.textContent = 'Remover';
   }
 }
 

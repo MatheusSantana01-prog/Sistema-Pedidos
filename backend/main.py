@@ -1680,8 +1680,12 @@ def listar_usuarios(u: dict = Depends(authorize(["manager", "owner"]))):
     resp = sb.table("restaurant_memberships").select(
         "id, role, is_active, created_at,"
         "usuarios(id, nome, email, ativo, ultimo_acesso, perfil)"
-    ).eq("restaurant_id", rid).execute()
-    return {"usuarios": _rows(resp)}
+    ).eq("restaurant_id", rid).eq("is_active", True).order("created_at", desc=True).execute()
+    usuarios = [
+        m for m in _rows(resp)
+        if m.get("usuarios") and (m.get("usuarios") or {}).get("ativo") is not False
+    ]
+    return {"usuarios": usuarios}
 
 
 @app.post("/api/admin/users", tags=["usuários"])
@@ -1692,10 +1696,16 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
     validar_role_no_plano(rid, body.role)
 
     # Verificar email duplicado
-    existe = sb.table("usuarios").select("id").eq("email", body.email).execute()
+    existe = sb.table("usuarios").select("id,ativo").eq("email", body.email).execute()
     if existe.data:
         # Usuário já existe — apenas adicionar membership
         uid = existe.data[0]["id"]
+        if existe.data[0].get("ativo") is False:
+            sb.table("usuarios").update({
+                "nome": body.nome,
+                "senha_hash": hash_senha(body.senha),
+                "ativo": True,
+            }).eq("id", uid).execute()
         membership = _first(_rows(sb.table("restaurant_memberships").select("id,is_active").eq("restaurant_id", rid).eq("usuario_id", uid).limit(1).execute()))
         if not membership or membership.get("is_active") is False:
             enforce_plan_limit(rid, "users", active_memberships_count(rid))
@@ -1724,11 +1734,12 @@ def alterar_role(usuario_id: str, body: dict, request: Request,
     nova_role = body.get("role")
     if nova_role not in ROLE_LEVEL:
         raise HTTPException(400, f"Role inválida: {list(ROLE_LEVEL.keys())}")
+    validar_role_no_plano(rid, nova_role)
 
     # Validar que o usuário pertence ao restaurante
-    m = sb.table("restaurant_memberships").select("role").eq("usuario_id", usuario_id).eq("restaurant_id", rid).single().execute()
+    m = sb.table("restaurant_memberships").select("role").eq("usuario_id", usuario_id).eq("restaurant_id", rid).eq("is_active", True).single().execute()
     if not m.data:
-        raise HTTPException(403, "Usuário não pertence ao seu restaurante")
+        raise HTTPException(404, "Usuário não encontrado neste restaurante")
 
     sb.table("restaurant_memberships").update({"role": nova_role, "updated_at": utcnow()}).eq("usuario_id", usuario_id).eq("restaurant_id", rid).execute()
     log_acao(u, "alterar_role_usuario", "restaurant_memberships", usuario_id,
@@ -1744,7 +1755,14 @@ def remover_usuario(usuario_id: str, request: Request,
     if usuario_id == u["sub"]:
         raise HTTPException(400, "Não pode remover sua própria conta")
 
-    sb.table("restaurant_memberships").update({"is_active": False, "updated_at": utcnow()}).eq("usuario_id", usuario_id).eq("restaurant_id", rid).execute()
+    membership = _first(_rows(sb.table("restaurant_memberships").select(
+        "id,role,is_active,usuarios(id,email)"
+    ).eq("usuario_id", usuario_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not membership or membership.get("is_active") is False:
+        raise HTTPException(404, "Usuário não encontrado neste restaurante")
+
+    sb.table("restaurant_memberships").update({"is_active": False, "updated_at": utcnow()}).eq("id", membership["id"]).execute()
+    desativar_usuarios_orfaos([usuario_id])
     log_acao(u, "remover_usuario", "restaurant_memberships", usuario_id, None, {"is_active": False}, request)
     return {"mensagem": "Usuário removido do restaurante"}
 
@@ -2620,9 +2638,15 @@ def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
         raise HTTPException(404, "Restaurante não encontrado")
     validar_role_no_plano(restaurant_id, body.role)
 
-    existe = sb.table("usuarios").select("id").eq("email", body.email).execute()
+    existe = sb.table("usuarios").select("id,ativo").eq("email", body.email).execute()
     if existe.data:
         uid = existe.data[0]["id"]
+        if existe.data[0].get("ativo") is False:
+            sb.table("usuarios").update({
+                "nome": body.nome,
+                "senha_hash": hash_senha(body.senha),
+                "ativo": True,
+            }).eq("id", uid).execute()
         membership = _first(_rows(sb.table("restaurant_memberships").select("id,is_active").eq("restaurant_id", restaurant_id).eq("usuario_id", uid).limit(1).execute()))
         if not membership or membership.get("is_active") is False:
             enforce_plan_limit(restaurant_id, "users", active_memberships_count(restaurant_id))
