@@ -29,6 +29,17 @@ function Expect-Blocked($Name, $ExpectedStatus, [scriptblock]$Call) {
   }
 }
 
+function Expect-Conta-Bloqueada($Name, $ExpectedStatus, [scriptblock]$Call) {
+  try {
+    & $Call | Out-Null
+    throw "$Name permitiu pedir conta antes da entrega"
+  } catch {
+    $status = $null
+    try { $status = [int]$_.Exception.Response.StatusCode } catch {}
+    if ($status -ne $ExpectedStatus) { throw "$Name retornou $status; esperado $ExpectedStatus" }
+  }
+}
+
 $slug = "e2e-" + ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
 $restaurantId = $null
 $emails = @{}
@@ -92,16 +103,23 @@ try {
   $pedidoId = $order.pedido.id
   if (-not $pedidoId) { throw "API nao retornou id do pedido" }
   if ([double]$order.pedido.total -ne [double]$product.preco) { throw "Backend nao recalculou preco real do produto" }
+  Expect-Conta-Bloqueada "conta com pedido pendente" 409 {
+    Invoke-Json POST "$BaseUrl/api/public/restaurants/$slug/tables/$($mesa.public_token)/call" @{ tipo = "conta" }
+  }
 
   Write-Host "7/11 Conferindo fila e avancando cozinha"
   $queue = Invoke-Json GET "$BaseUrl/api/kitchen/queue" $null $kitchen.token
   if (-not ($queue.pedidos | Where-Object { $_.id -eq $pedidoId })) { throw "Pedido nao apareceu na fila" }
   foreach ($status in @("confirmado", "em_preparo", "pronto")) {
     Invoke-Json PATCH "$BaseUrl/api/kitchen/orders/$pedidoId/status" @{ status = $status } $kitchen.token | Out-Null
+    Expect-Conta-Bloqueada "conta com pedido $status" 409 {
+      Invoke-Json POST "$BaseUrl/api/public/restaurants/$slug/tables/$($mesa.public_token)/call" @{ tipo = "conta" }
+    }
   }
 
   Write-Host "8/11 TV dando baixa"
   Invoke-Json PATCH "$BaseUrl/api/kitchen/orders/$pedidoId/status" @{ status = "entregue" } $tv.token | Out-Null
+  Invoke-Json POST "$BaseUrl/api/public/restaurants/$slug/tables/$($mesa.public_token)/call" @{ tipo = "conta" } | Out-Null
 
   Write-Host "9/11 Conta e fechamento"
   $bill = Invoke-Json GET "$BaseUrl/api/public/restaurants/$slug/sessions/$($session.sessao.id)/bill"

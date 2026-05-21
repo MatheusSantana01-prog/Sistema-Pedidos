@@ -1019,13 +1019,21 @@ def criar_chamado_mesa(slug: str, table_token: str, body: ChamadoMesaInput, requ
     if body.tipo == "conta" and settings.get("allow_table_close_request") is False:
         raise HTTPException(403, "Este restaurante desativou pedido de fechamento pela mesa")
 
-    sessao = sb.table("sessao_mesa").select("id").eq("mesa_id", mesa.data["id"]).eq("restaurant_id", rid).eq("status", "aberta").limit(1).execute()
+    sessao = sb.table("sessao_mesa").select("id,total_consumido").eq("mesa_id", mesa.data["id"]).eq("restaurant_id", rid).eq("status", "aberta").limit(1).execute()
+    sessao_data = _first(_rows(sessao)) or {}
+    if body.tipo == "conta":
+        if not sessao_data.get("id"):
+            raise HTTPException(409, "Ainda não existe conta aberta nesta mesa")
+        pedidos_abertos = sb.table("pedidos").select("id", count="exact").eq("sessao_mesa_id", sessao_data["id"]).eq("restaurant_id", rid).in_("status", list(OPEN_ORDER_STATUSES)).execute()
+        if pedidos_abertos.count:
+            raise HTTPException(409, "A conta só pode ser solicitada depois que todos os pedidos forem entregues")
+
     dados = {
         "tipo": body.tipo,
         "mensagem": body.mensagem,
         "mesa_id": mesa.data["id"],
         "mesa_numero": mesa.data["numero"],
-        "sessao_mesa_id": (_first(_rows(sessao)) or {}).get("id"),
+        "sessao_mesa_id": sessao_data.get("id"),
         "status": "aberto",
         "created_at": utcnow(),
     }

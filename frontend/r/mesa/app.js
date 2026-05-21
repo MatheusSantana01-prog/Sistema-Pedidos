@@ -618,13 +618,24 @@ async function verConta() {
         <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.04);font-size:12px;line-height:1.45">
           <b>Chave Pix</b><br><span style="word-break:break-word">${escapeHtml(settings.pix_key)}</span>
         </div>` : ''}
-      ${settings.allow_table_close_request ? `
-        <div style="margin-top:8px;font-size:13px;color:var(--muted);text-align:center">
-          <button class="account-btn" onclick="enviarChamado('conta')">Pedir fechamento da conta</button>
-        </div>` : ''}`;
+      ${settings.allow_table_close_request ? renderBotaoPedirConta(pedidos) : ''}`;
   } catch (e) {
     document.getElementById('conta-conteudo').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro ao carregar conta.</div>';
   }
+}
+
+function renderBotaoPedirConta(pedidos) {
+  const abertos = (pedidos || []).filter(p => ['pendente', 'confirmado', 'em_preparo', 'pronto'].includes(p.status));
+  if (abertos.length) {
+    return `
+      <div style="margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.035);font-size:13px;color:var(--muted);line-height:1.45;text-align:center">
+        Ainda temos ${abertos.length} pedido(s) em andamento. Assim que tudo for entregue, a solicitação de fechamento será liberada.
+      </div>`;
+  }
+  return `
+        <div style="margin-top:8px;font-size:13px;color:var(--muted);text-align:center">
+          <button class="account-btn" onclick="enviarChamado('conta')">Pedir fechamento da conta</button>
+        </div>`;
 }
 
 function statusCliente(s) {
@@ -640,6 +651,16 @@ async function enviarChamado(tipo) {
   try {
     const slug = getCurrentRestaurantSlug();
     const token = mesaTokenAtual();
+    if (tipo === 'conta') {
+      const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
+      const abertos = (data.pedidos || []).filter(p => ['pendente', 'confirmado', 'em_preparo', 'pronto'].includes(p.status));
+      if (abertos.length) {
+        renderStatusFromBill(data);
+        showToast('Aguarde a entrega dos pedidos para pedir a conta', 'error');
+        scrollParaStatus();
+        return;
+      }
+    }
     await apiPublic('POST', `/api/public/restaurants/${slug}/tables/${token}/call`, {
       tipo,
       mensagem: tipo === 'problema' ? 'Cliente informou um problema na mesa' : null,
