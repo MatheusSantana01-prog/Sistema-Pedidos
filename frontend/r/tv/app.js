@@ -154,16 +154,10 @@ function renderEntregues(colId, pedidos) {
 }
 
 function actionForPedido(p) {
-  const role = getUsuario()?.role;
-  if (role === 'tv') {
-    return p.status === 'pronto'
-      ? { label: 'Dar baixa', cls: 'entregar', next: 'entregue' }
-      : null;
-  }
   return {
-    pendente:   { label: 'Confirmar', cls: 'confirmar', next: 'confirmado' },
-    confirmado: { label: 'Iniciar', cls: 'preparo', next: 'em_preparo' },
-    em_preparo: { label: 'Marcar pronto', cls: 'pronto', next: 'pronto' },
+    pendente:   { label: 'Prosseguir', cls: 'confirmar', next: 'confirmado' },
+    confirmado: { label: 'Prosseguir', cls: 'preparo', next: 'em_preparo' },
+    em_preparo: { label: 'Prosseguir', cls: 'pronto', next: 'pronto' },
     pronto:     { label: 'Dar baixa', cls: 'entregar', next: 'entregue' },
   }[p.status] || null;
 }

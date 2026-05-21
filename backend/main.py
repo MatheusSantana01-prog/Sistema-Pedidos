@@ -1356,8 +1356,6 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
     status_atual = ant.data["status"]
     if body.status not in ORDER_TRANSITIONS.get(status_atual, set()):
         raise HTTPException(409, f"Transição inválida: {status_atual} -> {body.status}")
-    if u.get("role") == "tv" and not (status_atual == "pronto" and body.status == "entregue"):
-        raise HTTPException(403, "TV só pode marcar pedido pronto como entregue")
     if body.status == "cancelado" and u.get("role") == "kitchen":
         raise HTTPException(403, "Cozinha não pode cancelar pedidos")
 
