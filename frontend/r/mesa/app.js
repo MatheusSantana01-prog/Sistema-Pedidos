@@ -56,6 +56,7 @@ async function init() {
     document.getElementById('app').style.display = 'block';
     atualizarAcoesMesa();
     carregarCardapio();
+    atualizarStatusPedidos(true);
     iniciarPollingConta();
     iniciarPollingCardapio();
   } catch (e) {
@@ -288,6 +289,11 @@ function scrollParaProdutos() {
   document.getElementById('produtos-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function scrollParaStatus() {
+  atualizarStatusPedidos(false);
+  document.getElementById('order-status-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 /* ── PRODUTO MODAL ───────────────────────────────────── */
 function abrirProduto(id) {
   prodAtual = todosProdutos.find(p => p.id === id);
@@ -446,7 +452,10 @@ async function enviarPedido() {
     fecharModal('modal-carrinho');
     atualizarFAB();
     document.getElementById('sucesso-overlay').classList.add('show');
-    setTimeout(verConta, 900);
+    setTimeout(() => {
+      atualizarStatusPedidos(false);
+      scrollParaStatus();
+    }, 900);
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
@@ -458,6 +467,104 @@ function fecharSucesso() {
   document.getElementById('sucesso-overlay').classList.remove('show');
 }
 
+/* ── STATUS DO PEDIDO ───────────────────────────────── */
+async function atualizarStatusPedidos(silent = true) {
+  if (!SESSAO_ID) return;
+  const wrap = document.getElementById('order-status-wrap');
+  const list = document.getElementById('order-status-list');
+  if (!wrap || !list) return;
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
+    renderStatusFromBill(data);
+    const ativos = (data.pedidos || []).filter(p => !['entregue', 'cancelado'].includes(p.status));
+    if (!silent && ativos.length) showToast('Status atualizado', 'success');
+  } catch (e) {
+    if (!silent) showToast('Não foi possível atualizar o status', 'error');
+  }
+}
+
+function renderStatusFromBill(data) {
+  const wrap = document.getElementById('order-status-wrap');
+  const list = document.getElementById('order-status-list');
+  if (!wrap || !list) return;
+  const pedidos = data.pedidos || [];
+  if (!pedidos.length) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  list.innerHTML = pedidos
+    .slice()
+    .sort((a, b) => Number(b.numero || 0) - Number(a.numero || 0))
+    .map(renderStatusPedido)
+    .join('');
+}
+
+function renderStatusPedido(pedido) {
+  const status = pedido.status || 'pendente';
+  const meta = statusPedidoMeta(status);
+  const itens = (pedido.itens || []).slice(0, 3).map(it => `${it.quantidade}× ${it.nome_produto}`).join(', ');
+  return `
+    <div class="order-status-card ${escapeAttr(status)}">
+      <div class="order-status-top">
+        <div>
+          <div class="order-status-number">Pedido #${escapeHtml(pedido.numero || '-')}</div>
+          <div class="order-status-items">${escapeHtml(itens || 'Pedido recebido')}</div>
+        </div>
+        <span class="order-status-pill ${escapeAttr(status)}">${escapeHtml(meta.label)}</span>
+      </div>
+      <div class="order-progress" aria-label="Status do pedido">
+        ${['pendente','confirmado','em_preparo','pronto','entregue'].map((step, idx) => `
+          <span class="${idx <= meta.step ? 'done' : ''}"></span>`).join('')}
+      </div>
+      <div class="order-status-message">${escapeHtml(meta.message)}</div>
+      <div class="order-status-estimate">${escapeHtml(meta.estimate)}</div>
+    </div>`;
+}
+
+function statusPedidoMeta(status) {
+  const map = {
+    pendente: {
+      step: 0,
+      label: 'Recebido',
+      message: 'Seu pedido chegou ao restaurante e será confirmado em breve.',
+      estimate: 'Previsão tranquila: a cozinha já recebeu sua solicitação.',
+    },
+    confirmado: {
+      step: 1,
+      label: 'Confirmado',
+      message: 'Tudo certo. A equipe confirmou o pedido e organizou a produção.',
+      estimate: 'Estimativa aproximada: 15 a 30 minutos, conforme o movimento.',
+    },
+    em_preparo: {
+      step: 2,
+      label: 'Em preparo',
+      message: 'A cozinha já está preparando seus itens.',
+      estimate: 'Estimativa aproximada: 10 a 20 minutos para finalizar.',
+    },
+    pronto: {
+      step: 3,
+      label: 'Pronto',
+      message: 'Seu pedido está pronto e deve sair para a mesa.',
+      estimate: 'Agora é só aguardar a entrega pelo atendimento.',
+    },
+    entregue: {
+      step: 4,
+      label: 'Entregue',
+      message: 'Pedido entregue. Bom apetite.',
+      estimate: 'Você pode acompanhar sua conta quando quiser.',
+    },
+    cancelado: {
+      step: 0,
+      label: 'Cancelado',
+      message: 'Este pedido foi cancelado.',
+      estimate: 'Fale com o atendimento se precisar de ajuda.',
+    },
+  };
+  return map[status] || map.pendente;
+}
+
 /* ── CONTA ───────────────────────────────────────────── */
 async function verConta() {
   document.getElementById('modal-conta').classList.add('show');
@@ -465,6 +572,7 @@ async function verConta() {
   try {
     const slug = getCurrentRestaurantSlug();
     const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
+    renderStatusFromBill(data);
     const pedidos = data.pedidos || [];
     const total   = Number(data.total_consumido ?? pedidos.reduce((a, p) => a + Number(p.total), 0));
     const taxa    = Number(data.taxa_servico || 0);
@@ -575,6 +683,7 @@ function iniciarPollingConta() {
     try {
       const slug = getCurrentRestaurantSlug();
       const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/bill`);
+      renderStatusFromBill(data);
       if (data.sessao_status === 'fechada') {
         clearTimeout(pollingConta);
         mostrarContaFechada();

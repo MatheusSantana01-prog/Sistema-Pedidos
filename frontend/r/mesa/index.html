@@ -21,6 +21,7 @@
       <div class="header-actions">
         <button class="account-btn secondary" id="btn-chamar-garcom" onclick="enviarChamado('garcom')">Chamar garçom</button>
         <button class="account-btn secondary" id="btn-pedir-conta" onclick="enviarChamado('conta')">Pedir conta</button>
+        <button class="account-btn secondary" onclick="scrollParaStatus()">Meus pedidos</button>
         <button class="account-btn" onclick="verConta()">Minha conta</button>
       </div>
     </div>
@@ -42,10 +43,22 @@
       <p id="hero-sub">Veja os destaques da casa, monte seu pedido e acompanhe tudo pela mesa.</p>
       <div class="hero-actions">
         <button onclick="scrollParaProdutos()">Ver pratos</button>
+        <button class="ghost" onclick="scrollParaStatus()">Acompanhar pedido</button>
         <button class="ghost" onclick="verConta()">Minha conta</button>
       </div>
       <div class="hero-stats" id="hero-stats"></div>
     </div>
+  </section>
+
+  <section class="order-status-wrap" id="order-status-wrap" style="display:none;">
+    <div class="order-status-head">
+      <div>
+        <div class="order-status-kicker">Acompanhamento</div>
+        <h2>Meus pedidos</h2>
+      </div>
+      <button class="status-refresh" onclick="atualizarStatusPedidos(false)">Atualizar</button>
+    </div>
+    <div id="order-status-list"></div>
   </section>
 
   <div class="cats-wrap">

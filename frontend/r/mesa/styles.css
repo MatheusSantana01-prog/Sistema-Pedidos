@@ -62,6 +62,28 @@ body {
 .hero-stats strong { display:block; font-size:19px; font-weight:950; color:#fff; }
 .hero-stats span { display:block; margin-top:2px; font-size:11px; color:rgba(242,240,235,.64); }
 
+/* STATUS DO PEDIDO */
+.order-status-wrap { margin:18px clamp(18px,4vw,56px) 0; padding:18px; border:1px solid rgba(255,255,255,.12); border-radius:18px; background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018)),var(--panel); box-shadow:var(--shadow); }
+.order-status-head { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.order-status-kicker { font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; color:var(--color-primary); margin-bottom:4px; }
+.order-status-head h2 { font-size:22px; line-height:1.1; margin:0; }
+.status-refresh { border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.055); color:var(--color-text); border-radius:999px; padding:9px 13px; font-size:12px; font-weight:900; cursor:pointer; white-space:nowrap; }
+.status-refresh:hover { border-color:var(--color-primary); color:var(--color-primary); }
+#order-status-list { display:grid; gap:10px; }
+.order-status-card { border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:13px; background:rgba(0,0,0,.18); }
+.order-status-top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.order-status-number { font-size:13px; font-weight:950; }
+.order-status-items { color:var(--muted); font-size:12px; line-height:1.4; margin-top:3px; }
+.order-status-pill { border-radius:999px; padding:5px 9px; background:rgba(255,255,255,.07); color:var(--muted); font-size:10px; font-weight:950; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+.order-status-pill.confirmado,.order-status-pill.em_preparo { color:#fbbf24; background:rgba(251,191,36,.12); }
+.order-status-pill.pronto,.order-status-pill.entregue { color:var(--green); background:rgba(34,197,94,.12); }
+.order-status-pill.cancelado { color:var(--red); background:rgba(239,68,68,.12); }
+.order-progress { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin:12px 0 10px; }
+.order-progress span { height:5px; border-radius:999px; background:rgba(255,255,255,.1); }
+.order-progress span.done { background:linear-gradient(90deg,var(--color-primary),var(--color-accent)); }
+.order-status-message { font-size:13px; line-height:1.45; }
+.order-status-estimate { color:var(--muted); font-size:12px; line-height:1.4; margin-top:4px; }
+
 .cats-wrap { padding:14px clamp(18px,4vw,56px); overflow-x:auto; scrollbar-width:none; background:rgba(21,19,17,.88); border-bottom:1px solid var(--border); backdrop-filter:blur(16px); }
 .cats-wrap::-webkit-scrollbar { display:none; }
 .cats-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; font-weight:900; color:var(--muted); margin-bottom:8px; }
@@ -202,6 +224,7 @@ body {
   .modal-bg { align-items:center; padding:24px; }
   .modal,
   .confirm-modal { width:min(640px, 100%); max-height:86vh; border-radius:18px; padding:24px; }
+  .order-status-wrap { max-width:920px; }
   .modal-drag { display:none; }
   #modal-produto-img { height:260px !important; }
   .cart-fab { left:auto; right:32px; transform:none; }
