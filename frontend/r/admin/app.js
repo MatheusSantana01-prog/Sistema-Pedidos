@@ -41,7 +41,7 @@ async function fazerLogin() {
   const erro  = document.getElementById('login-erro');
 
   if (!email || !senha) {
-    erro.textContent = 'Preencha e-mail e senha';
+    erro.textContent = 'Preencha login e senha';
     erro.classList.add('show');
     return;
   }
@@ -89,6 +89,7 @@ function iniciarApp() {
   document.getElementById('app-screen').style.display   = 'flex';
   document.getElementById('user-nome').textContent = u.nome;
   document.getElementById('user-role').textContent = u.role;
+  renderAtalhosRapidos();
 
   // Esconder abas sem permissão
   const roleLevels = { 'role-manager': 'manager', 'role-owner': 'owner' };
@@ -109,6 +110,27 @@ function iniciarApp() {
 
   carregarMesas();
   iniciarPolling();
+}
+
+function renderAtalhosRapidos() {
+  const el = document.getElementById('quick-access');
+  if (!el) return;
+  const slug = getCurrentRestaurantSlug();
+  const links = [
+    ['Admin', `/r/${slug}/admin`, 'Painel administrativo'],
+    ['Caixa', `/r/${slug}/caixa`, 'Fechamento de contas'],
+    ['Cozinha', `/r/${slug}/cozinha`, 'Fila de preparo'],
+    ['TV', `/r/${slug}/tv`, 'Tela de status'],
+    ['Garçom', `/r/${slug}/garcom`, 'Atendimento'],
+  ];
+  el.innerHTML = `
+    <div class="quick-access-label">Acessos rápidos</div>
+    <div class="quick-access-links">
+      ${links.map(([label, href, title]) => `
+        <a class="quick-link" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="${escapeAttr(title)}">
+          <span>${escapeHtml(label)}</span>
+        </a>`).join('')}
+    </div>`;
 }
 
 function iniciarPolling() {
@@ -167,6 +189,7 @@ async function carregarMesas() {
         <div class="mesa-info">${sess ? `${mesaOrigem(sess)} · ${durStr}<br>R$ ${fmt(total)}` : 'Mesa livre'}</div>
         ${alerta.texto ? `<div class="mesa-alerta">${alerta.texto}</div>` : ''}
         <div class="mesa-actions" onclick="event.stopPropagation()">
+          ${m.qr_code_token ? `<a class="btn btn-sm" href="/r/${getCurrentRestaurantSlug()}/mesa/${escapeAttr(m.qr_code_token)}" target="_blank" rel="noopener">Abrir mesa</a>` : ''}
           ${sess ? `<button class="btn btn-sm btn-success" onclick="abrirConta('${m.id}','${sess.id}',${m.numero},${total})">Ver conta →</button>` : ''}
           ${!sess ? `<button class="btn btn-sm btn-success" onclick="ocuparMesa('${m.id}',${m.numero},this)">Ocupar</button>` : ''}
           ${sess && (sess.pedidos_count || 0) === 0 ? `<button class="btn btn-sm btn-danger" onclick="liberarSemConsumo('${m.id}',${m.numero},this)">Liberar sem consumo</button>` : ''}
