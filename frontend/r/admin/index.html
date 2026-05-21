@@ -16,10 +16,10 @@
     <div class="login-logo">Sistema de Pedidos</div>
     <div class="login-nome-rest restaurant-name"></div>
     <div class="login-sub">Entre com suas credenciais</div>
-    <div class="login-erro" id="login-erro">E-mail ou senha incorretos</div>
+    <div class="login-erro" id="login-erro">Login ou senha incorretos</div>
     <div class="form-row">
-      <label class="form-label">E-mail</label>
-      <input class="form-input" id="l-email" type="email" placeholder="seu@email.com"
+      <label class="form-label">Login</label>
+      <input class="form-input" id="l-email" type="text" placeholder="usuario ou e-mail"
              oninput="document.getElementById('login-erro').classList.remove('show')">
     </div>
     <div class="form-row">
@@ -95,8 +95,12 @@
     <div class="page" id="page-cardapio">
       <div class="section-head">
         <div class="section-title">Cardápio</div>
-        <button class="btn btn-sm btn-primary role-manager role-owner" onclick="abrirModalProduto()">+ Produto</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm role-manager role-owner" onclick="abrirModalCategoria()">+ Categoria</button>
+          <button class="btn btn-sm btn-primary role-manager role-owner" onclick="abrirModalProduto()">+ Produto</button>
+        </div>
       </div>
+      <div id="categorias-lista" class="categorias-admin-list"></div>
       <div class="cardapio-toolbar">
         <input class="form-input" id="cardapio-busca" placeholder="Buscar por produto, descrição ou categoria" oninput="renderAdminProdutos()">
         <select class="form-input" id="cardapio-status" onchange="renderAdminProdutos()">
@@ -180,7 +184,7 @@
         <img id="prod-preview-img" src="" alt="Prévia do produto">
         <div>
           <div class="form-label">Imagem do cardápio</div>
-          <div class="produto-editor-hint">Use uma URL de foto real. Sem URL, o sistema usa uma imagem automática pelo nome do produto.</div>
+          <div class="produto-editor-hint">Use URL ou envie JPG/PNG/WebP até 700 KB. Imagens quadradas funcionam melhor no cardápio.</div>
         </div>
       </div>
       <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="prod-nome" oninput="atualizarPreviewProduto()"></div>
@@ -191,6 +195,7 @@
       </div>
       <div class="form-row"><label class="form-label">Categoria</label><select class="form-input" id="prod-cat"></select></div>
       <div class="form-row"><label class="form-label">Foto (URL)</label><input class="form-input" id="prod-foto" placeholder="https://..." oninput="atualizarPreviewProduto()"></div>
+      <div class="form-row"><label class="form-label">Enviar foto</label><input class="form-input" id="prod-foto-file" type="file" accept="image/png,image/jpeg,image/webp" onchange="carregarImagemProduto(this)"></div>
       <div style="display:flex;gap:20px;margin-top:4px;">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prod-disp" checked> Disponível</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prod-dest"> Destaque</label>
@@ -199,6 +204,28 @@
     <div class="modal-footer">
       <button class="btn" onclick="fecharModal('modal-produto')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CATEGORIA -->
+<div class="modal-bg" id="modal-categoria">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Categoria</div>
+      <button class="modal-close" onclick="fecharModal('modal-categoria')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cat-id">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="cat-nome" placeholder="Pizza doce, Pratos, Bebidas"></div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Ícone</label><input class="form-input" id="cat-icone" placeholder="🍕"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Ordem</label><input class="form-input" id="cat-ordem" type="number" value="99"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modal-categoria')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCategoria()">Salvar</button>
     </div>
   </div>
 </div>
@@ -212,7 +239,7 @@
     </div>
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="u-nome"></div>
-      <div class="form-row"><label class="form-label">E-mail</label><input class="form-input" id="u-email" type="email"></div>
+      <div class="form-row"><label class="form-label">Usuário ou e-mail</label><input class="form-input" id="u-email" type="text" placeholder="garcom, caixa, tv ou dono@email.com"></div>
       <div class="form-row"><label class="form-label">Senha</label><input class="form-input" id="u-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
       <div class="form-row"><label class="form-label">Papel (role)</label>
         <select class="form-input" id="u-role">

@@ -362,7 +362,7 @@ function renderDetalhesRestaurante() {
       <div class="detail-panel">
         <div class="detail-panel-title">Usuários</div>
         <div class="mini-table">
-          ${(d.users || []).map(m => `<div><span>${escapeHtml(m.usuarios?.nome || 'Sem nome')}</span><small>${escapeHtml(m.role)} • ${escapeHtml(m.usuarios?.email || '')}</small></div>`).join('') || '<div class="muted-line">Nenhum usuário</div>'}
+          ${(d.users || []).map(m => `<div><span>${escapeHtml(m.usuarios?.nome || 'Sem nome')}</span><small>${escapeHtml(m.role)} • ${escapeHtml(m.usuarios?.login || m.usuarios?.email || '')}</small><button class="btn btn-sm" onclick="redefinirSenhaSuper('${escapeAttr(m.usuarios?.id || '')}')">Senha</button></div>`).join('') || '<div class="muted-line">Nenhum usuário</div>'}
         </div>
       </div>
       <div class="detail-panel">
@@ -461,6 +461,19 @@ async function salvarControleRestaurante(restId) {
     showToast('Controle atualizado', 'success');
     await abrirDetalhesRestaurante(restId);
     carregarRestaurantes();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function redefinirSenhaSuper(usuarioId) {
+  if (!usuarioId) return;
+  const senha = prompt('Nova senha para este usuário (mínimo 6 caracteres):');
+  if (senha === null) return;
+  if (senha.length < 6) return showToast('Senha precisa ter no mínimo 6 caracteres', 'error');
+  try {
+    await apiCall('PATCH', `/api/super-admin/users/${usuarioId}/password`, { senha });
+    showToast('Senha atualizada', 'success');
   } catch(e) {
     showToast(e.message, 'error');
   }
@@ -632,7 +645,7 @@ async function carregarUsuarios() {
       ? '<tr><td colspan="5" class="tabela-empty">Nenhum usuário</td></tr>'
       : rows.map(m => `<tr>
           <td>${escapeHtml(m.usuarios?.nome || '—')}</td>
-          <td class="mono" style="font-size:12px">${escapeHtml(m.usuarios?.email || '—')}</td>
+          <td class="mono" style="font-size:12px">${escapeHtml(m.usuarios?.login || m.usuarios?.email || '—')}</td>
           <td style="font-size:12px;color:var(--muted)">${escapeHtml(m.restaurants?.name || '—')}</td>
           <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(124,58,237,.1);color:var(--primary)">${escapeHtml(m.role)}</span></td>
           <td><span style="font-size:10px;color:${m.is_active?'var(--green)':'var(--red)'}">${m.is_active?'✓ Ativo':'✗ Inativo'}</span></td>
@@ -656,8 +669,9 @@ async function criarUsuario() {
   const senha  = document.getElementById('u-senha').value;
   const role   = document.getElementById('u-role').value;
   if (!nome || !email || !senha) return showToast('Preencha todos os campos', 'error');
+  if (senha.length < 6) return showToast('Senha precisa ter no mínimo 6 caracteres', 'error');
   try {
-    await apiCall('POST', `/api/super-admin/restaurants/${restId}/users`, { nome, email, senha, role });
+    await apiCall('POST', `/api/super-admin/restaurants/${restId}/users`, { nome, username: email, email, senha, role });
     showToast('Usuário criado com sucesso', 'success');
     fecharModal('modal-usuario');
     carregarUsuarios();

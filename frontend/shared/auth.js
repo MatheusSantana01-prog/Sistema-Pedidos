@@ -86,13 +86,14 @@ function exigirPerfil(roles, mensagem = 'Entre com um usuário autorizado para e
 
 // ── Login ───────────────────────────────────────────────────────
 async function login(email, senha, restaurantSlug = null) {
+  const identifier = email.trim();
   const resp = await fetch(`${AUTH_API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email.trim().toLowerCase(), senha: senha.trim(), restaurant_slug: restaurantSlug }),
+    body: JSON.stringify({ email: identifier.toLowerCase(), username: identifier, login: identifier, senha: senha.trim(), restaurant_slug: restaurantSlug }),
   });
 
-  if (resp.status === 401) throw new Error('E-mail ou senha incorretos');
+  if (resp.status === 401) throw new Error('Login ou senha incorretos');
   if (resp.status === 403) throw new Error('Sem acesso a este restaurante');
   if (!resp.ok) {
     throw new Error(await readApiError(resp, 'Erro ao fazer login'));

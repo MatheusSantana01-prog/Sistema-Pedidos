@@ -172,10 +172,13 @@ function renderHero() {
       : 'Veja o cardápio, adicione ao carrinho e acompanhe sua conta pela mesa.';
   }
   if (stats) {
+    const s = RESTAURANT?.settings || {};
+    const horario = s.opening_time && s.closing_time ? `${s.opening_time} - ${s.closing_time}` : '';
     stats.innerHTML = `
       <div><strong>${disponiveis.length}</strong><span>itens disponíveis</span></div>
       <div><strong>${categorias.length}</strong><span>categorias</span></div>
       ${menorPreco ? `<div><strong>R$ ${fmt(menorPreco)}</strong><span>a partir de</span></div>` : ''}
+      ${horario ? `<div><strong>${escapeHtml(horario)}</strong><span>funcionamento</span></div>` : ''}
     `;
   }
 }
@@ -503,6 +506,10 @@ async function verConta() {
           settings.accept_cash !== false ? 'dinheiro' : '',
         ].filter(Boolean).join(', ') || 'consulte o atendimento'}
       </div>
+      ${settings.accept_pix !== false && settings.pix_key ? `
+        <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.04);font-size:12px;line-height:1.45">
+          <b>Chave Pix</b><br><span style="word-break:break-word">${escapeHtml(settings.pix_key)}</span>
+        </div>` : ''}
       ${settings.allow_table_close_request ? `
         <div style="margin-top:8px;font-size:13px;color:var(--muted);text-align:center">
           <button class="account-btn" onclick="enviarChamado('conta')">Pedir fechamento da conta</button>

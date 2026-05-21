@@ -181,6 +181,10 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 .usuario-info { flex:1; min-width:0; }
 .usuario-nome { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .usuario-email { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.categorias-admin-list{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}
+.categoria-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--panel);border-radius:8px;padding:8px 10px;font-size:13px;}
+.categoria-pill span{font-weight:600;}
+.categoria-pill small{color:var(--muted);font-family:var(--mono);}
 
 /* CONFIGURACOES */
 .config-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; align-items:start; }

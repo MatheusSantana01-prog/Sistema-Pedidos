@@ -550,6 +550,40 @@ def insert_user(payload: dict, email: str) -> str:
     usr = sb.table("usuarios").select("id").eq("email", email).single().execute()
     return _row(usr)["id"]
 
+def make_login_identifier(identifier: str, restaurant_slug: str | None = None) -> str:
+    raw = (identifier or "").strip().lower()
+    if not raw:
+        raise HTTPException(400, "Login obrigatório")
+    if "@" in raw or raw.startswith("super:") or ":" in raw:
+        return raw
+    if not restaurant_slug:
+        raise HTTPException(400, "Informe o restaurante para login por usuário")
+    clean = "".join(ch for ch in raw if ch.isalnum() or ch in ("-", "_", "."))
+    if len(clean) < 2:
+        raise HTTPException(400, "Usuário precisa ter ao menos 2 caracteres")
+    return f"{restaurant_slug}:{clean}"
+
+def display_login_identifier(identifier: str, restaurant_slug: str | None = None) -> str:
+    raw = identifier or ""
+    prefix = f"{restaurant_slug}:"
+    if restaurant_slug and raw.startswith(prefix):
+        return raw[len(prefix):]
+    return raw
+
+def user_identifier_from_body(body: CriarUsuarioInput, restaurant_slug: str) -> str:
+    value = body.username or body.email
+    if not value:
+        raise HTTPException(400, "Informe usuário ou e-mail")
+    return make_login_identifier(value, restaurant_slug)
+
+def enrich_membership_logins(memberships: list[dict], restaurant_slug: str | None = None) -> list[dict]:
+    for m in memberships:
+        usuario = m.get("usuarios") or {}
+        if usuario.get("email"):
+            usuario["login"] = display_login_identifier(usuario["email"], restaurant_slug)
+            usuario["is_email_login"] = "@" in usuario["email"]
+    return memberships
+
 def desativar_usuarios_orfaos(usuario_ids: list[str]) -> int:
     desativados = 0
     for uid in set(usuario_ids):
@@ -674,9 +708,17 @@ def log_publico_restaurante(restaurant_id: str, acao: str, tabela: str = None,
 
 # ── SCHEMAS ───────────────────────────────────────────────────────
 class LoginInput(BaseModel):
-    email: str
+    email: Optional[str] = None
+    username: Optional[str] = None
+    login: Optional[str] = None
     senha: str
     restaurant_slug: Optional[str] = None  # opcional — se omitido, tenta encontrar o restaurante
+
+    def identifier(self) -> str:
+        value = self.email or self.username or self.login
+        if not value:
+            raise HTTPException(400, "Informe o login")
+        return value
 
 
 class CriarRestauranteInput(BaseModel):
@@ -763,7 +805,8 @@ class AtualizarSettingsInput(BaseModel):
 
 class CriarUsuarioInput(BaseModel):
     nome: str
-    email: str
+    email: Optional[str] = None
+    username: Optional[str] = None
     senha: str
     role: str = "waiter"
     observacao: Optional[str] = None
@@ -780,6 +823,17 @@ class CriarUsuarioInput(BaseModel):
     def val_role(cls, v):
         if v not in ROLE_LEVEL:
             raise ValueError(f"Role inválida: {list(ROLE_LEVEL.keys())}")
+        return v
+
+
+class ResetSenhaInput(BaseModel):
+    senha: str
+
+    @field_validator("senha")
+    @classmethod
+    def val_senha(cls, v):
+        if len(v) < 6:
+            raise ValueError("Senha mínimo 6 caracteres")
         return v
 
 
@@ -1086,6 +1140,16 @@ def criar_pedido_public(slug: str, body: dict):
         preco = float(produto["preco"])
         item_subtotal = round(preco * quantidade, 2)
         subtotal = round(subtotal + item_subtotal, 2)
+        ingredientes = item.get("ingredientes") or []
+        if not isinstance(ingredientes, list) or len(ingredientes) > 20:
+            raise HTTPException(400, "Adicionais/ingredientes inválidos")
+        ingredientes_sanitizados = []
+        for ing in ingredientes:
+            nome_ing = str((ing or {}).get("nome_ingrediente") or "").strip()
+            acao_ing = str((ing or {}).get("acao") or "remover").strip()
+            if not nome_ing or len(nome_ing) > 80 or acao_ing not in {"remover", "adicionar"}:
+                raise HTTPException(400, "Adicional/ingrediente inválido")
+            ingredientes_sanitizados.append({"nome_ingrediente": nome_ing, "acao": acao_ing})
         itens_sanitizados.append({
             "produto_id": produto_id,
             "nome_produto": produto["nome"],
@@ -1093,7 +1157,7 @@ def criar_pedido_public(slug: str, body: dict):
             "quantidade": quantidade,
             "subtotal": item_subtotal,
             "observacao": (item.get("observacao") or None) if settings.get("allow_customer_notes", True) else None,
-            "ingredientes": item.get("ingredientes") or [],
+            "ingredientes": ingredientes_sanitizados,
         })
 
     # Garantir que o restaurant_id é o certo (nunca confia no body)
@@ -1128,7 +1192,7 @@ def get_conta_public(slug: str, sessao_id: str):
         raise HTTPException(404, "Sessão não encontrada")
 
     settings = _first(sb.table("restaurant_settings").select(
-        "service_fee_enabled,service_fee_percent,accept_pix,accept_card,accept_cash,allow_table_close_request"
+        "service_fee_enabled,service_fee_percent,accept_pix,accept_card,accept_cash,allow_table_close_request,pix_key"
     ).eq("restaurant_id", rid).execute().data) or {}
     pedidos = sb.rpc("get_pedidos_sessao", {"p_sessao_id": sessao_id, "p_restaurant_id": rid}).execute()
     total_consumido = float(sessao.data["total_consumido"] or 0)
@@ -1158,7 +1222,9 @@ def login(body: LoginInput, request: Request):
     3. Se restaurant_slug informado, valida que o usuário pertence a ele
     4. Retorna JWT com restaurant_id e role embutidos
     """
-    resp = sb.table("usuarios").select("*").eq("email", body.email.strip().lower()).eq("ativo", True).single().execute()
+    identifier = body.identifier()
+    login_id = make_login_identifier(identifier, body.restaurant_slug)
+    resp = sb.table("usuarios").select("*").eq("email", login_id).eq("ativo", True).single().execute()
     if not resp.data:
         raise HTTPException(401, "Credenciais inválidas")
 
@@ -1620,9 +1686,59 @@ def listar_categorias(u: dict = Depends(authorize(["manager", "owner"]))):
 def criar_categoria(body: dict, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "admin")
+    nome = (body.get("nome") or "").strip()
+    if not nome:
+        raise HTTPException(400, "Nome da categoria obrigatório")
+    body["nome"] = nome
+    body["icone"] = (body.get("icone") or "•")[:8]
+    body["ordem"] = int(body.get("ordem") or 99)
     body["restaurant_id"] = rid
-    resp = sb.table("categorias").insert(body).select("*").execute()
+    resp = sb.table("categorias").insert(body).execute()
+    categoria = _first(_rows(resp)) or _first(_rows(sb.table("categorias").select("*").eq("restaurant_id", rid).eq("nome", nome).limit(1).execute()))
+    log_acao(u, "criar_categoria", "categorias", categoria.get("id") if categoria else None, None, body, request)
+    return {"categoria": categoria}
+
+
+@app.patch("/api/admin/categories/{categoria_id}", tags=["cardápio"])
+def atualizar_categoria(categoria_id: str, body: dict, request: Request,
+                        u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    ant = sb.table("categorias").select("*").eq("id", categoria_id).eq("restaurant_id", rid).single().execute()
+    if not ant.data:
+        raise HTTPException(404, "Categoria não encontrada")
+    payload = {}
+    if "nome" in body:
+        nome = (body.get("nome") or "").strip()
+        if not nome:
+            raise HTTPException(400, "Nome da categoria obrigatório")
+        payload["nome"] = nome
+    if "icone" in body:
+        payload["icone"] = (body.get("icone") or "•")[:8]
+    if "ordem" in body:
+        payload["ordem"] = int(body.get("ordem") or 99)
+    if not payload:
+        raise HTTPException(400, "Nada para atualizar")
+    sb.table("categorias").update(payload).eq("id", categoria_id).execute()
+    resp = sb.table("categorias").select("*").eq("id", categoria_id).eq("restaurant_id", rid).single().execute()
+    log_acao(u, "atualizar_categoria", "categorias", categoria_id, ant.data, payload, request)
     return {"categoria": _row(resp)}
+
+
+@app.delete("/api/admin/categories/{categoria_id}", tags=["cardápio"])
+def deletar_categoria(categoria_id: str, request: Request,
+                      u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    cat = sb.table("categorias").select("*").eq("id", categoria_id).eq("restaurant_id", rid).single().execute()
+    if not cat.data:
+        raise HTTPException(404, "Categoria não encontrada")
+    produtos = sb.table("produtos").select("id", count="exact").eq("restaurant_id", rid).eq("categoria_id", categoria_id).execute()
+    if produtos.count:
+        raise HTTPException(409, "Mova ou exclua os produtos desta categoria antes de remover")
+    sb.table("categorias").delete().eq("id", categoria_id).eq("restaurant_id", rid).execute()
+    log_acao(u, "deletar_categoria", "categorias", categoria_id, cat.data, None, request)
+    return {"mensagem": "Categoria removida"}
 
 
 @app.get("/api/admin/products", tags=["cardápio"])
@@ -1677,6 +1793,8 @@ def atualizar_produto(produto_id: str, body: dict, request: Request,
 @app.get("/api/admin/users", tags=["usuários"])
 def listar_usuarios(u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    rest = sb.table("restaurants").select("slug").eq("id", rid).single().execute()
+    slug = (rest.data or {}).get("slug")
     resp = sb.table("restaurant_memberships").select(
         "id, role, is_active, created_at,"
         "usuarios(id, nome, email, ativo, ultimo_acesso, perfil)"
@@ -1685,7 +1803,7 @@ def listar_usuarios(u: dict = Depends(authorize(["manager", "owner"]))):
         m for m in _rows(resp)
         if m.get("usuarios") and (m.get("usuarios") or {}).get("ativo") is not False
     ]
-    return {"usuarios": usuarios}
+    return {"usuarios": enrich_membership_logins(usuarios, slug)}
 
 
 @app.post("/api/admin/users", tags=["usuários"])
@@ -1694,9 +1812,12 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "users")
     validar_role_no_plano(rid, body.role)
+    rest = sb.table("restaurants").select("slug").eq("id", rid).single().execute()
+    slug = (rest.data or {}).get("slug")
+    login_id = user_identifier_from_body(body, slug)
 
     # Verificar email duplicado
-    existe = sb.table("usuarios").select("id,ativo").eq("email", body.email).execute()
+    existe = sb.table("usuarios").select("id,ativo").eq("email", login_id).execute()
     if existe.data:
         # Usuário já existe — apenas adicionar membership
         uid = existe.data[0]["id"]
@@ -1712,18 +1833,31 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
     else:
         enforce_plan_limit(rid, "users", active_memberships_count(rid))
         uid = insert_user({
-            "nome": body.nome, "email": body.email,
+            "nome": body.nome, "email": login_id,
             "senha_hash": hash_senha(body.senha),
             "perfil": "funcionario", "ativo": True,
-        }, body.email)
+        }, login_id)
 
     # Criar ou atualizar membership
     sb.table("restaurant_memberships").upsert({
         "restaurant_id": rid, "usuario_id": uid, "role": body.role, "is_active": True,
     }, on_conflict="restaurant_id,usuario_id").execute()
 
-    log_acao(u, "criar_usuario", "usuarios", uid, None, {"email": body.email, "role": body.role}, request)
+    log_acao(u, "criar_usuario", "usuarios", uid, None, {"login": display_login_identifier(login_id, slug), "role": body.role}, request)
     return {"mensagem": "Usuário criado e vinculado ao restaurante", "usuario_id": uid}
+
+
+@app.patch("/api/admin/users/{usuario_id}/password", tags=["usuários"])
+def redefinir_senha_usuario(usuario_id: str, body: ResetSenhaInput, request: Request,
+                            u: dict = Depends(authorize(["owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "users")
+    membership = _first(_rows(sb.table("restaurant_memberships").select("id,is_active").eq("usuario_id", usuario_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not membership or membership.get("is_active") is False:
+        raise HTTPException(404, "Usuário não encontrado neste restaurante")
+    sb.table("usuarios").update({"senha_hash": hash_senha(body.senha), "ativo": True}).eq("id", usuario_id).execute()
+    log_acao(u, "redefinir_senha_usuario", "usuarios", usuario_id, None, {"alterada": True}, request)
+    return {"mensagem": "Senha atualizada"}
 
 
 @app.patch("/api/admin/users/{usuario_id}/role", tags=["usuários"])
@@ -2128,6 +2262,10 @@ def listar_usuarios_plataforma(u: dict = Depends(require_super_admin)):
         m for m in _rows(resp)
         if m.get("usuarios") and m.get("restaurants")
     ]
+    for m in memberships:
+        slug = (m.get("restaurants") or {}).get("slug")
+        usuario = m.get("usuarios") or {}
+        usuario["login"] = display_login_identifier(usuario.get("email"), slug)
     return {"memberships": memberships}
 
 
@@ -2142,6 +2280,7 @@ def detalhes_restaurante_plataforma(restaurant_id: str, u: dict = Depends(requir
     users = _rows(sb.table("restaurant_memberships").select(
         "id,role,is_active,created_at,usuarios(id,nome,email,ativo,ultimo_acesso)"
     ).eq("restaurant_id", restaurant_id).order("created_at", desc=True).execute())
+    users = enrich_membership_logins(users, restaurant.get("slug"))
 
     mesas = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).execute()
     produtos = sb.table("produtos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
@@ -2222,7 +2361,7 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
     if isinstance(body.get("modules"), dict):
         control["modules"].update(body["modules"])
     save_platform_control(restaurant_id, control)
-    if requested_plan and (control.get("modules") or {}).get("garcom") is False:
+    if (control.get("modules") or {}).get("garcom") is False:
         sb.table("restaurant_settings").update({
             "allow_waiter_call": False,
             "allow_table_close_request": False,
@@ -2633,12 +2772,14 @@ def diagnosticos_plataforma(u: dict = Depends(require_super_admin)):
 def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
                                request: Request, u: dict = Depends(require_super_admin)):
     # Verificar que o restaurante existe
-    rest = sb.table("restaurants").select("id").eq("id", restaurant_id).execute()
+    rest = sb.table("restaurants").select("id,slug").eq("id", restaurant_id).execute()
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     validar_role_no_plano(restaurant_id, body.role)
+    slug = rest.data[0].get("slug")
+    login_id = user_identifier_from_body(body, slug)
 
-    existe = sb.table("usuarios").select("id,ativo").eq("email", body.email).execute()
+    existe = sb.table("usuarios").select("id,ativo").eq("email", login_id).execute()
     if existe.data:
         uid = existe.data[0]["id"]
         if existe.data[0].get("ativo") is False:
@@ -2653,10 +2794,10 @@ def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
     else:
         enforce_plan_limit(restaurant_id, "users", active_memberships_count(restaurant_id))
         uid = insert_user({
-            "nome": body.nome, "email": body.email,
+            "nome": body.nome, "email": login_id,
             "senha_hash": hash_senha(body.senha),
             "perfil": "funcionario", "ativo": True,
-        }, body.email)
+        }, login_id)
 
     sb.table("restaurant_memberships").upsert({
         "restaurant_id": restaurant_id, "usuario_id": uid,
@@ -2664,5 +2805,16 @@ def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
     }, on_conflict="restaurant_id,usuario_id").execute()
 
     log_acao(u, "super_criar_usuario", "usuarios", uid, None,
-             {"email": body.email, "role": body.role, "restaurant_id": restaurant_id}, request)
+             {"login": display_login_identifier(login_id, slug), "role": body.role, "restaurant_id": restaurant_id}, request)
     return {"mensagem": "Usuário criado", "usuario_id": uid}
+
+
+@app.patch("/api/super-admin/users/{usuario_id}/password", tags=["super-admin"])
+def redefinir_senha_usuario_super_admin(usuario_id: str, body: ResetSenhaInput,
+                                        request: Request, u: dict = Depends(require_super_admin)):
+    usuario = sb.table("usuarios").select("id,email").eq("id", usuario_id).single().execute()
+    if not usuario.data:
+        raise HTTPException(404, "Usuário não encontrado")
+    sb.table("usuarios").update({"senha_hash": hash_senha(body.senha), "ativo": True}).eq("id", usuario_id).execute()
+    log_acao(u, "super_redefinir_senha_usuario", "usuarios", usuario_id, None, {"alterada": True}, request)
+    return {"mensagem": "Senha atualizada"}

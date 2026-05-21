@@ -518,6 +518,56 @@ function renderAdminProdutos() {
           </div>
         </div>`).join('')}
       </div>`;
+  renderCategoriasAdmin();
+}
+
+function renderCategoriasAdmin() {
+  const el = document.getElementById('categorias-lista');
+  if (!el) return;
+  el.innerHTML = !categoriasLista.length ? '<div class="tabela-empty">Crie categorias para organizar o cardápio</div>' :
+    categoriasLista.map(c => `
+      <div class="categoria-pill">
+        <span>${escapeHtml(c.icone || '')} ${escapeHtml(c.nome)}</span>
+        <small>#${escapeHtml(c.ordem ?? 99)}</small>
+        <button class="btn btn-sm" onclick="abrirModalCategoria('${escapeAttr(c.id)}')">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="removerCategoria('${escapeAttr(c.id)}',this)">Remover</button>
+      </div>`).join('');
+}
+
+function abrirModalCategoria(id = '') {
+  const c = categoriasLista.find(item => item.id === id) || {};
+  document.getElementById('cat-id').value = c.id || '';
+  document.getElementById('cat-nome').value = c.nome || '';
+  document.getElementById('cat-icone').value = c.icone || '';
+  document.getElementById('cat-ordem').value = c.ordem ?? 99;
+  document.getElementById('modal-categoria').classList.add('show');
+}
+
+async function salvarCategoria() {
+  const id = document.getElementById('cat-id').value;
+  const payload = {
+    nome: document.getElementById('cat-nome').value.trim(),
+    icone: document.getElementById('cat-icone').value.trim() || '•',
+    ordem: Number(document.getElementById('cat-ordem').value || 99),
+  };
+  if (!payload.nome) return showToast('Informe o nome da categoria', 'error');
+  try {
+    if (id) await apiCall('PATCH', `/api/admin/categories/${id}`, payload);
+    else await apiCall('POST', '/api/admin/categories', payload);
+    fecharModal('modal-categoria');
+    showToast(id ? 'Categoria atualizada' : 'Categoria criada', 'success');
+    carregarCardapio();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function removerCategoria(id, btn) {
+  if (!confirm('Remover esta categoria? Produtos vinculados precisam ser movidos antes.')) return;
+  btn.disabled = true;
+  try {
+    await apiCall('DELETE', `/api/admin/categories/${id}`);
+    showToast('Categoria removida', 'success');
+    carregarCardapio();
+  } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
 }
 
 function abrirModalProdutoById(id) { abrirModalProduto(produtosMap[id]); }
@@ -529,12 +579,33 @@ function abrirModalProduto(p = null) {
   document.getElementById('prod-preco').value = p?.preco || '';
   document.getElementById('prod-custo').value = p?.custo || 0;
   document.getElementById('prod-foto').value  = p?.foto_url || '';
+  const file = document.getElementById('prod-foto-file');
+  if (file) file.value = '';
   atualizarPreviewProduto();
   document.getElementById('prod-disp').checked = p ? p.disponivel : true;
   document.getElementById('prod-dest').checked = p?.destaque || false;
   document.getElementById('prod-cat').innerHTML =
     categoriasLista.map(c => `<option value="${escapeAttr(c.id)}" ${p?.categoria_id===c.id?'selected':''}>${escapeHtml(c.icone||'')} ${escapeHtml(c.nome)}</option>`).join('');
   document.getElementById('modal-produto').classList.add('show');
+}
+
+function carregarImagemProduto(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!['image/png','image/jpeg','image/webp'].includes(file.type)) {
+    input.value = '';
+    return showToast('Use PNG, JPG ou WebP', 'error');
+  }
+  if (file.size > 700 * 1024) {
+    input.value = '';
+    return showToast('Imagem muito grande. Use até 700 KB.', 'error');
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    document.getElementById('prod-foto').value = reader.result;
+    atualizarPreviewProduto();
+  };
+  reader.readAsDataURL(file);
 }
 
 async function salvarProduto() {
@@ -629,9 +700,10 @@ async function carregarUsuarios() {
             </div>
             <div class="usuario-info">
               <div class="usuario-nome">${escapeHtml(u.nome||'—')}</div>
-              <div class="usuario-email">${escapeHtml(u.email||'—')}</div>
+              <div class="usuario-email">${escapeHtml(u.login || u.email || '—')}</div>
             </div>
             <span class="role-badge">${escapeHtml(m.role)}</span>
+            ${temRole('owner') ? `<button class="btn btn-sm" onclick="redefinirSenhaUsuario('${escapeAttr(u.id)}')">Senha</button>` : ''}
             ${podeRemover ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario('${escapeAttr(u.id)}',this)">Remover</button>` : ''}
           </div>`;
         }).join('');
@@ -651,11 +723,22 @@ async function salvarUsuario() {
   const senha = document.getElementById('u-senha').value;
   const role  = document.getElementById('u-role').value;
   if (!nome || !email || !senha) return showToast('Preencha todos os campos', 'error');
+  if (senha.length < 6) return showToast('Senha precisa ter no mínimo 6 caracteres', 'error');
   try {
-    await apiCall('POST', '/api/admin/users', { nome, email, senha, role });
+    await apiCall('POST', '/api/admin/users', { nome, username: email, email, senha, role });
     showToast('Usuário criado', 'success');
     fecharModal('modal-usuario');
     carregarUsuarios();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function redefinirSenhaUsuario(usuarioId) {
+  const senha = prompt('Nova senha para este usuário (mínimo 6 caracteres):');
+  if (senha === null) return;
+  if (senha.length < 6) return showToast('Senha precisa ter no mínimo 6 caracteres', 'error');
+  try {
+    await apiCall('PATCH', `/api/admin/users/${usuarioId}/password`, { senha });
+    showToast('Senha atualizada', 'success');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -687,7 +770,9 @@ async function carregarConfiguracoes() {
           <div class="form-row"><label class="form-label">Nome do restaurante</label>
             <input class="form-input" id="cfg-nome" value="${escapeAttr(restaurant.name || '')}"></div>
           <div class="form-row"><label class="form-label">Logo (URL)</label>
-            <input class="form-input" id="cfg-logo" value="${restaurant.logo_url||''}" placeholder="https://..."></div>
+            <input class="form-input" id="cfg-logo" value="${escapeAttr(restaurant.logo_url||'')}" placeholder="https://..."></div>
+          <div class="form-row"><label class="form-label">Enviar logo</label>
+            <input class="form-input" id="cfg-logo-file" type="file" accept="image/png,image/jpeg,image/webp" onchange="carregarLogoRestaurante(this)"></div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor primária</label>
             <input type="color" class="color-swatch" id="cfg-primary" value="${restaurant.primary_color||'#ff4d1c'}"
@@ -701,10 +786,22 @@ async function carregarConfiguracoes() {
             <input class="form-input" id="cfg-accent-txt" value="${restaurant.accent_color||'#ff6b3d'}" style="width:110px">
           </div>
           <div class="color-picker-row">
+            <label class="form-label" style="min-width:140px">Cor secundária</label>
+            <input type="color" class="color-swatch" id="cfg-secondary" value="${restaurant.secondary_color||'#1a1a1a'}"
+                   oninput="document.documentElement.style.setProperty('--color-secondary',this.value)">
+            <input class="form-input" id="cfg-secondary-txt" value="${restaurant.secondary_color||'#1a1a1a'}" style="width:110px">
+          </div>
+          <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor de fundo</label>
             <input type="color" class="color-swatch" id="cfg-bg" value="${restaurant.background_color||'#0a0a0a'}"
                    oninput="document.documentElement.style.setProperty('--color-bg',this.value)">
             <input class="form-input" id="cfg-bg-txt" value="${restaurant.background_color||'#0a0a0a'}" style="width:110px">
+          </div>
+          <div class="color-picker-row">
+            <label class="form-label" style="min-width:140px">Cor do texto</label>
+            <input type="color" class="color-swatch" id="cfg-text" value="${restaurant.text_color||'#f2f0eb'}"
+                   oninput="document.documentElement.style.setProperty('--color-text',this.value)">
+            <input class="form-input" id="cfg-text-txt" value="${restaurant.text_color||'#f2f0eb'}" style="width:110px">
           </div>
           <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="salvarConfiguracoes()">Salvar visual</button>
         </div>
@@ -718,7 +815,7 @@ async function carregarConfiguracoes() {
           <label class="toggle-row"><input type="checkbox" id="cfg-card" ${s.accept_card!==false?'checked':''}> Aceitar cartão</label>
           <label class="toggle-row"><input type="checkbox" id="cfg-cash" ${s.accept_cash!==false?'checked':''}> Aceitar dinheiro</label>
           <div class="form-row"><label class="form-label">Chave Pix</label>
-            <input class="form-input" id="cfg-pix-key" value="${s.pix_key||''}" placeholder="CPF, CNPJ, e-mail ou chave aleatória">
+            <input class="form-input" id="cfg-pix-key" value="${escapeAttr(s.pix_key||'')}" placeholder="CPF, CNPJ, e-mail ou chave aleatória">
           </div>
           <button class="btn btn-primary btn-sm" onclick="salvarSettings()">Salvar configurações</button>
         </div>
@@ -732,9 +829,9 @@ async function carregarConfiguracoes() {
         <div class="config-card">
           <div class="config-title">Contato e funcionamento</div>
           <div class="form-row"><label class="form-label">WhatsApp</label>
-            <input class="form-input" id="cfg-whatsapp" value="${s.whatsapp||''}" placeholder="(11) 99999-9999"></div>
+            <input class="form-input" id="cfg-whatsapp" value="${escapeAttr(s.whatsapp||'')}" placeholder="(11) 99999-9999"></div>
           <div class="form-row"><label class="form-label">Endereço</label>
-            <input class="form-input" id="cfg-address" value="${s.address||''}" placeholder="Rua, número, bairro"></div>
+            <input class="form-input" id="cfg-address" value="${escapeAttr(s.address||'')}" placeholder="Rua, número, bairro"></div>
           <div class="form-row-2">
             <div class="form-row" style="margin:0"><label class="form-label">Abre</label><input class="form-input" id="cfg-open" type="time" value="${s.opening_time||''}"></div>
             <div class="form-row" style="margin:0"><label class="form-label">Fecha</label><input class="form-input" id="cfg-close" type="time" value="${s.closing_time||''}"></div>
@@ -753,9 +850,31 @@ async function carregarConfiguracoes() {
     document.getElementById('cfg-accent').addEventListener('input', e => {
       document.getElementById('cfg-accent-txt').value = e.target.value;
     });
+    document.getElementById('cfg-secondary').addEventListener('input', e => {
+      document.getElementById('cfg-secondary-txt').value = e.target.value;
+    });
+    document.getElementById('cfg-text').addEventListener('input', e => {
+      document.getElementById('cfg-text-txt').value = e.target.value;
+    });
   } catch (e) {
     document.getElementById('config-content').innerHTML = '<div class="tabela-empty">Erro ao carregar.</div>';
   }
+}
+
+function carregarLogoRestaurante(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!['image/png','image/jpeg','image/webp'].includes(file.type)) {
+    input.value = '';
+    return showToast('Use PNG, JPG ou WebP', 'error');
+  }
+  if (file.size > 700 * 1024) {
+    input.value = '';
+    return showToast('Logo muito grande. Use até 700 KB.', 'error');
+  }
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById('cfg-logo').value = reader.result; };
+  reader.readAsDataURL(file);
 }
 
 async function salvarConfiguracoes() {
@@ -764,14 +883,18 @@ async function salvarConfiguracoes() {
       name:             document.getElementById('cfg-nome').value.trim(),
       logo_url:         document.getElementById('cfg-logo').value.trim() || null,
       primary_color:    document.getElementById('cfg-primary-txt').value,
+      secondary_color:  document.getElementById('cfg-secondary-txt').value,
       accent_color:     document.getElementById('cfg-accent-txt').value,
       background_color: document.getElementById('cfg-bg-txt').value,
+      text_color:       document.getElementById('cfg-text-txt').value,
     });
     showToast('Visual atualizado', 'success');
     applyRestaurantTheme({ ...window.__RESTAURANT__,
       primary_color: document.getElementById('cfg-primary-txt').value,
+      secondary_color: document.getElementById('cfg-secondary-txt').value,
       accent_color: document.getElementById('cfg-accent-txt').value,
       background_color: document.getElementById('cfg-bg-txt').value,
+      text_color: document.getElementById('cfg-text-txt').value,
     });
   } catch (e) { showToast(e.message, 'error'); }
 }
