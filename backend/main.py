@@ -653,18 +653,9 @@ def _forma_pagamento_pedido(resumo_pagamento: dict, total_pedido: float) -> str:
     por_forma = resumo_pagamento.get("por_forma") or {}
     if len(por_forma) == 1:
         return next(iter(por_forma.keys()))
-
-    total_conta = _money(resumo_pagamento.get("total"))
-    total_pedido = _money(total_pedido)
-    if total_conta <= 0:
-        return "misto"
-
-    partes = []
-    for forma, valor in sorted(por_forma.items()):
-        valor_pedido = round(total_pedido * _money(valor) / total_conta, 2)
-        if valor_pedido > 0:
-            partes.append(f"{forma}:{valor_pedido:.2f}")
-    return "misto|" + ";".join(partes) if partes else "misto"
+    # O banco atual valida forma_pagamento contra valores fixos e não aceita
+    # composição mista. O detalhamento fica no retorno e no audit_log.
+    return next(iter(sorted(por_forma.keys())), "pix")
 
 def utcnow() -> str:
     return datetime.utcnow().isoformat()
