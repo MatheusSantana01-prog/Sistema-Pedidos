@@ -558,6 +558,46 @@ def save_platform_control(restaurant_id: str, control: dict):
     else:
         sb.table("configuracoes").insert(payload).execute()
 
+def support_ticket_public(ticket: dict) -> dict:
+    ticket = dict(ticket or {})
+    restaurant = ticket.pop("restaurants", None)
+    if restaurant:
+        ticket["restaurant"] = restaurant
+    return ticket
+
+def listar_support_tickets(restaurant_id: str | None = None, limit: int = 80) -> list:
+    query = sb.table("platform_support_tickets").select(
+        "*, restaurants(id,name,slug,plan,is_active)"
+    ).order("created_at", desc=True).limit(limit)
+    if restaurant_id:
+        query = query.eq("restaurant_id", restaurant_id)
+    return [support_ticket_public(t) for t in _rows(query.execute())]
+
+def atualizar_resumo_suporte(restaurant_id: str):
+    control = get_platform_control(restaurant_id)
+    tickets = listar_support_tickets(restaurant_id, 20)
+    open_tickets = [t for t in tickets if t.get("status") != "resolvido"]
+    current = open_tickets[0] if open_tickets else (tickets[0] if tickets else None)
+    if not current:
+        control["support_status"] = "sem_chamado"
+        control["support_priority"] = "normal"
+        save_platform_control(restaurant_id, control)
+        return control
+    if open_tickets:
+        control["support_status"] = current.get("status") or "aberto"
+        control["support_priority"] = current.get("priority") or "normal"
+    else:
+        control["support_status"] = "resolvido"
+        control["support_priority"] = current.get("priority") or "normal"
+    resumo = []
+    for t in tickets[:6]:
+        resumo.append(
+            f"[{t.get('ticket_number') or t.get('id')}] {t.get('status')} / {t.get('priority')} - {t.get('subject') or t.get('message') or ''}"
+        )
+    control["support_notes"] = "\n".join(resumo)[:6000]
+    save_platform_control(restaurant_id, control)
+    return control
+
 def get_restaurant_feature_flags(restaurant_id: str) -> dict:
     defaults = {"allow_waiter_payment": False}
     row = _first(sb.table("configuracoes").select("valor").eq("restaurant_id", restaurant_id).eq("chave", "feature_flags").execute().data)
@@ -2378,18 +2418,38 @@ def abrir_suporte_restaurante(body: dict, request: Request,
     control = get_platform_control(rid)
     mensagem = str(body.get("mensagem") or "").strip()
     prioridade = str(body.get("prioridade") or "normal").strip()
+    categoria = str(body.get("categoria") or "suporte").strip().lower()
+    assunto = str(body.get("assunto") or "").strip()
     if prioridade not in {"normal", "alta", "urgente"}:
         prioridade = "normal"
+    if categoria not in {"suporte", "financeiro", "operacao", "acesso", "bug", "melhoria"}:
+        categoria = "suporte"
     if not mensagem or len(mensagem) > 2000:
         raise HTTPException(400, "Descreva o suporte em até 2000 caracteres")
-    anterior = control.get("support_notes") or ""
-    registro = f"[{utcnow()}] {u.get('nome') or u.get('email')}: {mensagem}"
+    ticket = _row(sb.table("platform_support_tickets").insert({
+        "restaurant_id": rid,
+        "category": categoria,
+        "priority": prioridade,
+        "status": "aberto",
+        "subject": assunto[:140] or None,
+        "message": mensagem,
+        "customer_name": u.get("nome"),
+        "customer_email": u.get("email") or u.get("login"),
+        "created_by": u.get("sub"),
+    }).execute())
+    registro = f"[{utcnow()}] {ticket.get('ticket_number') or ticket.get('id')} - {u.get('nome') or u.get('email')}: {mensagem}"
     control["support_status"] = "aberto"
     control["support_priority"] = prioridade
-    control["support_notes"] = (registro + ("\n\n" + anterior if anterior else ""))[:6000]
+    control["support_notes"] = (registro + ("\n\n" + (control.get("support_notes") or "") if control.get("support_notes") else ""))[:6000]
     save_platform_control(rid, control)
-    log_acao(u, "abrir_suporte", "configuracoes", rid, None, {"prioridade": prioridade, "mensagem": mensagem}, request)
-    return {"mensagem": "Solicitação de suporte enviada", "support_status": control["support_status"]}
+    log_acao(u, "abrir_suporte", "platform_support_tickets", rid, ticket.get("id"), {"prioridade": prioridade, "categoria": categoria}, request)
+    return {"mensagem": "Solicitação de suporte enviada", "support_status": control["support_status"], "ticket": support_ticket_public(ticket)}
+
+
+@app.get("/api/admin/support", tags=["restaurante"])
+def suporte_restaurante(u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    return {"tickets": listar_support_tickets(rid, 50), "control": get_platform_control(rid)}
 
 
 @app.get("/api/admin/fiscal", tags=["restaurante"])
@@ -2814,6 +2874,46 @@ def financeiro_plataforma(u: dict = Depends(require_super_admin)):
     return {"summary": summary, "items": items, "generated_at": utcnow()}
 
 
+@app.get("/api/super-admin/support", tags=["super-admin"])
+def suporte_plataforma(u: dict = Depends(require_super_admin)):
+    tickets = listar_support_tickets(None, 120)
+    open_tickets = [t for t in tickets if t.get("status") != "resolvido"]
+    return {
+        "tickets": tickets,
+        "summary": {
+            "open": len(open_tickets),
+            "urgent": len([t for t in open_tickets if t.get("priority") == "urgente"]),
+            "resolved": len([t for t in tickets if t.get("status") == "resolvido"]),
+            "total": len(tickets),
+        },
+    }
+
+
+@app.patch("/api/super-admin/support/{ticket_id}", tags=["super-admin"])
+def atualizar_suporte_plataforma(ticket_id: str, body: dict, request: Request,
+                                 u: dict = Depends(require_super_admin)):
+    row = _row(sb.table("platform_support_tickets").select("*").eq("id", ticket_id).execute())
+    payload = {}
+    if body.get("status") in {"aberto", "em_andamento", "aguardando_cliente", "resolvido"}:
+        payload["status"] = body.get("status")
+        if payload["status"] == "resolvido":
+            payload["resolved_at"] = utcnow()
+        elif row.get("resolved_at"):
+            payload["resolved_at"] = None
+    if body.get("priority") in {"normal", "alta", "urgente"}:
+        payload["priority"] = body.get("priority")
+    for key in ("admin_notes", "last_response"):
+        if key in body:
+            payload[key] = str(body.get(key) or "")[:3000]
+    if not payload:
+        raise HTTPException(400, "Nada para atualizar")
+    payload["updated_at"] = utcnow()
+    ticket = _row(sb.table("platform_support_tickets").update(payload).eq("id", ticket_id).execute())
+    atualizar_resumo_suporte(ticket["restaurant_id"])
+    log_acao(u, "atualizar_suporte", "platform_support_tickets", ticket["restaurant_id"], ticket_id, payload, request)
+    return {"ticket": support_ticket_public(ticket)}
+
+
 @app.get("/api/super-admin/restaurants/{restaurant_id}/overview", tags=["super-admin"])
 def detalhes_restaurante_plataforma(restaurant_id: str, u: dict = Depends(require_super_admin)):
     rest = sb.table("restaurants").select("*,restaurant_settings(*)").eq("id", restaurant_id).single().execute()
@@ -2876,6 +2976,7 @@ def detalhes_restaurante_plataforma(restaurant_id: str, u: dict = Depends(requir
         },
         "recent_orders": recentes,
         "recent_logs": logs,
+        "support_tickets": listar_support_tickets(restaurant_id, 20),
     }
 
 
