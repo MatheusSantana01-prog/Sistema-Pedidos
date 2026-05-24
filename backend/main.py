@@ -2320,11 +2320,15 @@ def get_meu_restaurante(u: dict = Depends(authorize(["manager", "owner"]))):
     resp = sb.table("restaurants").select("*,restaurant_settings(*)").eq("id", rid).single().execute()
     restaurant = _row(resp)
     flags = get_restaurant_feature_flags(rid)
-    settings = restaurant.get("restaurant_settings") or []
-    if settings:
-        settings[0].update(flags)
+    settings = restaurant.get("restaurant_settings")
+    if isinstance(settings, list):
+        normalized_settings = settings[0] if settings else {}
+    elif isinstance(settings, dict):
+        normalized_settings = settings
     else:
-        restaurant["restaurant_settings"] = [flags]
+        normalized_settings = {}
+    normalized_settings.update(flags)
+    restaurant["restaurant_settings"] = [normalized_settings]
     return {"restaurant": restaurant}
 
 
