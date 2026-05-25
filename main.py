@@ -2894,7 +2894,7 @@ def atualizar_suporte_plataforma(ticket_id: str, body: dict, request: Request,
                                  u: dict = Depends(require_super_admin)):
     row = _row(sb.table("platform_support_tickets").select("*").eq("id", ticket_id).execute())
     payload = {}
-    if body.get("status") in {"aberto", "em_andamento", "aguardando_cliente", "resolvido"}:
+    if body.get("status") in {"aberto", "em_andamento", "liberado_teste", "aguardando_cliente", "resolvido"}:
         payload["status"] = body.get("status")
         if payload["status"] == "resolvido":
             payload["resolved_at"] = utcnow()
