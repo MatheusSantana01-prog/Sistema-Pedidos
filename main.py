@@ -1360,6 +1360,11 @@ def health():
     return {"status": "ok", "timestamp": utcnow(), "version": APP_VERSION}
 
 
+@app.get("/api/health", tags=["geral"])
+def api_health():
+    return health()
+
+
 # ── Público: Buscar restaurante por slug ─────────────────────────
 @app.get("/api/public/restaurants/{slug}", tags=["público"])
 def get_restaurant_public(slug: str):
