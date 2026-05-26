@@ -1654,11 +1654,11 @@ def login(body: LoginInput, request: Request):
     """
     identifier = body.identifier()
     login_id = make_login_identifier(identifier, body.restaurant_slug)
-    resp = sb.table("usuarios").select("*").eq("email", login_id).eq("ativo", True).single().execute()
-    if not resp.data:
+    resp = sb.table("usuarios").select("*").eq("email", login_id).eq("ativo", True).limit(1).execute()
+    u = _first(_rows(resp))
+    if not u:
         raise HTTPException(401, "Credenciais inválidas")
 
-    u = resp.data
     if not verificar_senha(body.senha.strip(), u.get("senha_hash", "")):
         raise HTTPException(401, "Credenciais inválidas")
 
