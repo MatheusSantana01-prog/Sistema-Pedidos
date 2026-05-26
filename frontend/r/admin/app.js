@@ -1127,11 +1127,21 @@ async function carregarSuporteCliente() {
   try {
     const { tickets } = await apiCall('GET', '/api/admin/support');
     const lista = tickets || [];
+    const whatsappUrl = supportWhatsAppUrl();
     atualizarBadgeSuporteAdmin(lista);
     el.innerHTML = `
       <div class="support-workspace">
         <div class="support-open-panel">
           <div class="config-title">Abrir chamado</div>
+          <div class="support-contact-box">
+            <div>
+              <b>Atendimento pelo WhatsApp</b>
+              <span>Abra o chamado aqui e continue a conversa pelo WhatsApp de suporte.</span>
+            </div>
+            ${whatsappUrl
+              ? `<a class="btn btn-sm btn-success" href="${escapeAttr(whatsappUrl)}" target="_blank" rel="noopener">WhatsApp</a>`
+              : '<span class="support-contact-muted">WhatsApp não configurado</span>'}
+          </div>
           <div class="form-row"><label class="form-label">Categoria</label>
             <select class="form-input" id="support-category">
               <option value="suporte">Suporte geral</option>
@@ -1171,6 +1181,11 @@ async function carregarSuporteCliente() {
   } catch (e) {
     el.innerHTML = `<div class="tabela-empty">Histórico indisponível: ${escapeHtml(e.message)}</div>`;
   }
+}
+
+function supportWhatsAppUrl() {
+  const raw = window.SAAS_CONFIG?.SUPPORT_WHATSAPP_URL || '';
+  return safeUrl(raw, '');
 }
 
 async function carregarContadorSuporteAdmin(showErrors = false) {

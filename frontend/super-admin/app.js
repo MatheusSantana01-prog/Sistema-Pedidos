@@ -10,25 +10,24 @@ const PLANOS = {
     label: 'Básico',
     headline: 'QR Code, pedidos digitais e operação essencial.',
     limits: { users: 5, tables: 20, products: 100 },
-    modules: { financeiro: true, estoque: false, cupons: false, tv: false, garcom: false, relatorios: false, custom_branding: false, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+    modules: { financeiro: true, cupons: false, tv: false, garcom: false, relatorios: false, custom_branding: false, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
   pro: {
     label: 'Pro',
     headline: 'Plano recomendado para salão, cozinha, caixa e atendimento.',
     limits: { users: 15, tables: 60, products: 400 },
-    modules: { financeiro: true, estoque: false, cupons: false, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+    modules: { financeiro: true, cupons: false, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
   enterprise: {
     label: 'Premium',
     headline: 'Escala, suporte e integrações premium em evolução.',
     limits: { users: 9999, tables: 9999, products: 9999 },
-    modules: { financeiro: true, estoque: true, cupons: true, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: true, advanced_reports: true, priority_support: true, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+    modules: { financeiro: true, cupons: true, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: true, advanced_reports: true, priority_support: true, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
 };
 
 const MODULE_LABELS = {
   financeiro: 'Financeiro e caixa',
-  estoque: 'Estoque',
   cupons: 'Cupons',
   tv: 'TV de pedidos',
   garcom: 'Garçom e chamadas',
@@ -445,7 +444,7 @@ function moduleToggle(id, label, checked) {
 }
 
 function renderModules(modules) {
-  const keys = ['financeiro', 'tv', 'garcom', 'relatorios', 'custom_branding', 'estoque', 'cupons', 'backups', 'advanced_reports', 'priority_support', 'api_integrations', 'ifood', 'whatsapp', 'multiunit'];
+  const keys = ['financeiro', 'tv', 'garcom', 'relatorios', 'custom_branding', 'cupons', 'backups', 'advanced_reports', 'priority_support', 'api_integrations', 'ifood', 'whatsapp', 'multiunit'];
   return `<div class="module-grid">
     ${keys.map(key => {
       const checkedValue = modules?.[key] === true;
@@ -478,7 +477,6 @@ async function salvarControleRestaurante(restId) {
     desired_tables: Number(val('desired-tables') || 0),
     modules: {
       financeiro: checked('mod-financeiro'),
-      estoque: checked('mod-estoque'),
       cupons: checked('mod-cupons'),
       tv: checked('mod-tv'),
       garcom: checked('mod-garcom'),
@@ -557,7 +555,6 @@ function abrirModalNovoRest() {
   document.getElementById('r-mesas').value = 10;
   document.getElementById('r-plano').value = 'starter';
   aplicarPlanoComercial();
-  document.getElementById('r-categorias').checked = true;
   document.getElementById('modal-rest').classList.add('show');
 }
 
@@ -629,7 +626,6 @@ async function criarRestaurante() {
   const plano = document.getElementById('r-plano').value;
   const cor   = document.getElementById('r-cor').value;
   const mesas = Number(document.getElementById('r-mesas').value || 0);
-  const categorias = document.getElementById('r-categorias').checked;
   const ownerNome  = document.getElementById('r-owner-nome').value.trim() || null;
   const ownerEmail = document.getElementById('r-owner-email').value.trim() || null;
   const ownerSenha = document.getElementById('r-owner-senha').value || null;
@@ -647,8 +643,8 @@ async function criarRestaurante() {
       template,
       primary_color: cor,
       initial_table_count: mesas,
-      create_default_categories: categorias,
-      create_sample_products: categorias,
+      create_default_categories: false,
+      create_sample_products: false,
     };
     const { restaurant } = await apiCall('POST', '/api/super-admin/restaurants', payload);
 

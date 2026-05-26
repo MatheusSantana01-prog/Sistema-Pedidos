@@ -113,7 +113,6 @@ PLAN_ALIASES = {
 PLAN_MODULES = {
     "starter": {
         "financeiro": True,
-        "estoque": False,
         "cupons": False,
         "tv": False,
         "garcom": False,
@@ -129,7 +128,6 @@ PLAN_MODULES = {
     },
     "pro": {
         "financeiro": True,
-        "estoque": False,
         "cupons": False,
         "tv": True,
         "garcom": True,
@@ -145,7 +143,6 @@ PLAN_MODULES = {
     },
     "enterprise": {
         "financeiro": True,
-        "estoque": True,
         "cupons": True,
         "tv": True,
         "garcom": True,
@@ -1075,8 +1072,8 @@ class CriarRestauranteInput(BaseModel):
     plan: str = "starter"
     template: str = "restaurante"
     initial_table_count: int = 10
-    create_default_categories: bool = True
-    create_sample_products: bool = True
+    create_default_categories: bool = False
+    create_sample_products: bool = False
 
     @field_validator("slug")
     @classmethod
@@ -2689,37 +2686,6 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
             "accept_cash": True,
         }).execute()
 
-        categorias_criadas = []
-        if body.create_default_categories:
-            template_cats = TEMPLATE_CATEGORIES.get(body.template, TEMPLATE_CATEGORIES["restaurante"])
-            sb.table("categorias").insert([
-                {"restaurant_id": rest["id"], **cat}
-                for cat in template_cats
-            ]).execute()
-            categorias_criadas = _rows(sb.table("categorias").select("id,nome").eq("restaurant_id", rest["id"]).execute())
-
-        if body.create_sample_products and categorias_criadas:
-            cat_por_nome = {c["nome"]: c["id"] for c in categorias_criadas}
-            produtos_seed = []
-            for cat_nome, nome, descricao, preco, destaque, tempo in SAMPLE_PRODUCTS.get(body.template, SAMPLE_PRODUCTS["restaurante"]):
-                cat_id = cat_por_nome.get(cat_nome)
-                if not cat_id:
-                    continue
-                produtos_seed.append({
-                    "restaurant_id": rest["id"],
-                    "categoria_id": cat_id,
-                    "nome": nome,
-                    "descricao": descricao,
-                    "preco": preco,
-                    "custo": 0,
-                    "foto_url": None,
-                    "disponivel": True,
-                    "destaque": destaque,
-                    "tempo_preparo_minutos": tempo,
-                })
-            if produtos_seed:
-                sb.table("produtos").insert(produtos_seed).execute()
-
         if body.initial_table_count:
             criadas = ensure_active_tables_count(rest["id"], body.initial_table_count)
             if active_tables_count(rest["id"]) < body.initial_table_count:
@@ -3324,7 +3290,7 @@ def reparar_seed_restaurante(restaurant_id: str, body: dict, request: Request,
         criados["settings"] = 1
 
     categorias = _rows(sb.table("categorias").select("id,nome").eq("restaurant_id", restaurant_id).execute())
-    if not categorias:
+    if body.get("create_default_categories", False) and not categorias:
         sb.table("categorias").insert([
             {"restaurant_id": restaurant_id, **cat}
             for cat in TEMPLATE_CATEGORIES[template]
@@ -3332,7 +3298,7 @@ def reparar_seed_restaurante(restaurant_id: str, body: dict, request: Request,
         categorias = _rows(sb.table("categorias").select("id,nome").eq("restaurant_id", restaurant_id).execute())
         criados["categories"] = len(categorias)
 
-    if body.get("create_sample_products", True) and not _rows(sb.table("produtos").select("id").eq("restaurant_id", restaurant_id).limit(1).execute()):
+    if body.get("create_sample_products", False) and not _rows(sb.table("produtos").select("id").eq("restaurant_id", restaurant_id).limit(1).execute()):
         cat_por_nome = {c["nome"]: c["id"] for c in categorias}
         produtos_seed = []
         for cat_nome, nome, descricao, preco, destaque, tempo in SAMPLE_PRODUCTS.get(template, SAMPLE_PRODUCTS["restaurante"]):
