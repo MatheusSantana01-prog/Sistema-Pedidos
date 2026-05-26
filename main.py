@@ -800,6 +800,32 @@ def active_tables_count(restaurant_id: str) -> int:
     resp = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).execute()
     return resp.count or 0
 
+def ensure_active_tables_count(restaurant_id: str, desired_count: int) -> int:
+    desired_count = max(0, int(desired_count or 0))
+    current_count = active_tables_count(restaurant_id)
+    if desired_count <= current_count:
+        return 0
+    enforce_plan_limit(restaurant_id, "tables", current_count, desired_count - current_count)
+    existentes = _rows(sb.table("mesas").select("numero").eq("restaurant_id", restaurant_id).execute())
+    usados = {int(m["numero"]) for m in existentes if str(m.get("numero", "")).isdigit()}
+    novas = []
+    n = 1
+    while len(novas) < (desired_count - current_count):
+        if n not in usados:
+            novas.append({
+                "restaurant_id": restaurant_id,
+                "numero": n,
+                "capacidade": 4,
+                "ativa": True,
+                "status": "livre",
+                "qr_code_token": secrets.token_urlsafe(24),
+            })
+            usados.add(n)
+        n += 1
+    if novas:
+        sb.table("mesas").insert(novas).execute()
+    return len(novas)
+
 def products_count(restaurant_id: str) -> int:
     resp = sb.table("produtos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
     return resp.count or 0
@@ -2695,17 +2721,9 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
                 sb.table("produtos").insert(produtos_seed).execute()
 
         if body.initial_table_count:
-            sb.table("mesas").insert([
-                {
-                    "restaurant_id": rest["id"],
-                    "numero": n,
-                    "capacidade": 4,
-                    "ativa": True,
-                    "status": "livre",
-                    "qr_code_token": secrets.token_urlsafe(24),
-                }
-                for n in range(1, body.initial_table_count + 1)
-            ]).execute()
+            criadas = ensure_active_tables_count(rest["id"], body.initial_table_count)
+            if active_tables_count(rest["id"]) < body.initial_table_count:
+                raise RuntimeError(f"Foram criadas {criadas} mesa(s), mas o total solicitado foi {body.initial_table_count}")
     except Exception as exc:
         apagar_restaurante_dados(rest["id"])
         raise HTTPException(500, f"Erro ao preparar restaurante inicial: {exc}")
@@ -3052,6 +3070,9 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
             control[key] = body.get(key)
     control = calcular_status_financeiro(control)
     save_platform_control(restaurant_id, control)
+    tables_created = 0
+    if "desired_tables" in body:
+        tables_created = ensure_active_tables_count(restaurant_id, int(body.get("desired_tables") or 0))
     if (control.get("modules") or {}).get("garcom") is False:
         sb.table("restaurant_settings").update({
             "allow_waiter_call": False,
@@ -3060,7 +3081,7 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
         }).eq("restaurant_id", restaurant_id).execute()
 
     log_acao(u, "super_atualizar_controle", "configuracoes", restaurant_id, None, body, request)
-    return {"mensagem": "Controle atualizado", "control": control, "restaurant_patch": restaurant_patch}
+    return {"mensagem": "Controle atualizado", "control": control, "restaurant_patch": restaurant_patch, "tables_created": tables_created}
 
 
 @app.post("/api/super-admin/restaurants/{restaurant_id}/impersonate", tags=["super-admin"])
@@ -3334,24 +3355,7 @@ def reparar_seed_restaurante(restaurant_id: str, body: dict, request: Request,
     mesas_ativas = active_tables_count(restaurant_id)
     mesas_desejadas = int(body.get("tables") or 0)
     if mesas_desejadas > mesas_ativas:
-        enforce_plan_limit(restaurant_id, "tables", mesas_ativas, mesas_desejadas - mesas_ativas)
-        existentes = _rows(sb.table("mesas").select("numero").eq("restaurant_id", restaurant_id).execute())
-        usados = {int(m["numero"]) for m in existentes if str(m.get("numero", "")).isdigit()}
-        novas = []
-        n = 1
-        while len(novas) < (mesas_desejadas - mesas_ativas):
-            if n not in usados:
-                novas.append({
-                    "restaurant_id": restaurant_id,
-                    "numero": n,
-                    "capacidade": 4,
-                    "ativa": True,
-                    "status": "livre",
-                    "qr_code_token": secrets.token_urlsafe(24),
-                })
-            n += 1
-        sb.table("mesas").insert(novas).execute()
-        criados["tables"] = len(novas)
+        criados["tables"] = ensure_active_tables_count(restaurant_id, mesas_desejadas)
 
     log_acao(u, "super_reparar_seed", "restaurants", restaurant_id, None, criados, request)
     return {"mensagem": "Seed verificado", "created": criados}
