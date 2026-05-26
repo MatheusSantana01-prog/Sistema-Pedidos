@@ -1,0 +1,401 @@
+let RESTAURANT = null;
+let mesasLista = [];
+let categorias = [];
+let filtroMesa = 'todas';
+let pollingHandle = null;
+let mesaAtual = null;
+
+const FOOD_IMAGES = {
+  pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=500&q=80',
+  burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80',
+  drink: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=500&q=80',
+  dessert: 'https://images.unsplash.com/photo-1564355808539-22fda35bed7e?auto=format&fit=crop&w=500&q=80',
+  default: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=500&q=80',
+};
+
+async function init() {
+  RESTAURANT = await initTenant();
+  if (!RESTAURANT) return;
+  setupRememberedLogin('garcom');
+  if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) iniciarApp();
+  else if (isLoggedIn()) logout();
+}
+
+async function fazerLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const senha = document.getElementById('l-senha').value.trim();
+  const erro = document.getElementById('login-erro');
+  const btn = document.querySelector('.btn-primary');
+  if (!email || !senha) {
+    erro.textContent = 'Preencha e-mail e senha';
+    erro.classList.add('show');
+    return;
+  }
+  btn.disabled = true;
+  document.getElementById('login-txt').textContent = 'Entrando...';
+  try {
+    const remember = document.getElementById('l-remember')?.checked === true;
+    await login(email, senha, getCurrentRestaurantSlug(), { remember });
+    persistRememberedLogin('garcom', email, remember);
+    iniciarApp();
+  } catch (e) {
+    erro.textContent = e.message;
+    erro.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('login-txt').textContent = 'Entrar';
+  }
+}
+
+function fazerLogout() {
+  logout();
+  clearTimeout(pollingHandle);
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function iniciarApp() {
+  try {
+    exigirSessaoRestaurante(RESTAURANT);
+    exigirPerfil(['waiter', 'manager', 'owner'], 'Use um login de garçom, gerente ou dono para atendimento');
+  } catch (e) {
+    showLoginError(e.message);
+    return;
+  }
+  const u = getUsuario();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('user-nome').textContent = u.nome || 'Usuário';
+  document.getElementById('user-role').textContent = u.role || '';
+  carregarMesas();
+  carregarChamados();
+  carregarCardapio();
+  iniciarPolling();
+}
+
+function showLoginError(msg) {
+  const erro = document.getElementById('login-erro');
+  erro.textContent = msg;
+  erro.classList.add('show');
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+}
+
+function iniciarPolling() {
+  clearTimeout(pollingHandle);
+  function tick() {
+    pollingHandle = setTimeout(async () => {
+      await carregarMesas(false);
+      await carregarChamados(false);
+      tick();
+    }, 12000);
+  }
+  tick();
+}
+
+async function carregarChamados(showErrors = true) {
+  try {
+    const { chamados } = await apiCall('GET', '/api/admin/service-requests?limite=30');
+    const abertos = (chamados || []).filter(c => c.status !== 'atendido');
+    document.getElementById('calls-list').innerHTML = abertos.length ? abertos.map(c => `
+      <div class="call-card ${escapeAttr(c.tipo)}">
+        <div>
+          <strong>Mesa ${escapeHtml(c.mesa_numero || '—')}</strong>
+          <span>${escapeHtml(labelChamado(c.tipo))} · ${escapeHtml(tempoAberta(c.created_at))}</span>
+          ${c.mensagem ? `<small>${escapeHtml(c.mensagem)}</small>` : ''}
+        </div>
+        <button onclick="atenderChamado('${escapeAttr(c.id)}',this)">Atender</button>
+      </div>`).join('') : '<div class="empty">Nenhum chamado aberto.</div>';
+  } catch (e) {
+    if (showErrors) showToast(e.message, 'error');
+  }
+}
+
+async function atenderChamado(id, btn) {
+  btn.disabled = true;
+  try {
+    await apiCall('PATCH', `/api/admin/service-requests/${id}`, { status: 'atendido' });
+    carregarChamados(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function labelChamado(tipo) {
+  return { garcom: 'Chamou garçom', conta: 'Pediu conta', problema: 'Problema' }[tipo] || 'Chamado';
+}
+
+async function carregarMesas(showErrors = true) {
+  try {
+    const { mesas } = await apiCall('GET', '/api/admin/tables');
+    mesasLista = mesas || [];
+    renderMesas();
+  } catch (e) {
+    if (showErrors) showToast(e.message, 'error');
+  }
+}
+
+function renderMesas() {
+  const ocupadas = mesasLista.filter(m => m.status === 'ocupada').length;
+  const livres = mesasLista.filter(m => m.status === 'livre').length;
+  const semPedido = mesasLista.filter(m => m.estado_operacional === 'ocupada_sem_pedido').length;
+  const aberto = mesasLista.reduce((a, m) => a + Number(m.sessao_ativa?.total_consumido || 0), 0);
+  document.getElementById('s-ocup').textContent = semPedido ? `${ocupadas} (${semPedido} sem pedido)` : ocupadas;
+  document.getElementById('s-liv').textContent = livres;
+  document.getElementById('s-fat').textContent = 'R$ ' + fmt(aberto);
+
+  const mesas = mesasLista.filter(m => filtroMesa === 'todas' || m.status === filtroMesa);
+  document.getElementById('mesas-grid').innerHTML = mesas.length ? mesas.map(m => {
+    const sess = m.sessao_ativa;
+    const total = Number(sess?.total_consumido || 0);
+    const aberta = sess?.aberta_em ? tempoAberta(sess.aberta_em) : '';
+    const alerta = alertaMesa(sess);
+    const estado = m.estado_operacional || m.status;
+    return `<div class="mesa-card ${escapeAttr(m.status)} ${escapeAttr(estado)} ${escapeAttr(alerta.classe)}" onclick="${sess ? `abrirMesa('${escapeAttr(m.id)}','${escapeAttr(sess.id)}',${Number(m.numero || 0)})` : ''}">
+      <div>
+        <div class="mesa-num">${escapeHtml(m.numero)}</div>
+        <div class="mesa-status">${escapeHtml(labelEstadoMesa(m))}</div>
+      </div>
+      <div>
+        ${sess ? `<div class="mesa-total">R$ ${fmt(total)}</div><div class="mesa-note">${escapeHtml(mesaOrigem(sess))} · ${escapeHtml(aberta)}</div>` : '<div class="mesa-note">Sem conta aberta</div>'}
+        ${alerta.texto ? `<div class="mesa-alerta">${escapeHtml(alerta.texto)}</div>` : ''}
+        <div class="mesa-actions" onclick="event.stopPropagation()">
+          ${!sess ? `<button onclick="ocuparMesa('${escapeAttr(m.id)}',${Number(m.numero || 0)},this)">Ocupar</button>` : ''}
+          ${sess && (sess.pedidos_count || 0) === 0 ? `<button class="danger" onclick="liberarSemConsumo('${escapeAttr(m.id)}',${Number(m.numero || 0)},this)">Liberar sem consumo</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">Nenhuma mesa neste filtro.</div>';
+}
+
+function labelEstadoMesa(m) {
+  if (m.estado_operacional === 'ocupada_sem_pedido') return 'Mesa ocupada sem pedido';
+  if (m.estado_operacional === 'com_pedido') return 'Mesa com pedido';
+  return m.status === 'ocupada' ? 'Mesa ocupada' : 'Mesa livre';
+}
+
+function mesaOrigem(sess) {
+  const obs = String(sess?.observacao || '');
+  if (obs.includes('cardapio_fisico')) return 'Cardápio físico';
+  if (obs.includes('reserva_chegou')) return 'Reserva chegou';
+  if (obs.includes('aguardando')) return 'Cliente aguardando';
+  if (obs.includes('ocupacao_manual')) return 'Ocupação manual';
+  return (sess?.pedidos_count || 0) === 0 ? 'Sem pedido' : `${sess.pedidos_count} pedido(s)`;
+}
+
+async function ocuparMesa(mesaId, numero, btn) {
+  const motivo = await appPrompt(`Motivo para ocupar a mesa ${numero}. Use: cliente_sentou, aguardando, cardapio_fisico, reserva_chegou ou outro.`, 'cliente_sentou', { title: 'Ocupar mesa' });
+  if (!motivo) return;
+  btn.disabled = true;
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaId}/occupy`, { motivo: motivo.trim() || 'cliente_sentou' });
+    showToast(`Mesa ${numero} ocupada`, 'success');
+    carregarMesas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function liberarSemConsumo(mesaId, numero, btn) {
+  const motivo = await appPrompt(`Por que liberar a mesa ${numero} sem consumo? Use: nao_consumiu, desistiu, aguardou_e_saiu, erro_operacional ou outro.`, 'nao_consumiu', { title: 'Liberar sem consumo' });
+  if (!motivo) return;
+  if (!await appConfirm(`Confirmar liberação da mesa ${numero} sem consumo?`, { title: 'Confirmar liberação', danger: true })) return;
+  btn.disabled = true;
+  try {
+    await apiCall('POST', `/api/admin/tables/${mesaId}/release`, { motivo: motivo.trim() || 'nao_consumiu' });
+    showToast(`Mesa ${numero} liberada sem consumo`, 'success');
+    carregarMesas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function alertaMesa(sess) {
+  if (!sess?.ultima_atividade_em) return { classe: '', texto: '' };
+  const min = Math.floor((Date.now() - new Date(sess.ultima_atividade_em)) / 60000);
+  if (min >= 60) return { classe: 'mesa-alerta-critico', texto: `Sem novo pedido há ${min}min` };
+  if (min >= 30) return { classe: 'mesa-alerta-atencao', texto: `Sem novo pedido há ${min}min` };
+  return { classe: '', texto: '' };
+}
+
+function filtrarMesas(btn, filtro) {
+  filtroMesa = filtro;
+  document.querySelectorAll('.filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMesas();
+}
+
+async function abrirMesa(mesaId, sessaoId, numero) {
+  mesaAtual = { mesaId, sessaoId, numero, total: 0, settings: {}, pedidos: [] };
+  document.getElementById('modal-title').textContent = `Mesa ${numero}`;
+  document.getElementById('modal-body').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  document.getElementById('modal-mesa').classList.add('show');
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${sessaoId}/bill`);
+    const pedidos = data.pedidos || [];
+    const total = Number(data.total_consumido ?? pedidos.reduce((a, p) => a + Number(p.total || 0), 0));
+    mesaAtual = { mesaId, sessaoId, numero, total: Number(data.total_com_taxa ?? total), settings: data.settings || {}, pedidos };
+    document.getElementById('modal-body').innerHTML = pedidos.length ? `
+      ${pedidos.map(p => `
+        <div class="pedido-card">
+          <div class="pedido-head">
+            <span>#${escapeHtml(p.numero || '—')} · ${escapeHtml(statusLabel(p.status))}</span>
+            <span>R$ ${fmt(p.total || 0)}</span>
+          </div>
+          ${(p.itens || []).map(it => `
+            <div class="pedido-item">
+              <span>${escapeHtml(it.quantidade)}x ${escapeHtml(it.nome_produto)}</span>
+              <span>R$ ${fmt(it.subtotal || 0)}</span>
+            </div>`).join('')}
+        </div>`).join('')}
+      <div class="bill-total"><span>Total consumido</span><strong>R$ ${fmt(mesaAtual.total)}</strong></div>
+      ${renderPagamentoGarcom(mesaAtual)}
+    ` : '<div class="empty">Esta mesa ainda não tem pedidos.</div>';
+  } catch (e) {
+    document.getElementById('modal-body').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+function renderPagamentoGarcom(ctx) {
+  if (!ctx.settings?.allow_waiter_payment) {
+    return '<div class="empty" style="margin-top:12px">Pagamento pela mesa desativado pelo restaurante.</div>';
+  }
+  const abertos = (ctx.pedidos || []).filter(p => ['pendente','confirmado','em_preparo','pronto'].includes(p.status));
+  if (abertos.length) {
+    return `<div class="empty" style="margin-top:12px">Ainda há ${abertos.length} pedido(s) em andamento. Entregue tudo antes de fechar a conta.</div>`;
+  }
+  const formas = [
+    ctx.settings.accept_pix !== false ? ['pix', 'Pix'] : null,
+    ctx.settings.accept_card !== false ? ['cartao_debito', 'Cartão débito'] : null,
+    ctx.settings.accept_card !== false ? ['cartao_credito', 'Cartão crédito'] : null,
+    ctx.settings.accept_cash !== false ? ['dinheiro', 'Dinheiro'] : null,
+  ].filter(Boolean);
+  return `
+    <div class="waiter-pay-box">
+      <div class="section-kicker">Pagamento na mesa</div>
+      <div class="pay-actions">
+        ${formas.map(([forma, label]) => `<button onclick="fecharMesaGarcom('${forma}', this)">Receber ${label}</button>`).join('')}
+      </div>
+      <div class="pay-split">
+        ${formas.map(([forma, label]) => `
+          <label>${label}<input id="pay-${forma}" type="number" min="0" step="0.01" placeholder="0,00"></label>`).join('')}
+      </div>
+      <button class="pay-submit" onclick="fecharMesaGarcom('misto', this)">Fechar com valores acima</button>
+    </div>`;
+}
+
+async function fecharMesaGarcom(forma, btn) {
+  if (!mesaAtual) return;
+  if (!await appConfirm(`Confirmar fechamento da mesa ${mesaAtual.numero}?`, { title: 'Fechar mesa' })) return;
+  btn.disabled = true;
+  try {
+    let payload;
+    if (forma === 'misto') {
+      const pagamentos = ['pix','cartao_debito','cartao_credito','dinheiro']
+        .map(f => ({ forma_pagamento: f, valor: Number(document.getElementById('pay-' + f)?.value || 0) }))
+        .filter(p => p.valor > 0);
+      payload = { pagamentos };
+    } else {
+      payload = { forma_pagamento: forma };
+    }
+    await apiCall('POST', `/api/admin/tables/${mesaAtual.mesaId}/close`, payload);
+    showToast('Conta fechada pelo garçom', 'success');
+    fecharModal('modal-mesa');
+    carregarMesas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function carregarCardapio() {
+  try {
+    const slug = getCurrentRestaurantSlug();
+    const { cardapio } = await apiPublic('GET', `/api/public/restaurants/${slug}/menu`);
+    categorias = (cardapio || []).map(c => ({ ...c, produtos: c.produtos || [] }));
+    renderCardapio();
+  } catch (e) {
+    document.getElementById('cardapio-lista').innerHTML = '<div class="empty">Erro ao carregar cardápio.</div>';
+  }
+}
+
+function renderCardapio() {
+  const q = (document.getElementById('menu-search')?.value || '').trim().toLowerCase();
+  const cats = categorias.map(c => ({
+    ...c,
+    produtos: (c.produtos || []).filter(p => {
+      const txt = `${p.nome || ''} ${p.descricao || ''} ${c.nome || ''}`.toLowerCase();
+      return !q || txt.includes(q);
+    }),
+  })).filter(c => c.produtos.length);
+
+  document.getElementById('cardapio-lista').innerHTML = cats.length ? cats.map(c => `
+    <div class="cat-title">${escapeHtml(c.icone || '')} ${escapeHtml(c.nome || 'Categoria')}</div>
+    ${c.produtos.map(p => `
+      <div class="product-row ${p.disponivel === false ? 'off' : ''}">
+        <img src="${safeUrl(imageForProduct(p), FOOD_IMAGES.default)}" alt="${escapeAttr(p.nome || 'Produto')}" loading="lazy" onerror="this.src='${FOOD_IMAGES.default}'">
+        <div>
+          <div class="product-name">${escapeHtml(p.nome || 'Produto')}</div>
+          ${p.descricao ? `<div class="product-desc">${escapeHtml(p.descricao)}</div>` : ''}
+        </div>
+        <div class="product-price">${p.disponivel === false ? 'Indisponível' : 'R$ ' + fmt(p.preco || 0)}</div>
+      </div>`).join('')}
+  `).join('') : '<div class="empty">Nenhum produto encontrado.</div>';
+}
+
+function imageForProduct(p) {
+  if (p?.foto_url) return p.foto_url;
+  const text = `${p?.nome || ''} ${p?.descricao || ''}`.toLowerCase();
+  if (text.includes('pizza')) return FOOD_IMAGES.pizza;
+  if (text.includes('burger') || text.includes('hamb')) return FOOD_IMAGES.burger;
+  if (text.includes('suco') || text.includes('drink') || text.includes('bebida') || text.includes('refri')) return FOOD_IMAGES.drink;
+  if (text.includes('sobremesa') || text.includes('doce')) return FOOD_IMAGES.dessert;
+  return FOOD_IMAGES.default;
+}
+
+function tempoAberta(data) {
+  const min = Math.max(0, Math.floor((Date.now() - new Date(data)) / 60000));
+  return min < 60 ? `${min}min aberta` : `${Math.floor(min / 60)}h${min % 60 ? String(min % 60).padStart(2, '0') : ''} aberta`;
+}
+
+function statusLabel(s) {
+  return { pendente:'Aguardando', confirmado:'Confirmado', em_preparo:'Em preparo', pronto:'Pronto', entregue:'Entregue', cancelado:'Cancelado' }[s] || s || '—';
+}
+
+function fecharModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => {
+    if (e.target === bg) bg.classList.remove('show');
+  });
+});
+
+function showToast(msg, tipo = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (tipo ? ' ' + tipo : '') + ' show';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+function fmt(v) {
+  return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+init();

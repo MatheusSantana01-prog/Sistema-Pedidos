@@ -1,0 +1,24 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.vercel/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*.log
+
+# Legacy standalone pages. The active frontend lives in /frontend with
+# separate HTML, CSS and JS files.
+/admin.html
+/cliente.html
