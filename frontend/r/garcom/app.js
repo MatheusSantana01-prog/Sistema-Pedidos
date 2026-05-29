@@ -57,7 +57,7 @@ function fazerLogout() {
 function iniciarApp() {
   try {
     exigirSessaoRestaurante(RESTAURANT);
-    exigirPerfil(['waiter', 'manager', 'owner'], 'Use um login de garçom, gerente ou dono para atendimento');
+    exigirPerfil(['waiter'], 'Use um login de garçom para atendimento');
   } catch (e) {
     showLoginError(e.message);
     return;

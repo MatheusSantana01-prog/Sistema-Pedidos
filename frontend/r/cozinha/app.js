@@ -32,7 +32,7 @@ async function fazerLogin() {
 function iniciarKDS() {
   try {
     exigirSessaoRestaurante(RESTAURANT);
-    exigirPerfil(['kitchen', 'manager', 'owner'], 'Use um login de cozinha, gerente ou dono para ver os pedidos');
+    exigirPerfil(['kitchen'], 'Use um login de cozinha para ver os pedidos');
   } catch (e) {
     document.getElementById('login-erro').textContent = e.message;
     document.getElementById('login-erro').classList.add('show');

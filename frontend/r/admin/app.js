@@ -118,24 +118,33 @@ function iniciarApp() {
   iniciarPolling();
 }
 
-function renderAtalhosRapidos() {
+async function renderAtalhosRapidos() {
   const el = document.getElementById('quick-access');
   if (!el) return;
   const slug = getCurrentRestaurantSlug();
-  const links = [
-    ['Admin', `/r/${slug}/admin`, 'Painel administrativo'],
-    ['Caixa', `/r/${slug}/caixa`, 'Fechamento de contas'],
-    ['Cozinha', `/r/${slug}/cozinha`, 'Fila de preparo'],
-    ['Garçom', `/r/${slug}/garcom`, 'Atendimento'],
-  ];
-  el.innerHTML = `
-    <div class="quick-access-label">Acessos rápidos</div>
-    <div class="quick-access-links">
-      ${links.map(([label, href, title]) => `
-        <a class="quick-link" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="${escapeAttr(title)}">
-          <span>${escapeHtml(label)}</span>
-        </a>`).join('')}
-    </div>`;
+  el.innerHTML = '<div class="quick-access-label">Acessos rápidos</div><div class="quick-access-links"><span class="quick-link muted">Carregando...</span></div>';
+  try {
+    const { usuarios } = await apiCall('GET', '/api/admin/users');
+    const rolesAtivos = new Set((usuarios || [])
+      .filter(m => m?.is_active !== false && m?.usuarios?.ativo !== false)
+      .map(m => m.role));
+    const links = [
+      ['Admin', `/r/${slug}/admin`, 'Painel administrativo', true],
+      ['Caixa', `/r/${slug}/caixa`, 'Fechamento de contas', rolesAtivos.has('cashier')],
+      ['Cozinha', `/r/${slug}/cozinha`, 'Fila de preparo', rolesAtivos.has('kitchen')],
+      ['Garçom', `/r/${slug}/garcom`, 'Atendimento', rolesAtivos.has('waiter')],
+    ].filter(item => item[3]);
+    el.innerHTML = `
+      <div class="quick-access-label">Acessos rápidos</div>
+      <div class="quick-access-links">
+        ${links.map(([label, href, title]) => `
+          <a class="quick-link" href="${escapeAttr(href)}" target="_blank" rel="noopener" title="${escapeAttr(title)}">
+            <span>${escapeHtml(label)}</span>
+          </a>`).join('')}
+      </div>`;
+  } catch (e) {
+    el.innerHTML = '<div class="quick-access-label">Acessos rápidos</div><div class="quick-access-links"><span class="quick-link muted">Indisponível</span></div>';
+  }
 }
 
 function iniciarPolling() {
@@ -869,6 +878,7 @@ async function carregarUsuarios() {
       : usuariosAtivos.map(m => {
           const u = m.usuarios || {};
           const podeRemover = temRole('owner') && u.id !== atual?.id;
+          const acesso = linkAcessoPerfil(m.role);
           return `<div class="usuario-row">
             <div class="usuario-avatar">
               ${escapeHtml((u.nome||'?').slice(0,2).toUpperCase())}
@@ -878,6 +888,7 @@ async function carregarUsuarios() {
               <div class="usuario-email">${escapeHtml(u.login || u.email || '—')}</div>
             </div>
             <span class="role-badge">${escapeHtml(m.role)}</span>
+            ${acesso ? `<a class="btn btn-sm" href="${escapeAttr(acesso.href)}" target="_blank" rel="noopener">${escapeHtml(acesso.label)}</a>` : ''}
             ${temRole('owner') ? `<button class="btn btn-sm" onclick="redefinirSenhaUsuario('${escapeAttr(u.id)}')">Senha</button>` : ''}
             ${podeRemover ? `<button class="btn btn-sm btn-danger" onclick="removerUsuario('${escapeAttr(u.id)}',this)">Remover</button>` : ''}
           </div>`;
@@ -885,6 +896,16 @@ async function carregarUsuarios() {
   } catch (e) {
     document.getElementById('usuarios-lista').innerHTML = '<div class="tabela-empty">Erro.</div>';
   }
+}
+
+function linkAcessoPerfil(role) {
+  const slug = getCurrentRestaurantSlug();
+  const links = {
+    cashier: { label: 'Abrir caixa', href: `/r/${slug}/caixa` },
+    kitchen: { label: 'Abrir cozinha', href: `/r/${slug}/cozinha` },
+    waiter: { label: 'Abrir garçom', href: `/r/${slug}/garcom` },
+  };
+  return links[role] || null;
 }
 
 function abrirModalUsuario() {

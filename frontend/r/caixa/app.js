@@ -40,7 +40,7 @@ function fazerLogout() {
 function iniciarApp() {
   try {
     exigirSessaoRestaurante(RESTAURANT);
-    exigirPerfil(['cashier', 'manager', 'owner'], 'Use um login de caixa, gerente ou dono para fechar contas');
+    exigirPerfil(['cashier'], 'Use um login de caixa para fechar contas');
   } catch (e) {
     document.getElementById('login-erro').textContent = e.message;
     document.getElementById('login-erro').classList.add('show');
