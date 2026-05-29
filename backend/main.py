@@ -1994,7 +1994,6 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
         raise HTTPException(403, "Cozinha não pode cancelar pedidos")
 
     extra = {"updated_at": utcnow()}
-    if body.status == "em_preparo": extra["tempo_inicio_preparo"] = extra["updated_at"]
     if body.status == "pronto":     extra["tempo_pronto"]         = extra["updated_at"]
     if body.status == "entregue":   extra["tempo_entrega"]        = extra["updated_at"]
     if body.status == "cancelado":
