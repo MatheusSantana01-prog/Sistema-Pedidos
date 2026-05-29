@@ -10,26 +10,25 @@ const PLANOS = {
     label: 'Básico',
     headline: 'QR Code, pedidos digitais e operação essencial.',
     limits: { users: 5, tables: 20, products: 100 },
-    modules: { financeiro: true, cupons: false, tv: false, garcom: false, relatorios: false, custom_branding: false, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+    modules: { financeiro: true, cupons: false, garcom: false, relatorios: false, custom_branding: false, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
   pro: {
     label: 'Pro',
     headline: 'Plano recomendado para salão, cozinha, caixa e atendimento.',
     limits: { users: 15, tables: 60, products: 400 },
-    modules: { financeiro: true, cupons: false, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+    modules: { financeiro: true, cupons: false, garcom: true, relatorios: true, custom_branding: true, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
   enterprise: {
     label: 'Premium',
     headline: 'Escala, suporte e integrações premium em evolução.',
     limits: { users: 9999, tables: 9999, products: 9999 },
-    modules: { financeiro: true, cupons: true, tv: true, garcom: true, relatorios: true, custom_branding: true, backups: true, advanced_reports: true, priority_support: true, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
+    modules: { financeiro: true, cupons: true, garcom: true, relatorios: true, custom_branding: true, backups: true, advanced_reports: true, priority_support: true, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
 };
 
 const MODULE_LABELS = {
   financeiro: 'Financeiro e caixa',
   cupons: 'Cupons',
-  tv: 'TV de pedidos',
   garcom: 'Garçom e chamadas',
   relatorios: 'Relatórios',
   custom_branding: 'Personalização avançada',
@@ -321,7 +320,6 @@ function renderDetalhesRestaurante() {
     <div class="detail-actions">
       ${profileLink('Admin', d.links.admin, rolesAtivos.has('owner') || rolesAtivos.has('manager'))}
       ${profileLink('Caixa', d.links.caixa, rolesAtivos.has('cashier'))}
-      ${profileLink('TV', d.links.tv, rolesAtivos.has('tv'))}
       ${profileLink('Garçom', d.links.garcom, rolesAtivos.has('waiter'))}
       ${profileLink('Cozinha', d.links.cozinha, rolesAtivos.has('kitchen'))}
       <button class="btn btn-sm" onclick="verQRCodes('${escapeJs(r.id)}','${escapeJs(r.name)}')">QR Codes</button>
@@ -363,6 +361,7 @@ function renderDetalhesRestaurante() {
         <div class="muted-line" style="margin-top:8px">Limite define o máximo do plano. Mesas cadastradas cria as mesas reais que aparecem no admin, QR Codes e atendimento.</div>
         ${renderModules(c.modules || planMeta.modules)}
         <div class="module-grid" style="margin-top:12px">
+          <label class="module-toggle"><input type="checkbox" id="flag-waiter-delivery" ${f.allow_waiter_delivery ? 'checked' : ''}> <span>Garçom pode marcar pedido como entregue</span></label>
           <label class="module-toggle"><input type="checkbox" id="flag-waiter-payment" ${f.allow_waiter_payment ? 'checked' : ''}> <span>Garçom pode fechar pagamento na mesa</span></label>
         </div>
       </div>
@@ -444,7 +443,7 @@ function moduleToggle(id, label, checked) {
 }
 
 function renderModules(modules) {
-  const keys = ['financeiro', 'tv', 'garcom', 'relatorios', 'custom_branding', 'cupons', 'backups', 'advanced_reports', 'priority_support', 'api_integrations', 'ifood', 'whatsapp', 'multiunit'];
+  const keys = ['financeiro', 'garcom', 'relatorios', 'custom_branding', 'cupons', 'backups', 'advanced_reports', 'priority_support', 'api_integrations', 'ifood', 'whatsapp', 'multiunit'];
   return `<div class="module-grid">
     ${keys.map(key => {
       const checkedValue = modules?.[key] === true;
@@ -478,7 +477,6 @@ async function salvarControleRestaurante(restId) {
     modules: {
       financeiro: checked('mod-financeiro'),
       cupons: checked('mod-cupons'),
-      tv: checked('mod-tv'),
       garcom: checked('mod-garcom'),
       relatorios: checked('mod-relatorios'),
       custom_branding: checked('mod-custom_branding'),
@@ -491,6 +489,7 @@ async function salvarControleRestaurante(restId) {
       multiunit: false,
     },
     feature_flags: {
+      allow_waiter_delivery: checked('flag-waiter-delivery'),
       allow_waiter_payment: checked('flag-waiter-payment'),
     },
   };

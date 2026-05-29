@@ -79,8 +79,10 @@ async function carregar() {
 }
 
 function pedidoVisivelNaCozinha(p) {
-  if (p.status !== 'pronto') return true;
-  const referencia = p.tempo_pronto || p.updated_at || p.created_at;
+  if (!['pronto', 'entregue'].includes(p.status)) return true;
+  const referencia = p.status === 'entregue'
+    ? (p.tempo_entrega || p.updated_at || p.created_at)
+    : (p.tempo_pronto || p.updated_at || p.created_at);
   if (!referencia) return true;
   const prontoEm = new Date(referencia).getTime();
   if (Number.isNaN(prontoEm)) return true;
@@ -102,13 +104,19 @@ function detectarNovos(pedidos) {
 }
 
 function renderBoard(pedidos) {
-  const cols = {pendente:[],confirmado:[],em_preparo:[],pronto:[]};
-  pedidos.forEach(p => { if (cols[p.status]) cols[p.status].push(p); });
-  const fila = cols.pendente.length + cols.confirmado.length + cols.em_preparo.length;
+  const cols = {pendente:[],em_preparo:[],pronto:[],entregue:[]};
+  pedidos.forEach(p => {
+    if (p.status === 'confirmado') cols.em_preparo.push(p);
+    else if (cols[p.status]) cols[p.status].push(p);
+  });
+  cols.entregue.sort((a, b) => new Date(b.tempo_entrega || b.updated_at || b.created_at) - new Date(a.tempo_entrega || a.updated_at || a.created_at));
+  const fila = cols.pendente.length + cols.em_preparo.length;
   document.getElementById('stat-fila').textContent    = fila;
   document.getElementById('stat-prontos').textContent = cols.pronto.length;
+  document.getElementById('stat-entregues').textContent = cols.entregue.length;
   Object.entries(cols).forEach(([status, lista]) => {
-    document.getElementById('cnt-' + status).textContent = lista.length;
+    const count = document.getElementById('cnt-' + status);
+    if (count) count.textContent = lista.length;
     diffColuna(document.getElementById('col-' + status), lista, status);
   });
   atualizarTimers(pedidos);
@@ -178,15 +186,17 @@ function cardHtml(p, status) {
         ${it.observacao?`<div class="item-obs">📝 ${it.observacao}</div>`:''}
       </div></div>`;
   }).join('');
+  const actionStatus = p.status || status;
   const ACOES = {
-    pendente:   {label:'Confirmar →',    cls:'btn-confirmar',next:'confirmado'},
-    confirmado: {label:'▶ Iniciar',       cls:'btn-preparo',  next:'em_preparo'},
+    pendente:   {label:'Confirmar e preparar', cls:'btn-confirmar',next:'em_preparo'},
+    confirmado: {label:'Iniciar preparo',      cls:'btn-preparo',  next:'em_preparo'},
     em_preparo: {label:'✓ Pronto',        cls:'btn-pronto',   next:'pronto'},
     pronto:     {label:'✓ Entregue',      cls:'btn-entregar', next:'entregue'},
   };
-  const a = ACOES[status];
+  const a = ACOES[actionStatus];
   const btn = a ? `<button class="btn-acao ${a.cls}" onclick="avancar('${p.id}','${a.next}',this)">${a.label}</button>` : '';
-  return `<div class="card" id="card-${p.id}">
+  const entregueInfo = status === 'entregue' ? `<div class="card-delivered">Entregue ${tempoDesde(p.tempo_entrega || p.updated_at || p.created_at)}</div>` : '';
+  return `<div class="card ${status === 'entregue' ? 'is-delivered' : ''}" id="card-${p.id}">
     <div class="card-head">
       <div class="card-mesa">${mesaLabel(p)}</div>
       <div class="card-meta">
@@ -194,15 +204,20 @@ function cardHtml(p, status) {
         <span class="card-tempo ${tempoCls}">${tempoTxt}</span>
       </div>
     </div>
-    <div class="card-actions card-actions-top">${btn}</div>
+    ${btn ? `<div class="card-actions card-actions-top">${btn}</div>` : entregueInfo}
     <div class="card-itens">${itensHtml}</div>
     ${p.observacao_geral?`<div class="card-obs">⚠️ ${p.observacao_geral}</div>`:''}
   </div>`;
 }
 
 function vazioHtml(status) {
-  const M = {pendente:{icon:'✓',txt:'Tudo em dia'},confirmado:{icon:'✓',txt:'Nenhum esperando'},em_preparo:{icon:'🔥',txt:'Nada no fogo'},pronto:{icon:'🛎',txt:'Nenhum aguardando'}}[status]||{icon:'✓',txt:''};
+  const M = {pendente:{icon:'✓',txt:'Tudo em dia'},em_preparo:{icon:'🔥',txt:'Nada em preparo'},pronto:{icon:'🛎',txt:'Nenhum aguardando entrega'},entregue:{icon:'✓',txt:'Nenhum entregue recente'}}[status]||{icon:'✓',txt:''};
   return `<div class="col-empty"><div class="col-empty-icon">${M.icon}</div><div class="col-empty-txt">${M.txt}</div></div>`;
+}
+
+function tempoDesde(data) {
+  const min = Math.max(0, Math.floor((Date.now() - new Date(data).getTime()) / 60000));
+  return min <= 0 ? 'agora' : `há ${min}min`;
 }
 
 async function avancar(pedidoId, novoStatus, btn) {

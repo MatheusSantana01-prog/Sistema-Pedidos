@@ -251,12 +251,34 @@ async function abrirMesa(mesaId, sessaoId, numero) {
               <span>${escapeHtml(it.quantidade)}x ${escapeHtml(it.nome_produto)}</span>
               <span>R$ ${fmt(it.subtotal || 0)}</span>
             </div>`).join('')}
+          ${renderAcaoEntregaGarcom(p, mesaAtual.settings)}
         </div>`).join('')}
       <div class="bill-total"><span>Total consumido</span><strong>R$ ${fmt(mesaAtual.total)}</strong></div>
       ${renderPagamentoGarcom(mesaAtual)}
     ` : '<div class="empty">Esta mesa ainda não tem pedidos.</div>';
   } catch (e) {
     document.getElementById('modal-body').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+function renderAcaoEntregaGarcom(pedido, settings) {
+  if (pedido.status !== 'pronto' || !settings?.allow_waiter_delivery) return '';
+  return `<div class="pedido-actions">
+    <button onclick="marcarPedidoEntregue('${escapeAttr(pedido.id)}', this)">Marcar como entregue</button>
+  </div>`;
+}
+
+async function marcarPedidoEntregue(pedidoId, btn) {
+  if (!mesaAtual || !pedidoId) return;
+  btn.disabled = true;
+  try {
+    await apiCall('PATCH', `/api/kitchen/orders/${pedidoId}/status`, { status: 'entregue' });
+    showToast('Pedido marcado como entregue', 'success');
+    await abrirMesa(mesaAtual.mesaId, mesaAtual.sessaoId, mesaAtual.numero);
+    await carregarMesas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
   }
 }
 

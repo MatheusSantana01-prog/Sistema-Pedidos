@@ -126,7 +126,6 @@ function renderAtalhosRapidos() {
     ['Admin', `/r/${slug}/admin`, 'Painel administrativo'],
     ['Caixa', `/r/${slug}/caixa`, 'Fechamento de contas'],
     ['Cozinha', `/r/${slug}/cozinha`, 'Fila de preparo'],
-    ['TV', `/r/${slug}/tv`, 'Tela de status'],
     ['Garçom', `/r/${slug}/garcom`, 'Atendimento'],
   ];
   el.innerHTML = `
@@ -461,8 +460,8 @@ async function carregarPedidos() {
       : pedidos.map(p => {
           const hora  = new Date(p.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
           const itens = (p.pedido_itens||[]).length;
-          const next  = {pendente:'confirmado',confirmado:'em_preparo',em_preparo:'pronto',pronto:'entregue'};
-          const lbls  = {confirmado:'Confirmar',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue'};
+          const next  = {pendente:'em_preparo',confirmado:'em_preparo',em_preparo:'pronto',pronto:'entregue'};
+          const lbls  = {em_preparo:'Confirmar e preparar',pronto:'Pronto',entregue:'Entregue'};
           const acoes = next[p.status]
             ? `<div style="display:flex;gap:6px;">
                 <button class="btn btn-sm" onclick="avancarPedido('${escapeAttr(p.id)}','${escapeAttr(next[p.status])}',this)">${escapeHtml(lbls[next[p.status]])}</button>
@@ -1001,6 +1000,7 @@ async function carregarConfiguracoes() {
           <label class="toggle-row"><input type="checkbox" id="cfg-notes" ${s.allow_customer_notes!==false?'checked':''}> Cliente pode enviar observações</label>
           <label class="toggle-row"><input type="checkbox" id="cfg-waiter" ${s.allow_waiter_call?'checked':''}> Permitir chamar garçom</label>
           <label class="toggle-row"><input type="checkbox" id="cfg-close-request" ${s.allow_table_close_request?'checked':''}> Permitir solicitar fechamento da conta</label>
+          <label class="toggle-row"><input type="checkbox" id="cfg-waiter-delivery" ${s.allow_waiter_delivery?'checked':''}> Permitir garçom marcar pedido como entregue</label>
           <label class="toggle-row"><input type="checkbox" id="cfg-waiter-payment" ${s.allow_waiter_payment?'checked':''}> Permitir garçom fechar pagamento na mesa</label>
           <button class="btn btn-primary btn-sm" onclick="salvarSettings()">Salvar experiência</button>
         </div>
@@ -1085,6 +1085,7 @@ async function salvarSettings() {
       allow_customer_notes: document.getElementById('cfg-notes').checked,
       allow_waiter_call: document.getElementById('cfg-waiter').checked,
       allow_table_close_request: document.getElementById('cfg-close-request').checked,
+      allow_waiter_delivery: document.getElementById('cfg-waiter-delivery').checked,
       allow_waiter_payment: document.getElementById('cfg-waiter-payment').checked,
       accept_pix:          document.getElementById('cfg-pix').checked,
       accept_card:         document.getElementById('cfg-card').checked,
@@ -1160,7 +1161,7 @@ async function carregarSuporteCliente() {
             </select>
           </div>
           <div class="form-row"><label class="form-label">Assunto</label>
-            <input class="form-input" id="support-subject" maxlength="140" placeholder="Ex: TV da cozinha não atualiza">
+            <input class="form-input" id="support-subject" maxlength="140" placeholder="Ex: cozinha não atualiza">
           </div>
           <div class="form-row"><label class="form-label">Descreva o problema</label>
             <textarea class="form-input" id="support-message" rows="5" placeholder="Inclua o que aconteceu, onde aconteceu e desde quando."></textarea>

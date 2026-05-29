@@ -74,7 +74,7 @@ ROLE_LEVEL = {
 }
 
 ORDER_TRANSITIONS = {
-    "pendente":    {"confirmado", "cancelado"},
+    "pendente":    {"confirmado", "em_preparo", "cancelado"},
     "confirmado":  {"em_preparo", "cancelado"},
     "em_preparo":  {"pronto", "cancelado"},
     "pronto":      {"entregue"},
@@ -114,7 +114,6 @@ PLAN_MODULES = {
     "starter": {
         "financeiro": True,
         "cupons": False,
-        "tv": False,
         "garcom": False,
         "relatorios": False,
         "api_integrations": False,
@@ -129,7 +128,6 @@ PLAN_MODULES = {
     "pro": {
         "financeiro": True,
         "cupons": False,
-        "tv": True,
         "garcom": True,
         "relatorios": True,
         "api_integrations": False,
@@ -144,7 +142,6 @@ PLAN_MODULES = {
     "enterprise": {
         "financeiro": True,
         "cupons": True,
-        "tv": True,
         "garcom": True,
         "relatorios": True,
         "api_integrations": False,
@@ -188,7 +185,6 @@ FUTURE_MODULES = {
 
 ROLE_MODULE_REQUIREMENTS = {
     "waiter": "garcom",
-    "tv": "tv",
 }
 
 TEMPLATE_CATEGORIES = {
@@ -596,7 +592,7 @@ def atualizar_resumo_suporte(restaurant_id: str):
     return control
 
 def get_restaurant_feature_flags(restaurant_id: str) -> dict:
-    defaults = {"allow_waiter_payment": False}
+    defaults = {"allow_waiter_payment": False, "allow_waiter_delivery": False}
     row = _first(sb.table("configuracoes").select("valor").eq("restaurant_id", restaurant_id).eq("chave", "feature_flags").execute().data)
     saved = row.get("valor") if row else None
     if isinstance(saved, str):
@@ -759,7 +755,6 @@ def platform_links(slug: str) -> dict:
     return {
         "admin": f"{prefix}/admin",
         "caixa": f"{prefix}/caixa",
-        "tv": f"{prefix}/tv",
         "garcom": f"{prefix}/garcom",
         "cozinha": f"{prefix}/cozinha",
     }
@@ -975,7 +970,7 @@ def pedido_visivel_na_fila(pedido: dict) -> bool:
     return datetime.utcnow() - pronto_em < timedelta(minutes=KITCHEN_READY_VISIBLE_MINUTES)
 
 
-def pedido_entregue_visivel_na_tv(pedido: dict) -> bool:
+def pedido_entregue_visivel_na_cozinha(pedido: dict) -> bool:
     referencia = pedido.get("tempo_entrega") or pedido.get("updated_at") or pedido.get("created_at")
     entregue_em = parse_datetime(referencia)
     if not entregue_em:
@@ -985,25 +980,32 @@ def pedido_entregue_visivel_na_tv(pedido: dict) -> bool:
 
 def carregar_pedidos_fila_cozinha(rid: str, limite: int = 80) -> list[dict]:
     resp = sb.table("pedidos").select(
-        "id,numero,status,created_at,updated_at,tempo_pronto,observacao_geral,mesa_id,"
+        "id,numero,status,created_at,updated_at,tempo_pronto,tempo_entrega,observacao_geral,mesa_id,"
         "mesas(numero),"
         "pedido_itens(nome_produto,quantidade,observacao,"
         "  pedido_item_ingredientes(acao,nome_ingrediente))"
     ).eq("restaurant_id", rid).in_(
         "status",
-        ["pendente", "confirmado", "em_preparo", "pronto"],
+        ["pendente", "confirmado", "em_preparo", "pronto", "entregue"],
     ).order("created_at").limit(min(max(limite, 1), 200)).execute()
-    return [p for p in _rows(resp) if pedido_visivel_na_fila(p)]
+    pedidos = []
+    for pedido in _rows(resp):
+        if pedido.get("status") == "entregue":
+            if pedido_entregue_visivel_na_cozinha(pedido):
+                pedidos.append(pedido)
+        elif pedido_visivel_na_fila(pedido):
+            pedidos.append(pedido)
+    return pedidos
 
 
-def carregar_pedidos_entregues_tv(rid: str, limite: int = 10) -> list[dict]:
+def carregar_pedidos_entregues_cozinha(rid: str, limite: int = 10) -> list[dict]:
     resp = sb.table("pedidos").select(
         "id,numero,status,total,created_at,updated_at,tempo_entrega,mesa_id,"
         "mesas(numero),pedido_itens(nome_produto,quantidade,subtotal)"
     ).eq("restaurant_id", rid).eq("status", "entregue").order(
         "created_at", desc=True
     ).limit(min(max(limite, 1), 50)).execute()
-    return [p for p in _rows(resp) if pedido_entregue_visivel_na_tv(p)]
+    return [p for p in _rows(resp) if pedido_entregue_visivel_na_cozinha(p)]
 
 
 def log_acao(u: dict, acao: str, tabela: str = None,
@@ -1125,6 +1127,7 @@ class AtualizarSettingsInput(BaseModel):
     allow_waiter_call: Optional[bool] = None
     allow_table_close_request: Optional[bool] = None
     allow_waiter_payment: Optional[bool] = None
+    allow_waiter_delivery: Optional[bool] = None
     accept_pix: Optional[bool] = None
     accept_card: Optional[bool] = None
     accept_cash: Optional[bool] = None
@@ -1784,10 +1787,8 @@ def switch_restaurant(body: dict, u: dict = Depends(verificar_token)):
 # ═════════════════════════════════════════════════════════════════
 
 @app.get("/api/kitchen/queue", tags=["cozinha"])
-def fila_cozinha(limite: int = 80, u: dict = Depends(authorize(["tv", "kitchen", "manager", "owner"]))):
+def fila_cozinha(limite: int = 80, u: dict = Depends(authorize(["kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
-    if u.get("role") == "tv":
-        enforce_platform_control(rid, "tv")
     return {"pedidos": carregar_pedidos_fila_cozinha(rid, limite)}
 
 
@@ -1812,7 +1813,7 @@ def fila_tv(limite: int = 50, u: dict = Depends(authorize(["tv", "kitchen", "man
     pedidos = carregar_pedidos_fila_cozinha(rid, limite)
     preparando = [p for p in pedidos if p.get("status") in {"pendente", "confirmado", "em_preparo"}]
     pronto = [p for p in pedidos if p.get("status") == "pronto"]
-    entregues = carregar_pedidos_entregues_tv(rid, 10)
+    entregues = carregar_pedidos_entregues_cozinha(rid, 10)
 
     return {
         "preparando": preparando,
@@ -1829,10 +1830,10 @@ def fila_tv(limite: int = 50, u: dict = Depends(authorize(["tv", "kitchen", "man
 
 @app.patch("/api/kitchen/orders/{pedido_id}/status", tags=["cozinha"])
 def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
-                   request: Request, u: dict = Depends(authorize(["tv", "kitchen", "manager", "owner"]))):
+                   request: Request, u: dict = Depends(authorize(["waiter", "kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
-    if u.get("role") == "tv":
-        enforce_platform_control(rid, "tv")
+    if u.get("role") == "waiter":
+        enforce_platform_control(rid, "garcom")
 
     # Validar que o pedido pertence ao restaurante do token
     ant = sb.table("pedidos").select("status,restaurant_id").eq("id", pedido_id).single().execute()
@@ -1840,6 +1841,12 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
         raise HTTPException(403, "Pedido não pertence ao seu restaurante")
 
     status_atual = ant.data["status"]
+    if u.get("role") == "waiter":
+        flags = get_restaurant_feature_flags(rid)
+        if not flags.get("allow_waiter_delivery"):
+            raise HTTPException(403, "Entrega pelo garçom está desativada pelo restaurante")
+        if status_atual != "pronto" or body.status != "entregue":
+            raise HTTPException(403, "Garçom só pode marcar pedido pronto como entregue")
     if body.status not in ORDER_TRANSITIONS.get(status_atual, set()):
         raise HTTPException(409, f"Transição inválida: {status_atual} -> {body.status}")
     if body.status == "cancelado" and u.get("role") == "kitchen":
@@ -2421,10 +2428,12 @@ def atualizar_settings(body: AtualizarSettingsInput, request: Request,
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
     control = get_platform_control(rid)
     flags_payload = {}
-    if "allow_waiter_payment" in payload:
-        flags_payload["allow_waiter_payment"] = bool(payload.pop("allow_waiter_payment"))
-    if (payload.get("allow_waiter_call") is True or payload.get("allow_table_close_request") is True or flags_payload.get("allow_waiter_payment") is True) and (control.get("modules") or {}).get("garcom") is False:
-        raise HTTPException(403, "Chamadas pela mesa estão disponíveis no plano Pro ou Premium")
+    for flag_key in ("allow_waiter_payment", "allow_waiter_delivery"):
+        if flag_key in payload:
+            flags_payload[flag_key] = bool(payload.pop(flag_key))
+    garcom_flags = flags_payload.get("allow_waiter_payment") is True or flags_payload.get("allow_waiter_delivery") is True
+    if (payload.get("allow_waiter_call") is True or payload.get("allow_table_close_request") is True or garcom_flags) and (control.get("modules") or {}).get("garcom") is False:
+        raise HTTPException(403, "Recursos de garçom estão disponíveis no plano Pro ou Premium")
     if payload:
         payload["updated_at"] = utcnow()
         sb.table("restaurant_settings").update(payload).eq("restaurant_id", rid).execute()
@@ -2998,9 +3007,9 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
         control["modules"].update(body["modules"])
     if isinstance(body.get("feature_flags"), dict):
         flags = get_restaurant_feature_flags(restaurant_id)
-        flags.update({k: bool(v) for k, v in body["feature_flags"].items() if k in {"allow_waiter_payment"}})
-        if flags.get("allow_waiter_payment") and (control.get("modules") or {}).get("garcom") is False:
-            raise HTTPException(403, "Pagamento pelo garçom exige módulo Garçom")
+        flags.update({k: bool(v) for k, v in body["feature_flags"].items() if k in {"allow_waiter_payment", "allow_waiter_delivery"}})
+        if (flags.get("allow_waiter_payment") or flags.get("allow_waiter_delivery")) and (control.get("modules") or {}).get("garcom") is False:
+            raise HTTPException(403, "Recursos de garçom exigem módulo Garçom")
         save_restaurant_feature_flags(restaurant_id, flags)
     if body.get("register_payment"):
         payment = body.get("payment") if isinstance(body.get("payment"), dict) else {}
@@ -3195,7 +3204,7 @@ def operacao_plataforma(u: dict = Depends(require_super_admin)):
     if stale_orders:
         add_alert("WARN", "Pedidos abertos há mais de 45min", f"{len(stale_orders)} pedido(s) precisam de atenção")
     if ready_stale_orders:
-        add_alert("INFO", "Pedidos prontos ocultos da TV", f"{len(ready_stale_orders)} pedido(s) prontos há mais de {KITCHEN_READY_VISIBLE_MINUTES}min")
+        add_alert("INFO", "Pedidos prontos fora da cozinha", f"{len(ready_stale_orders)} pedido(s) prontos há mais de {KITCHEN_READY_VISIBLE_MINUTES}min")
     if old_tables:
         add_alert("INFO", "Mesas ocupadas há mais de 2h", f"{len(old_tables)} mesa(s) abertas por muito tempo")
     if erros:
@@ -3437,7 +3446,7 @@ def diagnosticos_plataforma(u: dict = Depends(require_super_admin)):
     checks.append({
         "check_name": "cozinha_prontos_antigos",
         "status": "OK" if not prontos_antigos else "INFO",
-        "detail": "Nenhum pedido pronto ficou pendente além da janela da TV" if not prontos_antigos else f"{len(prontos_antigos)} pedido(s) prontos há mais de {KITCHEN_READY_VISIBLE_MINUTES}min",
+        "detail": "Nenhum pedido pronto ficou pendente além da janela da cozinha" if not prontos_antigos else f"{len(prontos_antigos)} pedido(s) prontos há mais de {KITCHEN_READY_VISIBLE_MINUTES}min",
     })
 
     restaurantes = _rows(sb.table("restaurants").select("id,name").eq("is_active", True).execute())

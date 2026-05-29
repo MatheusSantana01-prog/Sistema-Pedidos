@@ -33,6 +33,7 @@
     <div class="header-right">
       <div class="header-stat">Fila: <strong id="stat-fila">0</strong></div>
       <div class="header-stat">Prontos: <strong id="stat-prontos">0</strong></div>
+      <div class="header-stat">Entregues: <strong id="stat-entregues">0</strong></div>
       <div class="header-clock" id="relogio">--:--</div>
     </div>
   </div>
@@ -44,13 +45,6 @@
         <div class="col-count pendente" id="cnt-pendente">0</div>
       </div>
       <div class="col-body" id="col-pendente"></div>
-    </div>
-    <div class="col">
-      <div class="col-head confirmado">
-        <div class="col-label">Confirmado</div>
-        <div class="col-count confirmado" id="cnt-confirmado">0</div>
-      </div>
-      <div class="col-body" id="col-confirmado"></div>
     </div>
     <div class="col">
       <div class="col-head em_preparo">
@@ -65,6 +59,13 @@
         <div class="col-count pronto" id="cnt-pronto">0</div>
       </div>
       <div class="col-body" id="col-pronto"></div>
+    </div>
+    <div class="col">
+      <div class="col-head entregue">
+        <div class="col-label">Entregues recentes</div>
+        <div class="col-count entregue" id="cnt-entregue">0</div>
+      </div>
+      <div class="col-body" id="col-entregue"></div>
     </div>
   </div>
 </div>

@@ -6,6 +6,8 @@ const TEMPO_VISIVEL_POS_CONCLUSAO_MS = 15 * 60 * 1000;
 async function init() {
   RESTAURANT = await initTenant();
   if (!RESTAURANT) return;
+  window.location.replace(`/r/${getCurrentRestaurantSlug()}/cozinha`);
+  return;
   setupRememberedLogin('tv');
 
   // Ticker com nome do restaurante

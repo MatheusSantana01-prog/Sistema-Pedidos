@@ -118,6 +118,9 @@ body {
 .pedido-card { border:1px solid var(--border); background:rgba(255,255,255,.04); border-radius:10px; margin-bottom:10px; overflow:hidden; }
 .pedido-head { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:12px; }
 .pedido-item { display:flex; justify-content:space-between; gap:10px; padding:8px 12px; color:var(--muted); font-size:13px; }
+.pedido-actions { padding:10px 12px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; }
+.pedido-actions button { border:0; border-radius:9px; background:var(--green); color:#08120c; padding:9px 12px; font-weight:900; cursor:pointer; }
+.pedido-actions button:disabled { opacity:.55; cursor:not-allowed; }
 .bill-total { display:flex; justify-content:space-between; align-items:center; margin-top:14px; border-top:1px solid var(--border); padding-top:14px; font-size:18px; font-weight:700; }
 .bill-total strong { color:var(--color-primary); font-family:var(--mono); }
 
