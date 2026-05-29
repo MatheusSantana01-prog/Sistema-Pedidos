@@ -5,6 +5,11 @@ let pgtoSelecionado = null;
 let pagamentos = [];
 let totalContaAtual = 0;
 let polling = null;
+let caixas = [];
+let turnosAbertos = [];
+let turnoAtivo = null;
+let caixaSelecionadoId = null;
+let historicoTurnos = [];
 
 async function init() {
   RESTAURANT = await initTenant();
@@ -50,9 +55,176 @@ function iniciarApp() {
   }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'flex';
+  carregarCaixas();
   carregarMesas();
-  function agendar() { polling = setTimeout(() => { carregarMesas(); agendar(); }, 10000); }
+  function agendar() { polling = setTimeout(() => { carregarCaixas(false); carregarMesas(); agendar(); }, 10000); }
   agendar();
+}
+
+async function carregarCaixas(showErrors = true) {
+  const panel = document.getElementById('cash-shift-panel');
+  try {
+    const data = await apiCall('GET', '/api/admin/cash-registers');
+    caixas = data.registers || [];
+    turnosAbertos = data.open_shifts || [];
+    historicoTurnos = data.history || [];
+    if (!caixaSelecionadoId && caixas.length) caixaSelecionadoId = caixas[0].id;
+    turnoAtivo = turnosAbertos.find(t => t.opened_by === getUsuario()?.id) || turnosAbertos.find(t => t.register_id === caixaSelecionadoId) || null;
+    if (turnoAtivo) caixaSelecionadoId = turnoAtivo.register_id;
+    renderCaixaOperacao(data.limits || {});
+  } catch (e) {
+    if (showErrors) panel.innerHTML = `<div class="cash-alert error">Erro ao carregar caixa: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderCaixaOperacao(limits = {}) {
+  const panel = document.getElementById('cash-shift-panel');
+  const selected = caixas.find(c => c.id === caixaSelecionadoId) || caixas[0];
+  const abertoNesteCaixa = selected ? turnosAbertos.find(t => t.register_id === selected.id) : null;
+  const resumo = turnoAtivo
+    ? `<div class="cash-summary">
+        <div><span>Turno</span><strong>${escapeHtml(turnoAtivo.register_name)}</strong></div>
+        <div><span>Abertura</span><strong>R$ ${fmt(turnoAtivo.opening_amount || 0)}</strong></div>
+        <div><span>Vendas</span><strong>R$ ${fmt(turnoAtivo.sales_total || 0)}</strong></div>
+        <div><span>Dinheiro esperado</span><strong>R$ ${fmt((Number(turnoAtivo.opening_amount || 0) + Number(turnoAtivo.payments_by_method?.dinheiro || 0)))}</strong></div>
+      </div>`
+    : `<div class="cash-alert">Abra um turno para registrar fechamentos neste caixa.</div>`;
+
+  panel.innerHTML = `
+    <div class="cash-head">
+      <div>
+        <div class="cash-title">Controle do caixa</div>
+        <div class="cash-sub">${escapeHtml(caixas.length || 0)}/${escapeHtml(limits.registers || '-')} caixa(s) configurado(s)</div>
+      </div>
+      <button class="btn btn-sm" onclick="imprimirTurnoAtual()" ${turnoAtivo ? '' : 'disabled'}>Imprimir</button>
+    </div>
+    <div class="cash-row">
+      <select class="form-input cash-select" id="cash-register-select" onchange="selecionarCaixa(this.value)" ${turnoAtivo ? 'disabled' : ''}>
+        ${caixas.map(c => `<option value="${escapeAttr(c.id)}" ${selected?.id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+      </select>
+      ${turnoAtivo
+        ? '<button class="btn btn-success btn-sm" onclick="mostrarFechamentoTurno()">Fechar turno</button>'
+        : `<button class="btn btn-primary btn-sm" onclick="mostrarAberturaTurno()" ${abertoNesteCaixa ? 'disabled' : ''}>Abrir turno</button>`}
+    </div>
+    ${abertoNesteCaixa && !turnoAtivo ? `<div class="cash-alert error">Este caixa já foi aberto por ${escapeHtml(abertoNesteCaixa.opened_by_name || 'outro usuário')}.</div>` : ''}
+    ${resumo}
+    <div id="cash-form-area"></div>
+    <div class="cash-history-mini">
+      ${(historicoTurnos || []).slice(0, 3).map(t => `
+        <div class="cash-history-item">
+          <span>${escapeHtml(t.register_name)} · ${escapeHtml(statusTurno(t.status))}</span>
+          <strong>R$ ${fmt(t.sales_total || 0)}</strong>
+        </div>`).join('') || '<div class="split-empty">Nenhum turno registrado.</div>'}
+    </div>`;
+}
+
+function selecionarCaixa(id) {
+  caixaSelecionadoId = id;
+  turnoAtivo = null;
+  renderCaixaOperacao({ registers: caixas.length });
+}
+
+function denomInputs(prefix) {
+  return ['200','100','50','20','10','5','2','1','0.50','0.25','0.10','0.05'].map(v => `
+    <label class="denom-field"><span>R$ ${v.replace('.', ',')}</span><input id="${prefix}-${v}" type="number" min="0" step="1" value="0"></label>
+  `).join('');
+}
+
+function lerDenominacoes(prefix) {
+  const out = {};
+  ['200','100','50','20','10','5','2','1','0.50','0.25','0.10','0.05'].forEach(v => {
+    out[v] = Number(document.getElementById(`${prefix}-${v}`)?.value || 0);
+  });
+  return out;
+}
+
+function mostrarAberturaTurno() {
+  document.getElementById('cash-form-area').innerHTML = `
+    <div class="cash-form">
+      <div class="cash-form-title">Abertura do turno</div>
+      <div class="denom-grid">${denomInputs('open-denom')}</div>
+      <div class="cash-row">
+        <input class="form-input" id="open-amount" type="number" step="0.01" placeholder="Valor inicial total">
+        <button class="btn btn-primary btn-sm" onclick="abrirTurno()">Confirmar abertura</button>
+      </div>
+      <textarea class="form-input" id="open-notes" rows="2" placeholder="Observação opcional"></textarea>
+    </div>`;
+}
+
+async function abrirTurno() {
+  if (!caixaSelecionadoId) return showToast('Selecione um caixa', 'error');
+  try {
+    await apiCall('POST', `/api/admin/cash-registers/${caixaSelecionadoId}/open`, {
+      opening_amount: Number(document.getElementById('open-amount').value || 0),
+      denominations: lerDenominacoes('open-denom'),
+      notes: document.getElementById('open-notes').value.trim(),
+    });
+    showToast('Turno aberto', 'success');
+    carregarCaixas();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function mostrarFechamentoTurno() {
+  const esperado = Number(turnoAtivo?.opening_amount || 0) + Number(turnoAtivo?.payments_by_method?.dinheiro || 0);
+  document.getElementById('cash-form-area').innerHTML = `
+    <div class="cash-form">
+      <div class="cash-form-title">Fechamento do turno</div>
+      <div class="cash-alert">Dinheiro esperado: R$ ${fmt(esperado)}. Informe as notas/moedas contadas e o valor deixado para o próximo turno.</div>
+      <div class="denom-grid">${denomInputs('close-denom')}</div>
+      <div class="cash-row">
+        <input class="form-input" id="left-next" type="number" step="0.01" placeholder="Deixado para próxima abertura">
+        <button class="btn btn-success btn-sm" onclick="fecharTurno()">Confirmar fechamento</button>
+      </div>
+      <textarea class="form-input" id="close-notes" rows="2" placeholder="Ex: Maria deixou R$ 100 para João abrir amanhã"></textarea>
+    </div>`;
+}
+
+async function fecharTurno() {
+  if (!turnoAtivo) return;
+  if (!await appConfirm('Fechar este turno de caixa?', { title: 'Fechar turno' })) return;
+  try {
+    await apiCall('POST', `/api/admin/cash-shifts/${turnoAtivo.id}/close`, {
+      denominations: lerDenominacoes('close-denom'),
+      left_for_next_shift: Number(document.getElementById('left-next').value || 0),
+      notes: document.getElementById('close-notes').value.trim(),
+    });
+    showToast('Turno fechado', 'success');
+    turnoAtivo = null;
+    carregarCaixas();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function imprimirTurnoAtual() {
+  const t = turnoAtivo || historicoTurnos[0];
+  if (!t) return showToast('Nenhum turno para imprimir', 'error');
+  const linhas = [
+    RESTAURANT?.name || 'Restaurante',
+    t.register_name,
+    `Aberto por: ${t.opened_by_name || '-'}`,
+    `Abertura: ${fmtDate(t.opened_at)}`,
+    `Valor inicial: R$ ${fmt(t.opening_amount || 0)}`,
+    `Vendas: R$ ${fmt(t.sales_total || 0)}`,
+    `Dinheiro: R$ ${fmt(t.payments_by_method?.dinheiro || 0)}`,
+    `Pix: R$ ${fmt(t.payments_by_method?.pix || 0)}`,
+    `Cartões/outros: R$ ${fmt(totalNaoDinheiro(t.payments_by_method || {}))}`,
+    `Transações: ${t.transactions_count || 0}`,
+  ];
+  const w = window.open('', '_blank', 'width=420,height=640');
+  w.document.write(`<pre style="font-family:monospace;white-space:pre-wrap;font-size:13px">${escapeHtml(linhas.join('\n'))}</pre>`);
+  w.document.close();
+  w.print();
+}
+
+function statusTurno(status) {
+  return status === 'open' ? 'Aberto' : 'Fechado';
+}
+
+function totalNaoDinheiro(map) {
+  return Object.entries(map).filter(([k]) => k !== 'dinheiro').reduce((a, [, v]) => a + Number(v || 0), 0);
 }
 
 async function carregarMesas() {
@@ -203,17 +375,21 @@ function renderPagamentos() {
       <strong>R$ ${fmt(p.valor)}</strong>
       <button onclick="removerPagamento(${idx})">✕</button>
     </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
-  document.getElementById('btn-fechar').disabled = restante > 0.02 || !pagamentos.length;
+  document.getElementById('btn-fechar').disabled = restante > 0.02 || !pagamentos.length || !turnoAtivo;
 }
 
 async function fecharConta() {
   if (!mesaSelecionada || !pagamentos.length || restantePagamento() > 0.02) return;
+  if (!turnoAtivo) {
+    showToast('Abra um turno de caixa antes de fechar contas', 'error');
+    return;
+  }
   const btn = document.getElementById('btn-fechar');
   btn.disabled = true;
   btn.textContent = 'Fechando...';
   try {
     await apiCall('POST', `/api/admin/tables/${mesaSelecionada.id}/close`,
-      { pagamentos });
+      { pagamentos, cash_shift_id: turnoAtivo.id });
     showToast(`Mesa ${mesaSelecionada.numero} fechada!`, 'success');
     // Resetar
     mesaSelecionada = null; sessaoSelecionada = null; pgtoSelecionado = null; pagamentos = []; totalContaAtual = 0;
@@ -221,6 +397,7 @@ async function fecharConta() {
     document.getElementById('conta-mesa-info').textContent = 'Selecione uma mesa';
     document.getElementById('conta-footer').style.display = 'none';
     document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><div style="font-size:32px">🧾</div><span>Selecione uma mesa ocupada</span></div>';
+    carregarCaixas(false);
     carregarMesas();
   } catch(e) {
     showToast(e.message, 'error');
@@ -230,6 +407,10 @@ async function fecharConta() {
 }
 
 function fmt(n) { return Number(n).toFixed(2).replace('.', ','); }
+
+function fmtDate(value) {
+  return value ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({

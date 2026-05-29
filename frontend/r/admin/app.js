@@ -723,9 +723,88 @@ async function carregarFinanceiro() {
               <span style="font-family:var(--mono);font-weight:600">${p.quantidade} un · R$ ${fmt(p.total)}</span>
             </div>`).join('') || '<div class="tabela-empty">Sem vendas no período</div>'}
         </div>
-      </div>`;
+      </div>
+      <div id="financeiro-caixas" style="margin-top:16px"><div class="loading"><div class="spinner"></div></div></div>`;
+    carregarCaixasFinanceiro();
   } catch (e) {
     document.getElementById('financeiro-content').innerHTML = '<div class="tabela-empty">Erro: ' + e.message + '</div>';
+  }
+}
+
+async function carregarCaixasFinanceiro() {
+  const el = document.getElementById('financeiro-caixas');
+  if (!el) return;
+  try {
+    const data = await apiCall('GET', '/api/admin/cash-registers');
+    const regs = data.registers || [];
+    const open = data.open_shifts || [];
+    const hist = data.history || [];
+    const limit = data.limits?.registers || '-';
+    el.innerHTML = `
+      <div class="config-card">
+        <div class="config-title">Caixas e turnos</div>
+        <div class="muted-line">${regs.filter(r => r.is_active !== false).length}/${escapeHtml(limit)} caixa(s) ativos. Básico libera 1 caixa; Pro libera múltiplos caixas.</div>
+        <div class="form-row-2" style="margin-top:12px">
+          <input class="form-input" id="novo-caixa-nome" placeholder="Ex: Caixa 2">
+          <button class="btn btn-primary btn-sm" onclick="criarCaixaFinanceiro()">Adicionar caixa</button>
+        </div>
+        <div class="tabela-wrap" style="margin-top:12px">
+          <table class="tabela">
+            <thead><tr><th>Caixa</th><th>Status</th><th>Turno aberto</th><th>Ações</th></tr></thead>
+            <tbody>${regs.map(r => {
+              const aberto = open.find(t => t.register_id === r.id);
+              return `<tr>
+                <td>${escapeHtml(r.name)}</td>
+                <td>${r.is_active === false ? 'Inativo' : 'Ativo'}</td>
+                <td>${aberto ? `${escapeHtml(aberto.opened_by_name || '-')} · R$ ${fmt(aberto.sales_total || 0)}` : '-'}</td>
+                <td>${r.is_active === false ? '' : `<button class="btn btn-sm" onclick="desativarCaixaFinanceiro('${escapeAttr(r.id)}')">Desativar</button>`}</td>
+              </tr>`;
+            }).join('') || '<tr><td colspan="4" class="tabela-empty">Nenhum caixa</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div class="tabela-wrap" style="margin-top:12px">
+          <table class="tabela">
+            <thead><tr><th>Abertura</th><th>Caixa</th><th>Operador</th><th>Vendas</th><th>Dinheiro esperado</th><th>Diferença</th><th>Status</th></tr></thead>
+            <tbody>${hist.slice(0, 20).map(t => {
+              const esperado = t.expected_cash_amount ?? (Number(t.opening_amount || 0) + Number(t.payments_by_method?.dinheiro || 0));
+              return `<tr>
+                <td class="mono" style="font-size:11px">${escapeHtml(fmtDate(t.opened_at))}</td>
+                <td>${escapeHtml(t.register_name || '-')}</td>
+                <td>${escapeHtml(t.opened_by_name || '-')}</td>
+                <td>R$ ${fmt(t.sales_total || 0)}</td>
+                <td>R$ ${fmt(esperado)}</td>
+                <td>R$ ${fmt(t.cash_difference || 0)}</td>
+                <td>${t.status === 'open' ? 'Aberto' : 'Fechado'}</td>
+              </tr>`;
+            }).join('') || '<tr><td colspan="7" class="tabela-empty">Nenhum turno registrado.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="tabela-empty">Erro nos caixas: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function criarCaixaFinanceiro() {
+  const name = document.getElementById('novo-caixa-nome')?.value.trim();
+  if (!name) return showToast('Informe o nome do caixa', 'error');
+  try {
+    await apiCall('POST', '/api/admin/cash-registers', { name });
+    showToast('Caixa criado', 'success');
+    carregarCaixasFinanceiro();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function desativarCaixaFinanceiro(id) {
+  if (!await appConfirm('Desativar este caixa? Turnos já fechados continuam no histórico.', { title: 'Desativar caixa', danger: true })) return;
+  try {
+    await apiCall('PATCH', `/api/admin/cash-registers/${id}`, { is_active: false });
+    showToast('Caixa desativado', 'success');
+    carregarCaixasFinanceiro();
+  } catch (e) {
+    showToast(e.message, 'error');
   }
 }
 

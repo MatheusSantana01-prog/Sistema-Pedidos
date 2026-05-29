@@ -100,6 +100,12 @@ PLAN_LIMITS = {
     "enterprise": {"users": 9999, "tables": 9999, "products": 9999},
 }
 
+CASH_REGISTER_LIMITS = {
+    "starter": 1,
+    "pro": 3,
+    "enterprise": 20,
+}
+
 PLAN_ALIASES = {
     "basic": "starter",
     "basico": "starter",
@@ -682,6 +688,103 @@ def save_fiscal_docs(restaurant_id: str, docs: list[dict]):
     else:
         sb.table("configuracoes").insert(payload).execute()
 
+def _config_value(restaurant_id: str, chave: str, default):
+    row = _first(sb.table("configuracoes").select("valor").eq("restaurant_id", restaurant_id).eq("chave", chave).execute().data)
+    value = row.get("valor") if row else default
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            value = default
+    return value if value is not None else default
+
+def _save_config_value(restaurant_id: str, chave: str, valor, descricao: str):
+    payload = {
+        "restaurant_id": restaurant_id,
+        "chave": chave,
+        "valor": valor,
+        "descricao": descricao,
+        "updated_at": utcnow(),
+    }
+    exists = _first(sb.table("configuracoes").select("chave").eq("restaurant_id", restaurant_id).eq("chave", chave).execute().data)
+    if exists:
+        sb.table("configuracoes").update(payload).eq("restaurant_id", restaurant_id).eq("chave", chave).execute()
+    else:
+        sb.table("configuracoes").insert(payload).execute()
+
+def listar_caixas(restaurant_id: str) -> list[dict]:
+    caixas = _config_value(restaurant_id, "cash_registers", [])
+    if not isinstance(caixas, list):
+        caixas = []
+    if not caixas:
+        caixas = [{
+            "id": str(uuid4()),
+            "name": "Caixa 1",
+            "is_active": True,
+            "created_at": utcnow(),
+            "updated_at": utcnow(),
+        }]
+        salvar_caixas(restaurant_id, caixas)
+    return caixas
+
+def salvar_caixas(restaurant_id: str, caixas: list[dict]):
+    _save_config_value(restaurant_id, "cash_registers", caixas[-80:], "Caixas físicos/operacionais do restaurante")
+
+def listar_turnos_caixa(restaurant_id: str) -> list[dict]:
+    turnos = _config_value(restaurant_id, "cash_shifts", [])
+    return turnos if isinstance(turnos, list) else []
+
+def salvar_turnos_caixa(restaurant_id: str, turnos: list[dict]):
+    _save_config_value(restaurant_id, "cash_shifts", turnos[-500:], "Aberturas e fechamentos de caixa")
+
+def limite_caixas_restaurante(restaurant_id: str) -> int:
+    rest = _first(_rows(sb.table("restaurants").select("plan").eq("id", restaurant_id).limit(1).execute()))
+    plan = normalize_plan((rest or {}).get("plan"))
+    return CASH_REGISTER_LIMITS.get(plan, CASH_REGISTER_LIMITS["starter"])
+
+def caixa_por_id(restaurant_id: str, caixa_id: str) -> dict:
+    caixa = next((c for c in listar_caixas(restaurant_id) if c.get("id") == caixa_id and c.get("is_active") is not False), None)
+    if not caixa:
+        raise HTTPException(404, "Caixa não encontrado ou inativo")
+    return caixa
+
+def turno_aberto_por_caixa(restaurant_id: str, caixa_id: str) -> dict | None:
+    return next((t for t in listar_turnos_caixa(restaurant_id) if t.get("register_id") == caixa_id and t.get("status") == "open"), None)
+
+def turno_aberto_por_id(restaurant_id: str, turno_id: str) -> dict | None:
+    return next((t for t in listar_turnos_caixa(restaurant_id) if t.get("id") == turno_id and t.get("status") == "open"), None)
+
+def caixa_resumo_dinheiro(cedulas: dict | None) -> dict:
+    valores = {"200": 200, "100": 100, "50": 50, "20": 20, "10": 10, "5": 5, "2": 2, "1": 1, "0.50": 0.5, "0.25": 0.25, "0.10": 0.1, "0.05": 0.05}
+    cedulas = cedulas or {}
+    normalized = {}
+    total = 0.0
+    for key, valor in valores.items():
+        try:
+            qtd = max(0, int(cedulas.get(key) or 0))
+        except (TypeError, ValueError):
+            qtd = 0
+        normalized[key] = qtd
+        total += qtd * valor
+    return {"denominations": normalized, "total": _money(total)}
+
+def atualizar_turno_com_fechamento(restaurant_id: str, shift_id: str | None, fechamento: dict):
+    if not shift_id:
+        return None
+    turnos = listar_turnos_caixa(restaurant_id)
+    for turno in turnos:
+        if turno.get("id") == shift_id and turno.get("status") == "open":
+            turno.setdefault("account_closures", []).append(fechamento)
+            turno["sales_total"] = _money(float(turno.get("sales_total") or 0) + float(fechamento.get("total") or 0))
+            turno["transactions_count"] = int(turno.get("transactions_count") or 0) + 1
+            por_forma = turno.setdefault("payments_by_method", {})
+            for forma, valor in (fechamento.get("payments_by_method") or {}).items():
+                por_forma[forma] = _money(float(por_forma.get(forma) or 0) + float(valor or 0))
+            turno["updated_at"] = utcnow()
+            salvar_turnos_caixa(restaurant_id, turnos)
+            return turno
+    raise HTTPException(409, "Abra um turno de caixa antes de fechar contas")
+
 def registrar_fiscal_documento(restaurant_id: str, sessao_id: str, total: float, origem: str, status_doc: str = "pendente", extra: dict | None = None) -> dict:
     config = get_fiscal_config(restaurant_id)
     doc = {
@@ -787,6 +890,16 @@ def enforce_plan_limit(restaurant_id: str, limit_key: str, current_count: int, e
 def active_memberships_count(restaurant_id: str) -> int:
     resp = sb.table("restaurant_memberships").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("is_active", True).execute()
     return resp.count or 0
+
+def active_role_memberships_count(restaurant_id: str, role: str) -> int:
+    resp = sb.table("restaurant_memberships").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("role", role).eq("is_active", True).execute()
+    return resp.count or 0
+
+def enforce_cashier_user_limit(restaurant_id: str, role: str):
+    if role != "cashier":
+        return
+    if limite_caixas_restaurante(restaurant_id) <= 1 and active_role_memberships_count(restaurant_id, "cashier") >= 1:
+        raise HTTPException(403, "Plano Básico permite somente 1 usuário de caixa")
 
 def active_tables_count(restaurant_id: str) -> int:
     resp = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).execute()
@@ -1284,6 +1397,7 @@ class CriarProdutoInput(BaseModel):
 class FecharContaInput(BaseModel):
     forma_pagamento: Optional[str] = None
     pagamentos: Optional[list[dict]] = None
+    cash_shift_id: Optional[str] = None
 
     @field_validator("forma_pagamento")
     @classmethod
@@ -1291,6 +1405,33 @@ class FecharContaInput(BaseModel):
         if v is not None and v not in FORMAS_PAGAMENTO:
             raise ValueError("Forma de pagamento inválida")
         return v
+
+
+class CriarCaixaInput(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def val_name(cls, v):
+        v = (v or "").strip()
+        if len(v) < 3:
+            raise ValueError("Nome do caixa precisa ter pelo menos 3 caracteres")
+        if len(v) > 40:
+            raise ValueError("Nome do caixa muito longo")
+        return v
+
+
+class AbrirTurnoCaixaInput(BaseModel):
+    opening_amount: float = 0
+    denominations: Optional[dict] = None
+    notes: Optional[str] = None
+
+
+class FecharTurnoCaixaInput(BaseModel):
+    denominations: Optional[dict] = None
+    closing_amount: Optional[float] = None
+    left_for_next_shift: float = 0
+    notes: Optional[str] = None
 
 
 class FiscalConfigInput(BaseModel):
@@ -2032,12 +2173,20 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
             raise HTTPException(403, "Pagamento pelo garçom não está liberado neste restaurante")
     enforce_platform_control(rid, "financeiro")
 
-    buscar_mesa_do_restaurante(rid, mesa_id, "id")
+    mesa = buscar_mesa_do_restaurante(rid, mesa_id, "id,numero")
     sessao = buscar_sessao_aberta_mesa(rid, mesa_id, "id,total_consumido")
     if count_pedidos_abertos_sessao(rid, sessao["id"]):
         raise HTTPException(409, "Não é possível fechar: ainda existem pedidos em aberto")
 
     _, resumo_pagamento = _normalizar_pagamentos(body, sessao["total_consumido"])
+    if u.get("role") == "cashier" and not body.cash_shift_id:
+        raise HTTPException(409, "Abra um turno de caixa antes de fechar contas")
+    if body.cash_shift_id:
+        turno = turno_aberto_por_id(rid, body.cash_shift_id)
+        if not turno:
+            raise HTTPException(409, "Turno de caixa não está aberto")
+        if u.get("role") == "cashier" and turno.get("opened_by") != u["sub"]:
+            raise HTTPException(403, "Este turno pertence a outro caixa")
     pedidos_fechamento = listar_pedidos_fechamento(rid, sessao["id"])
 
     sb.rpc("fechar_sessao_mesa", {"p_sessao_id": sessao["id"], "p_restaurant_id": rid}).execute()
@@ -2051,6 +2200,20 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
 
     log_acao(u, "fechar_conta_mesa", "sessao_mesa", sessao["id"], None,
              {"pagamento": resumo_pagamento, "total": sessao["total_consumido"]}, request)
+    turno_atualizado = None
+    if body.cash_shift_id:
+        turno_atualizado = atualizar_turno_com_fechamento(rid, body.cash_shift_id, {
+            "id": str(uuid4()),
+            "sessao_id": sessao["id"],
+            "mesa_id": mesa_id,
+            "mesa_numero": mesa.get("numero"),
+            "total": resumo_pagamento["total"],
+            "pagamentos": resumo_pagamento["pagamentos"],
+            "payments_by_method": resumo_pagamento["por_forma"],
+            "closed_by": u["sub"],
+            "closed_by_name": u.get("nome") or "",
+            "closed_at": utcnow(),
+        })
     fiscal_doc = None
     fiscal_config = get_fiscal_config(rid)
     if fiscal_config.get("enabled") and fiscal_config.get("auto_after_close"):
@@ -2069,6 +2232,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
         "total": sessao["total_consumido"],
         "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, sessao["total_consumido"]),
         "pagamentos": resumo_pagamento["pagamentos"],
+        "cash_shift": turno_atualizado,
         "fiscal_document": fiscal_doc,
     }
 
@@ -2296,6 +2460,7 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "users")
     validar_role_no_plano(rid, body.role)
+    enforce_cashier_user_limit(rid, body.role)
     rest = sb.table("restaurants").select("slug").eq("id", rid).single().execute()
     slug = (rest.data or {}).get("slug")
     login_id = user_identifier_from_body(body, slug)
@@ -2358,6 +2523,8 @@ def alterar_role(usuario_id: str, body: dict, request: Request,
     m = sb.table("restaurant_memberships").select("role").eq("usuario_id", usuario_id).eq("restaurant_id", rid).eq("is_active", True).single().execute()
     if not m.data:
         raise HTTPException(404, "Usuário não encontrado neste restaurante")
+    if m.data["role"] != "cashier":
+        enforce_cashier_user_limit(rid, nova_role)
 
     sb.table("restaurant_memberships").update({"role": nova_role, "updated_at": utcnow()}).eq("usuario_id", usuario_id).eq("restaurant_id", rid).execute()
     log_acao(u, "alterar_role_usuario", "restaurant_memberships", usuario_id,
@@ -2563,6 +2730,142 @@ def historico_caixa(u: dict = Depends(authorize(["cashier", "manager", "owner"])
     enforce_platform_control(rid, "financeiro")
     resp = sb.table("fechamento_caixa").select("*,usuarios(nome)").eq("restaurant_id", rid).order("data_referencia", desc=True).limit(30).execute()
     return {"fechamentos": _rows(resp)}
+
+
+@app.get("/api/admin/cash-registers", tags=["caixa"])
+def listar_caixas_admin(u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    caixas = listar_caixas(rid)
+    turnos = listar_turnos_caixa(rid)
+    abertos = [t for t in turnos if t.get("status") == "open"]
+    return {
+        "registers": caixas,
+        "open_shifts": abertos,
+        "history": sorted(turnos, key=lambda t: t.get("opened_at") or "", reverse=True)[:80],
+        "limits": {"registers": limite_caixas_restaurante(rid)},
+    }
+
+
+@app.post("/api/admin/cash-registers", tags=["caixa"])
+def criar_caixa_admin(body: CriarCaixaInput, request: Request,
+                      u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    caixas = listar_caixas(rid)
+    ativos = [c for c in caixas if c.get("is_active") is not False]
+    limite = limite_caixas_restaurante(rid)
+    if len(ativos) >= limite:
+        raise HTTPException(403, f"Plano atual permite até {limite} caixa(s)")
+    nome = body.name.strip()
+    if any((c.get("name") or "").strip().lower() == nome.lower() and c.get("is_active") is not False for c in caixas):
+        raise HTTPException(409, "Já existe um caixa ativo com este nome")
+    caixa = {
+        "id": str(uuid4()),
+        "name": nome,
+        "is_active": True,
+        "created_at": utcnow(),
+        "updated_at": utcnow(),
+    }
+    caixas.append(caixa)
+    salvar_caixas(rid, caixas)
+    log_acao(u, "criar_caixa", "configuracoes", caixa["id"], None, caixa, request)
+    return {"register": caixa, "limits": {"registers": limite}}
+
+
+@app.patch("/api/admin/cash-registers/{caixa_id}", tags=["caixa"])
+def atualizar_caixa_admin(caixa_id: str, body: dict, request: Request,
+                          u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    caixas = listar_caixas(rid)
+    caixa = next((c for c in caixas if c.get("id") == caixa_id), None)
+    if not caixa:
+        raise HTTPException(404, "Caixa não encontrado")
+    ant = dict(caixa)
+    if "name" in body:
+        nome = (body.get("name") or "").strip()
+        if len(nome) < 3:
+            raise HTTPException(400, "Nome do caixa inválido")
+        caixa["name"] = nome[:40]
+    if "is_active" in body:
+        if body.get("is_active") is False and turno_aberto_por_caixa(rid, caixa_id):
+            raise HTTPException(409, "Feche o turno aberto antes de desativar este caixa")
+        caixa["is_active"] = bool(body.get("is_active"))
+    caixa["updated_at"] = utcnow()
+    salvar_caixas(rid, caixas)
+    log_acao(u, "atualizar_caixa", "configuracoes", caixa_id, ant, caixa, request)
+    return {"register": caixa}
+
+
+@app.post("/api/admin/cash-registers/{caixa_id}/open", tags=["caixa"])
+def abrir_turno_caixa(caixa_id: str, body: AbrirTurnoCaixaInput, request: Request,
+                      u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    caixa = caixa_por_id(rid, caixa_id)
+    if turno_aberto_por_caixa(rid, caixa_id):
+        raise HTTPException(409, "Este caixa já está aberto")
+    dinheiro = caixa_resumo_dinheiro(body.denominations)
+    abertura = _money(body.opening_amount if body.opening_amount and body.opening_amount > 0 else dinheiro["total"])
+    turno = {
+        "id": str(uuid4()),
+        "restaurant_id": rid,
+        "register_id": caixa_id,
+        "register_name": caixa.get("name") or "Caixa",
+        "status": "open",
+        "opened_by": u["sub"],
+        "opened_by_name": u.get("nome") or "",
+        "opened_at": utcnow(),
+        "opening_amount": abertura,
+        "opening_denominations": dinheiro["denominations"],
+        "opening_denominations_total": dinheiro["total"],
+        "notes": (body.notes or "")[:500],
+        "sales_total": 0,
+        "payments_by_method": {},
+        "transactions_count": 0,
+        "account_closures": [],
+        "updated_at": utcnow(),
+    }
+    turnos = listar_turnos_caixa(rid)
+    turnos.append(turno)
+    salvar_turnos_caixa(rid, turnos)
+    log_acao(u, "abrir_turno_caixa", "configuracoes", turno["id"], None, turno, request)
+    return {"shift": turno}
+
+
+@app.post("/api/admin/cash-shifts/{turno_id}/close", tags=["caixa"])
+def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Request,
+                       u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    turnos = listar_turnos_caixa(rid)
+    turno = next((t for t in turnos if t.get("id") == turno_id), None)
+    if not turno or turno.get("status") != "open":
+        raise HTTPException(404, "Turno aberto não encontrado")
+    if u.get("role") == "cashier" and turno.get("opened_by") != u["sub"]:
+        raise HTTPException(403, "Somente quem abriu o turno pode fechá-lo")
+    dinheiro = caixa_resumo_dinheiro(body.denominations)
+    fechamento_informado = body.closing_amount if body.closing_amount is not None else dinheiro["total"]
+    esperado = _money(float(turno.get("opening_amount") or 0) + float(turno.get("payments_by_method", {}).get("dinheiro") or 0))
+    fechamento = _money(fechamento_informado)
+    turno.update({
+        "status": "closed",
+        "closed_by": u["sub"],
+        "closed_by_name": u.get("nome") or "",
+        "closed_at": utcnow(),
+        "closing_amount": fechamento,
+        "closing_denominations": dinheiro["denominations"],
+        "closing_denominations_total": dinheiro["total"],
+        "expected_cash_amount": esperado,
+        "cash_difference": _money(fechamento - esperado),
+        "left_for_next_shift": _money(body.left_for_next_shift),
+        "closing_notes": (body.notes or "")[:500],
+        "updated_at": utcnow(),
+    })
+    salvar_turnos_caixa(rid, turnos)
+    log_acao(u, "fechar_turno_caixa", "configuracoes", turno_id, None, turno, request)
+    return {"shift": turno}
 
 
 @app.get("/api/admin/dashboard", tags=["financeiro"])
@@ -3490,6 +3793,7 @@ def criar_usuario_super_admin(restaurant_id: str, body: CriarUsuarioInput,
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     validar_role_no_plano(restaurant_id, body.role)
+    enforce_cashier_user_limit(restaurant_id, body.role)
     slug = rest.data[0].get("slug")
     login_id = user_identifier_from_body(body, slug)
 
