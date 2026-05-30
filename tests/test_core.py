@@ -41,8 +41,10 @@ def test_missing_restaurant_id_is_rejected():
 def test_plan_and_cash_register_limits():
     assert main.normalize_plan("básico") == "starter"
     assert main.normalize_plan("premium") == "enterprise"
-    assert main.CASH_REGISTER_LIMITS["starter"] == 1
+    assert main.PLAN_LIMITS["starter"] == {"users": 5, "tables": 10, "products": 100}
+    assert main.CASH_REGISTER_LIMITS["starter"] == 2
     assert main.CASH_REGISTER_LIMITS["pro"] >= 2
+    assert main.PLAN_BASE_PRICES == {"starter": 79, "pro": 149, "enterprise": 249}
 
 
 def test_cash_denominations_summary():

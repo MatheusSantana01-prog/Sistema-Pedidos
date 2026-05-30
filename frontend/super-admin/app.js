@@ -9,19 +9,22 @@ const PLANOS = {
   starter: {
     label: 'Básico',
     headline: 'QR Code, pedidos digitais e operação essencial.',
-    limits: { users: 5, tables: 20, products: 100 },
+    basePrice: 79,
+    limits: { users: 5, tables: 10, products: 100, registers: 2 },
     modules: { financeiro: true, cupons: false, garcom: false, relatorios: false, custom_branding: false, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
   pro: {
     label: 'Pro',
     headline: 'Plano recomendado para salão, cozinha, caixa e atendimento.',
-    limits: { users: 15, tables: 60, products: 400 },
+    basePrice: 149,
+    limits: { users: 15, tables: 60, products: 400, registers: 3 },
     modules: { financeiro: true, cupons: false, garcom: true, relatorios: true, custom_branding: true, backups: false, advanced_reports: false, priority_support: false, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
   enterprise: {
     label: 'Premium',
     headline: 'Escala, suporte e integrações premium em evolução.',
-    limits: { users: 9999, tables: 9999, products: 9999 },
+    basePrice: 249,
+    limits: { users: 9999, tables: 9999, products: 9999, registers: 20 },
     modules: { financeiro: true, cupons: true, garcom: true, relatorios: true, custom_branding: true, backups: true, advanced_reports: true, priority_support: true, api_integrations: false, ifood: false, whatsapp: false, multiunit: false },
   },
 };
@@ -742,11 +745,36 @@ function renderFinanceiroPlataforma(summary = {}, compat = false) {
       <div class="stat-card"><div class="stat-label">Clientes ativos</div><div class="stat-val">${escapeHtml(summary.active_clients ?? 0)}</div></div>
       <div class="stat-card"><div class="stat-label">Atrasados</div><div class="stat-val amber">${escapeHtml(summary.overdue_clients ?? 0)}</div></div>
     </div>
-    <div class="finance-workspace">
+      <div class="finance-pricing-strip">
+        ${renderPlanoPrecoCard('starter')}
+        ${renderPlanoPrecoCard('pro')}
+        ${renderPlanoPrecoCard('enterprise', true)}
+      </div>
+      <div class="finance-workspace">
       ${renderRegistroPagamento()}
       ${renderFinanceiroTabela()}
     </div>`;
   preencherFinanceiroDatalist();
+}
+
+function renderPlanoPrecoCard(plan, premium = false) {
+  const p = PLANOS[plan] || PLANOS.starter;
+  const limits = p.limits || {};
+  return `
+    <div class="finance-plan-card ${premium ? 'premium' : ''}">
+      <div class="finance-plan-top">
+        <span>${escapeHtml(p.label)}</span>
+        <b>R$ ${fmtMoney(p.basePrice)}/mês${premium ? ' base' : ''}</b>
+      </div>
+      <small>${escapeHtml(p.headline)}</small>
+      <div class="finance-plan-limits">
+        <span>${limits.tables >= 9999 ? 'mesas altas' : `${limits.tables} mesas`}</span>
+        <span>${limits.users >= 9999 ? 'usuários altos' : `${limits.users} usuários`}</span>
+        <span>${limits.products >= 9999 ? 'produtos altos' : `${limits.products} produtos`}</span>
+        <span>${limits.registers || '-'} caixas</span>
+      </div>
+      ${premium ? '<div class="finance-plan-note">Premium cresce com filiais, integrações, suporte prioritário e necessidades especiais.</div>' : ''}
+    </div>`;
 }
 
 async function carregarFinanceiroCompat() {
@@ -896,26 +924,89 @@ function renderRegistroPagamento() {
 }
 
 function renderFinanceiroTabela() {
-  const rows = FINANCEIRO_ITEMS
+  const cards = FINANCEIRO_ITEMS
     .slice()
     .sort((a, b) => String(a.restaurant?.name || '').localeCompare(String(b.restaurant?.name || '')))
-    .map(item => renderFinanceiroRow(item))
+    .map(item => renderFinanceiroAccordion(item))
     .join('');
   return `
     <div class="finance-table-panel">
       <div class="finance-register-head">
         <div>
-          <div class="detail-panel-title">Restaurantes e vencimentos</div>
-          <div class="finance-sub">Use o ID para registrar recebimentos rapidamente.</div>
+          <div class="detail-panel-title">Planos, mensalidades e vencimentos</div>
+          <div class="finance-sub">Clique em um restaurante para expandir cobranças, bloqueios e pagamento.</div>
         </div>
       </div>
-      <div class="tabela-wrap">
-        <table class="tabela finance-table">
-          <thead><tr><th>Restaurante</th><th>Código</th><th>Status</th><th>Mensalidade</th><th>Vencimento</th><th>Último pagamento</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="7" class="tabela-empty">Nenhum restaurante</td></tr>'}</tbody>
-        </table>
-      </div>
+      <div class="finance-accordion-list">${cards || '<div class="tabela-empty">Nenhum restaurante</div>'}</div>
     </div>`;
+}
+
+function renderFinanceiroAccordion(item) {
+  const r = item.restaurant || {};
+  const status = item.billing_status || 'em_dia';
+  const code = codigoClienteFinanceiro(item);
+  const plan = r.plan || 'starter';
+  const planMeta = PLANOS[plan] || PLANOS.starter;
+  return `
+    <details class="finance-accordion ${escapeAttr(status)}">
+      <summary>
+        <div class="finance-accordion-main">
+          <b>${escapeHtml(r.name || '-')}</b>
+          <span>/${escapeHtml(r.slug || '-')} · ${escapeHtml(code)} · ${escapeHtml(planLabel(plan))}</span>
+        </div>
+        <div class="finance-accordion-metrics">
+          <span>R$ ${fmtMoney(item.monthly_amount || planMeta.basePrice)}</span>
+          <span>${item.due_date ? fmtDateShort(item.due_date) : 'Sem vencimento'}</span>
+          <span class="finance-status ${escapeAttr(status)}">${escapeHtml(statusFinanceiroLabel(status))}</span>
+        </div>
+      </summary>
+      <div class="finance-accordion-body">
+        <div class="billing-alert ${escapeAttr(status)}">${escapeHtml(item.billing_notice || 'Sem alerta financeiro')}</div>
+        <div class="finance-box-grid">
+          <section class="finance-box">
+            <div class="finance-box-title">Plano e valor</div>
+            <div class="form-grid compact">
+              ${selectField(`fin-plan-${r.id}`, 'Plano', plan, [['starter','Básico - R$ 79'],['pro','Pro - R$ 149'],['enterprise','Premium - R$ 249 base']])}
+              ${inputField(`fin-monthly-${r.id}`, 'Mensalidade cobrada (R$)', item.monthly_amount || planMeta.basePrice || '', 'number')}
+              ${inputField(`fin-due-${r.id}`, 'Data de vencimento', item.due_date || '', 'date')}
+              ${inputField(`fin-trial-${r.id}`, 'Teste grátis até', item.trial_until || '', 'date')}
+            </div>
+            <div class="finance-help-text">No Premium, use R$ 249 como base e aumente conforme filiais, integrações, suporte ou escopo especial.</div>
+          </section>
+          <section class="finance-box">
+            <div class="finance-box-title">Status e bloqueio</div>
+            <div class="form-grid compact">
+              ${selectField(`fin-status-${r.id}`, 'Status', status, [['em_dia','Em dia'],['teste_gratis','Teste grátis'],['vencido','Vencido'],['bloqueado','Bloqueado']])}
+              ${inputField(`fin-alert-${r.id}`, 'Avisar após dias', item.grace_alert_days ?? 15, 'number')}
+              ${inputField(`fin-block-days-${r.id}`, 'Bloquear após dias', item.grace_block_days ?? 30, 'number')}
+              ${selectField(`fin-block-${r.id}`, 'Bloqueio aplicado', item.block_mode || 'none', [['none','Sem bloqueio'],['orders','Bloquear pedidos'],['admin','Bloquear admin'],['users','Bloquear usuários'],['full','Bloqueio total']])}
+            </div>
+          </section>
+          <section class="finance-box">
+            <div class="finance-box-title">Recebimento</div>
+            <label class="module-toggle"><input type="checkbox" id="fin-register-${escapeAttr(r.id)}"> Registrar pagamento agora</label>
+            <div class="form-grid compact">
+              ${inputField(`fin-pay-amount-${r.id}`, 'Valor pago', item.monthly_amount || planMeta.basePrice || '', 'number')}
+              ${inputField(`fin-pay-date-${r.id}`, 'Data pagamento', new Date().toISOString().slice(0,10), 'date')}
+              ${inputField(`fin-next-due-${r.id}`, 'Próximo vencimento', item.due_date || '', 'date')}
+              ${inputField(`fin-pay-ref-${r.id}`, 'Referência', item.last_payment_reference || '')}
+            </div>
+            ${renderHistoricoPagamentosResumo(item.recent_payments || [])}
+          </section>
+          <section class="finance-box">
+            <div class="finance-box-title">Observações</div>
+            <label class="form-label">Notas financeiras</label>
+            <textarea class="form-input text-area" id="fin-notes-${escapeAttr(r.id)}">${escapeHtml(item.payment_notes || '')}</textarea>
+            <div class="finance-row-actions">
+              <button class="btn btn-sm" onclick="copiarTexto('${escapeJs(code)}','Código copiado')">Copiar código</button>
+              <button class="btn btn-sm" onclick="carregarRestauranteNoPagamento('${escapeAttr(r.id)}')">Usar no recebimento</button>
+              <button class="btn btn-sm" onclick="abrirDetalhesRestaurante('${escapeAttr(r.id)}')">Ver detalhes</button>
+              <button class="btn btn-sm btn-primary" onclick="salvarFinanceiroRestaurante('${escapeAttr(r.id)}', this)">Salvar financeiro</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </details>`;
 }
 
 function renderFinanceiroRow(item) {
@@ -1225,6 +1316,7 @@ function fmtDateShort(value) {
 
 async function salvarFinanceiroRestaurante(restId, btn) {
   const payload = {
+    plan: val(`fin-plan-${restId}`) || undefined,
     billing_status: val(`fin-status-${restId}`),
     monthly_amount: Number(val(`fin-monthly-${restId}`) || 0),
     due_date: val(`fin-due-${restId}`) || null,

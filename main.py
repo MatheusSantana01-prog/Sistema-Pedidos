@@ -94,15 +94,21 @@ FORMAS_PAGAMENTO = {
 }
 
 PLAN_LIMITS = {
-    "starter": {"users": 5, "tables": 20, "products": 100},
+    "starter": {"users": 5, "tables": 10, "products": 100},
     "pro": {"users": 15, "tables": 60, "products": 400},
     "enterprise": {"users": 9999, "tables": 9999, "products": 9999},
 }
 
 CASH_REGISTER_LIMITS = {
-    "starter": 1,
+    "starter": 2,
     "pro": 3,
     "enterprise": 20,
+}
+
+PLAN_BASE_PRICES = {
+    "starter": 79,
+    "pro": 149,
+    "enterprise": 249,
 }
 
 PLAN_ALIASES = {
@@ -768,6 +774,8 @@ def aplicar_limites_plano(control: dict, plan: str, force: bool = False) -> dict
     modules = PLAN_MODULES.get(plan, PLAN_MODULES["starter"]).copy()
     control["limits"] = limits if force else {**limits, **(control.get("limits") or {})}
     control["modules"] = modules if force else {**modules, **(control.get("modules") or {})}
+    if force or not control.get("monthly_amount"):
+        control["monthly_amount"] = PLAN_BASE_PRICES.get(plan, PLAN_BASE_PRICES["starter"])
     control["future_modules"] = FUTURE_MODULES.copy()
     control["plan_marketing"] = PLAN_MARKETING.get(plan, PLAN_MARKETING["starter"]).copy()
     return control
@@ -827,7 +835,7 @@ def enforce_cashier_user_limit(restaurant_id: str, role: str):
     if role != "cashier":
         return
     if limite_caixas_restaurante(restaurant_id) <= 1 and active_role_memberships_count(restaurant_id, "cashier") >= 1:
-        raise HTTPException(403, "Plano Básico permite somente 1 usuário de caixa")
+        raise HTTPException(403, "Plano atual permite somente 1 usuário de caixa")
 
 def active_tables_count(restaurant_id: str) -> int:
     resp = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).execute()
