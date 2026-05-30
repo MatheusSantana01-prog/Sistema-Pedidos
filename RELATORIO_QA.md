@@ -5,6 +5,14 @@ Branch: `melhorias-saas-piloto`
 
 ## O que foi testado
 
+### QA visual/manual assistido
+
+- Executado em 2026-05-30 com Chromium via Playwright headless.
+- Ambiente publicado: Vercel + Render.
+- Restaurante temporário `qa-visual-*` criado e removido.
+- Telas validadas: super-admin, admin, mesa/mobile, cozinha, garçom/mobile, caixa e TV.
+- Evidências detalhadas em `QA_VISUAL.md`.
+
 ### Automatizado local
 
 - Importação do backend pela raiz e pela pasta `backend`.
@@ -74,10 +82,13 @@ Rotas verificadas com status `200`:
 - Limites e permissões críticas têm cobertura automatizada.
 - Frontend não apresentou erro de sintaxe JavaScript.
 - Render respondeu `/health` com `status: ok`.
+- QA visual confirmou navegação e botões críticos em super-admin, mesa, cozinha, garçom, admin e TV.
+- Caixa abriu turno e bloqueou soma divergente visualmente.
 
 ## Bugs encontrados
 
 - Durante o primeiro smoke, `/api/admin/dashboard` retornou erro de validação porque a chamada não informou `data_inicio` e `data_fim`.
+- No QA visual headless, o fechamento de conta do caixa não foi concluído pela UI porque o botão permaneceu desabilitado após o preenchimento programático do pagamento.
 
 ## Bugs corrigidos
 
@@ -85,7 +96,7 @@ Rotas verificadas com status `200`:
 
 ## Bugs pendentes
 
-- QA visual completo com clique em todos os botões ainda deve ser executado em navegador com usuário olhando fluxos e layout em celular/tablet.
+- Revalidar presencialmente o fechamento de conta no caixa usando navegador físico, com pagamento dinheiro, pix, cartão e misto.
 - Teste E2E automatizado com Playwright ainda não está versionado no repositório.
 - CSP ainda depende de `unsafe-inline`, então a redução de risco XSS continua pendente.
 - O uso de `localStorage` para JWT continua aceito por enquanto, mas deve ser revisado antes de escala maior.
@@ -99,4 +110,4 @@ Rotas verificadas com status `200`:
 
 ## Recomendação final
 
-Pronto para piloto controlado, com acompanhamento técnico no primeiro uso real e execução do `CHECKLIST_PILOTO.md` antes da instalação.
+Pronto para piloto controlado, com acompanhamento técnico no primeiro uso real, execução do `CHECKLIST_PILOTO.md` e revalidação presencial obrigatória do fechamento de conta no caixa antes de iniciar atendimento real.
