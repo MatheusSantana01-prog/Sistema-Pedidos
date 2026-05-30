@@ -9,7 +9,6 @@ Versão: 2.0.0
 - Pronto para Render/Railway/VPS
 """
 from __future__ import annotations
-import os
 import secrets
 import json
 import logging
@@ -18,47 +17,47 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
-import bcrypt
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, field_validator
-from supabase import Client, create_client
-import jwt as pyjwt
 
-load_dotenv()
+try:
+    from app.core.config import settings
+    from app.core.database import sb
+    from app.core.security import (
+        authorize,
+        bearer,
+        criar_token,
+        get_restaurant_id_from_token,
+        hash_senha,
+        verificar_senha,
+        verificar_token,
+    )
+except ModuleNotFoundError:
+    from backend.app.core.config import settings
+    from backend.app.core.database import sb
+    from backend.app.core.security import (
+        authorize,
+        bearer,
+        criar_token,
+        get_restaurant_id_from_token,
+        hash_senha,
+        verificar_senha,
+        verificar_token,
+    )
 
 # ── CONFIG ────────────────────────────────────────────────────────
-SUPABASE_URL     = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY     = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-JWT_SECRET       = os.getenv("JWT_SECRET", "")
-JWT_EXP_H        = int(os.getenv("JWT_EXP_HOURS", "12"))
-JWT_REMEMBER_DAYS = int(os.getenv("JWT_REMEMBER_DAYS", "30"))
-APP_ENV          = os.getenv("APP_ENV", "development")
-CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
-FRONTEND_URL     = os.getenv("PUBLIC_FRONTEND_URL", "*")
-APP_VERSION      = os.getenv("APP_VERSION", os.getenv("RENDER_GIT_COMMIT", "local"))[:12]
-KITCHEN_READY_VISIBLE_MINUTES = int(os.getenv("KITCHEN_READY_VISIBLE_MINUTES", "15"))
-
-if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET não configurado")
-if not SUPABASE_KEY or "COLE" in SUPABASE_KEY:
-    raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY não configurado")
-
-CORS_ORIGINS = ["*"] if CORS_ORIGINS_RAW == "*" else [
-    o.strip() for o in CORS_ORIGINS_RAW.split(",")
-]
-LOCAL_CORS_ORIGINS = [
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-if CORS_ORIGINS != ["*"]:
-    CORS_ORIGINS = list(dict.fromkeys([*CORS_ORIGINS, *LOCAL_CORS_ORIGINS]))
-
-sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+SUPABASE_URL = settings.supabase_url
+SUPABASE_KEY = settings.supabase_service_role_key
+JWT_SECRET = settings.jwt_secret
+JWT_EXP_H = settings.jwt_exp_hours
+JWT_REMEMBER_DAYS = settings.jwt_remember_days
+APP_ENV = settings.app_env
+CORS_ORIGINS_RAW = settings.cors_origins_raw
+CORS_ORIGINS = settings.cors_origins
+FRONTEND_URL = settings.frontend_url
+APP_VERSION = settings.app_version
+KITCHEN_READY_VISIBLE_MINUTES = settings.kitchen_ready_visible_minutes
 logger = logging.getLogger("restaurante-saas")
 logging.basicConfig(level=logging.INFO)
 
@@ -287,9 +286,6 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-bearer = HTTPBearer(auto_error=False)
-
-
 @app.middleware("http")
 async def monitorar_requisicoes(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or secrets.token_hex(8)
@@ -324,74 +320,6 @@ async def monitorar_requisicoes(request: Request, call_next):
     response.headers["x-request-id"] = request_id
     response.headers["x-app-version"] = APP_VERSION
     return response
-
-
-# ── BCRYPT ────────────────────────────────────────────────────────
-def hash_senha(senha: str) -> str:
-    return bcrypt.hashpw(senha.encode(), bcrypt.gensalt(12)).decode()
-
-def verificar_senha(senha: str, hash_armazenado: str) -> bool:
-    try:
-        return bcrypt.checkpw(senha.encode(), hash_armazenado.encode())
-    except Exception:
-        return False
-
-
-# ── JWT ───────────────────────────────────────────────────────────
-def criar_token(usuario: dict, restaurant_id: str = None, role: str = None, expires_hours: int = JWT_EXP_H) -> str:
-    payload = {
-        "sub":           str(usuario["id"]),
-        "email":         usuario["email"],
-        "nome":          usuario["nome"],
-        "perfil":        usuario.get("perfil", "funcionario"),
-        "restaurant_id": restaurant_id,
-        "role":          role,
-        "is_super_admin": usuario.get("is_super_admin", False),
-        "exp":           datetime.utcnow() + timedelta(hours=expires_hours),
-        "iat":           datetime.utcnow(),
-    }
-    return pyjwt.encode(payload, JWT_SECRET, algorithm="HS256")
-
-def verificar_token(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:
-    if not cred:
-        raise HTTPException(401, "Token não fornecido")
-    try:
-        return pyjwt.decode(cred.credentials, JWT_SECRET, algorithms=["HS256"])
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(401, "Token expirado")
-    except pyjwt.InvalidTokenError:
-        raise HTTPException(401, "Token inválido")
-
-
-# ── RBAC ─────────────────────────────────────────────────────────
-def authorize(roles: list[str], require_restaurant: bool = True):
-    """
-    Middleware RBAC multi-tenant.
-    Valida role E garante que o usuário pertence ao restaurante da requisição.
-    """
-    allowed_roles = set(roles)
-
-    def _check(u: dict = Depends(verificar_token)):
-        if u.get("is_super_admin"):
-            return u  # super_admin passa em tudo
-
-        role = u.get("role", "")
-        if role not in allowed_roles:
-            raise HTTPException(
-                403,
-                f"Sem permissão. Requer: {roles}. Seu papel: {role}"
-            )
-        if require_restaurant and not u.get("restaurant_id"):
-            raise HTTPException(403, "Usuário não vinculado a nenhum restaurante")
-        return u
-    return _check
-
-def get_restaurant_id_from_token(u: dict) -> str:
-    """Extrai restaurant_id do token — nunca confia no frontend."""
-    rid = u.get("restaurant_id")
-    if not rid:
-        raise HTTPException(403, "restaurant_id não encontrado no token")
-    return rid
 
 
 # ── HELPERS ───────────────────────────────────────────────────────
