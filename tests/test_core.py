@@ -80,3 +80,112 @@ def test_kitchen_status_transition_rules():
     assert "pronto" in main.ORDER_TRANSITIONS["em_preparo"]
     assert "entregue" in main.ORDER_TRANSITIONS["pronto"]
     assert "pendente" not in main.ORDER_TRANSITIONS["entregue"]
+
+
+def test_plan_limit_blocks_when_quota_is_exceeded(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_platform_control",
+        lambda restaurant_id: {"limits": {"tables": 2, "users": 1, "products": 3}},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main.enforce_plan_limit("restaurant-a", "tables", current_count=2)
+
+    assert exc.value.status_code == 403
+    assert "Limite de mesas" in exc.value.detail
+
+
+def test_plan_limit_allows_enterprise_high_limits(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_platform_control",
+        lambda restaurant_id: {"limits": {"products": 9999}},
+    )
+
+    main.enforce_plan_limit("restaurant-a", "products", current_count=9998)
+
+
+def test_platform_block_modes(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_platform_control",
+        lambda restaurant_id: {"billing_status": "em_dia", "block_mode": "orders", "modules": {}},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main.enforce_platform_control("restaurant-a", "orders")
+
+    assert exc.value.status_code == 403
+    assert "Novos pedidos bloqueados" in exc.value.detail
+
+
+def test_platform_full_block_blocks_admin(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_platform_control",
+        lambda restaurant_id: {"billing_status": "bloqueado", "block_mode": "none", "modules": {}},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main.enforce_platform_control("restaurant-a", "admin")
+
+    assert exc.value.status_code == 403
+    assert "Restaurante bloqueado" in exc.value.detail
+
+
+def test_billing_status_trial_overdue_and_blocked():
+    trial = main.calcular_status_financeiro({
+        "billing_status": "teste_gratis",
+        "trial_until": "2999-01-01",
+    })
+    assert trial["billing_computed_status"] == "teste_gratis"
+
+    overdue = main.calcular_status_financeiro({
+        "billing_status": "em_dia",
+        "due_date": "2000-01-01",
+        "grace_alert_days": 15,
+        "grace_block_days": 99999,
+    })
+    assert overdue["billing_status"] == "vencido"
+
+    blocked = main.calcular_status_financeiro({
+        "billing_status": "em_dia",
+        "due_date": "2000-01-01",
+        "grace_alert_days": 1,
+        "grace_block_days": 2,
+        "block_mode": "none",
+    })
+    assert blocked["billing_status"] == "bloqueado"
+    assert blocked["block_mode"] == "admin"
+
+
+def test_role_requires_plan_module(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_platform_control",
+        lambda restaurant_id: {"modules": {"garcom": False}},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main.validar_role_no_plano("restaurant-a", "waiter")
+
+    assert exc.value.status_code == 403
+
+
+def test_cashier_user_limit_for_starter(monkeypatch):
+    monkeypatch.setattr(main, "limite_caixas_restaurante", lambda restaurant_id: 1)
+    monkeypatch.setattr(main, "active_role_memberships_count", lambda restaurant_id, role: 1)
+
+    with pytest.raises(HTTPException) as exc:
+        main.enforce_cashier_user_limit("restaurant-a", "cashier")
+
+    assert exc.value.status_code == 403
+    assert "1 usuário de caixa" in exc.value.detail
+
+
+def test_require_super_admin_rejects_regular_user():
+    with pytest.raises(HTTPException) as exc:
+        main.require_super_admin({"sub": "user-1", "is_super_admin": False})
+
+    assert exc.value.status_code == 403
