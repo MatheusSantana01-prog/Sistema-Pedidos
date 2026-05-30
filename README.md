@@ -1,37 +1,101 @@
 # Sistema-Pedidos
 
-Sistema SaaS de pedidos para restaurantes.
+SaaS de pedidos para restaurantes com operação multi-tenant por slug. O sistema atende cliente por QR Code, garçom, cozinha, caixa, painel administrativo do restaurante e super-admin da plataforma.
 
-## Estrutura do repositorio
+## Stack
 
-- `backend/`: API FastAPI usada no Render.
-- `frontend/`: telas do sistema usadas no Vercel.
-- `frontend/r/admin/`: painel do restaurante.
-- `frontend/r/mesa/`: tela do cliente por mesa.
-- `frontend/r/cozinha/`: fila da cozinha.
-- `frontend/r/tv/`: painel de TV.
-- `frontend/r/caixa/`: caixa.
-- `frontend/r/garcom/`: tela do garcom.
-- `frontend/super-admin/`: painel SaaS.
-- `frontend/shared/`: configuracoes e utilitarios compartilhados.
+- Backend: FastAPI, Supabase, JWT, bcrypt.
+- Banco: Supabase/PostgreSQL.
+- Frontend: HTML, CSS e JavaScript puro.
+- Backend deploy: Render.
+- Frontend deploy: Vercel.
 
-## Padrao do frontend
+## Estrutura
 
-O frontend deve manter HTML, CSS e JavaScript separados.
+- `main.py`: entrada legada/local do backend.
+- `backend/main.py`: entrada usada pelo Render.
+- `backend/app/core/`: configuração, Supabase e segurança extraídos do backend.
+- `backend/scripts/seed_demo.py`: seed seguro para dados de demonstração.
+- `frontend/`: telas publicadas na Vercel.
+- `frontend/shared/`: configuração, autenticação e utilitários compartilhados.
+- `tests/`: testes básicos com mocks/env de teste.
 
-Cada tela segue o padrao:
+As telas ativas do frontend mantêm o padrão `index.html`, `styles.css` e `app.js`. Evite voltar a juntar HTML, CSS e JS em um único arquivo.
 
-- `index.html`: estrutura da pagina.
-- `styles.css`: estilos da tela.
-- `app.js`: logica da tela.
+## Variáveis de ambiente
 
-Arquivos HTML soltos na raiz, como `admin.html` e `cliente.html`, sao paginas legadas locais e nao representam a estrutura ativa do projeto.
+Configure no Render ou `.env` local:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `JWT_SECRET`
+- `JWT_EXP_HOURS`
+- `JWT_REMEMBER_DAYS`
+- `APP_ENV`
+- `CORS_ORIGINS`
+- `PUBLIC_FRONTEND_URL`
+- `KITCHEN_READY_VISIBLE_MINUTES`
+
+Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET` ou senhas reais no frontend ou no GitHub.
+
+## Rodar local
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Frontend local:
+
+```bash
+cd frontend
+python local_server.py
+```
+
+## Testes
+
+Os testes de CI usam variáveis falsas e cobrem importação do backend, health check, JWT, isolamento básico por `restaurant_id`, regras de cozinha e fechamento de conta em nível de lógica.
+
+```bash
+pytest -q
+python -m py_compile main.py backend/main.py
+```
+
+Fluxos completos com Supabase real devem ser testados em ambiente de staging ou produção controlada.
 
 ## Deploy
 
-- Backend: Render, usando a pasta `backend/`.
-- Frontend: Vercel, usando a pasta `frontend/`.
+Render usa a pasta `backend/` com:
 
-## Variaveis sensiveis
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT --workers 2
+```
 
-Arquivos `.env` nao devem ser enviados ao GitHub. Chaves privadas, como service role do Supabase, devem ficar apenas no backend ou nas variaveis de ambiente dos provedores.
+Vercel usa a pasta `frontend/` e o proxy `/api/*` para o backend do Render.
+
+Veja [DEPLOY.md](DEPLOY.md) para o passo a passo.
+
+## Seed demo
+
+O script cria restaurante, categorias, produtos, mesas e usuários demo.
+
+```bash
+python backend/scripts/seed_demo.py
+```
+
+Por padrão a senha demo é `demo123`. Para piloto real, defina `DEMO_PASSWORD` e altere as senhas logo após criar os usuários.
+
+## Fluxo principal
+
+1. Cliente acessa `/r/{slug}/mesa/{token}`, vê cardápio, envia pedido e consulta conta.
+2. Cozinha acessa `/r/{slug}/cozinha`, recebe pedidos e avança status até entregue.
+3. Garçom acessa `/r/{slug}/garcom`, acompanha mesas e chamados, se o plano permitir.
+4. Caixa acessa `/r/{slug}/caixa`, abre turno, fecha contas e registra pagamentos.
+5. Admin acessa `/r/{slug}/admin`, gerencia cardápio, mesas, usuários, caixas e configurações.
+6. Super-admin acessa `/super-admin`, gerencia restaurantes, planos, financeiro, suporte e bloqueios.
+
+## Documentos
+
+- [AUDITORIA_TECNICA.md](AUDITORIA_TECNICA.md)
+- [CHECKLIST_PILOTO.md](CHECKLIST_PILOTO.md)
+- [ROADMAP.md](ROADMAP.md)
