@@ -115,6 +115,44 @@ def test_cash_shift_updates_when_account_is_closed(monkeypatch):
     assert saved["turnos"][0]["account_closures"][0]["total"] == 100
 
 
+def test_inventory_item_status_low_and_zero():
+    assert main._inventory_item_status({"estoque_atual": 0, "estoque_minimo": 5}) == "zerado"
+    assert main._inventory_item_status({"estoque_atual": 3, "estoque_minimo": 5}) == "baixo"
+    assert main._inventory_item_status({"estoque_atual": 8, "estoque_minimo": 5}) == "ok"
+
+
+def test_recipe_cost_calculation(monkeypatch):
+    class FakeQuery:
+        def select(self, *_args, **_kwargs):
+            return self
+
+        def eq(self, *_args, **_kwargs):
+            return self
+
+        def in_(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            return type("Resp", (), {"data": [
+                {"id": "farinha", "nome": "Farinha", "custo_unitario": 4, "unidade": "kg"},
+                {"id": "queijo", "nome": "Queijo", "custo_unitario": 30, "unidade": "kg"},
+            ]})()
+
+    class FakeSb:
+        def table(self, _name):
+            return FakeQuery()
+
+    monkeypatch.setattr(main, "sb", FakeSb())
+
+    result = main.calcular_custo_receita("restaurant-a", [
+        {"inventory_item_id": "farinha", "quantity": 0.5},
+        {"inventory_item_id": "queijo", "quantity": 0.2},
+    ])
+
+    assert result["cost"] == 8.0
+    assert result["items"][0]["cost_total"] == 2.0
+
+
 def test_kitchen_status_transition_rules():
     assert "em_preparo" in main.ORDER_TRANSITIONS["pendente"]
     assert "pronto" in main.ORDER_TRANSITIONS["em_preparo"]

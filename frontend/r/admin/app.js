@@ -11,6 +11,9 @@ let pagamentosConta = [];
 let produtosMap    = {};
 let categoriasLista = [];
 let produtosLista  = [];
+let estoqueItems = [];
+let estoqueMovimentos = [];
+let estoqueAba = 'insumos';
 let pollingHandle  = null;
 let supportPollingHandle = null;
 
@@ -177,6 +180,7 @@ function irPara(pagina, tabEl) {
     mesas:         carregarMesas,
     pedidos:       carregarPedidos,
     cardapio:      carregarCardapio,
+    estoque:       carregarEstoque,
     financeiro:    carregarFinanceiro,
     fiscal:        carregarFiscal,
     usuarios:      carregarUsuarios,
@@ -690,6 +694,204 @@ async function toggleProduto(id, atual, btn) {
 }
 
 /* ── FINANCEIRO ───────────────────────────────────── */
+async function carregarEstoque() {
+  document.getElementById('estoque-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const [itemsResp, movResp, prodResp] = await Promise.all([
+      apiCall('GET', '/api/admin/inventory/items?include_inactive=true'),
+      apiCall('GET', '/api/admin/inventory/movements?limite=80'),
+      produtosLista.length ? Promise.resolve({ produtos: produtosLista }) : apiCall('GET', '/api/admin/products'),
+    ]);
+    estoqueItems = itemsResp.items || [];
+    estoqueMovimentos = movResp.movements || [];
+    produtosLista = prodResp.produtos || produtosLista;
+    produtosMap = {};
+    produtosLista.forEach(p => produtosMap[p.id] = p);
+    renderEstoque();
+  } catch (e) {
+    document.getElementById('estoque-content').innerHTML = `<div class="tabela-empty">Estoque indisponível: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function trocarSubEstoque(aba, btn) {
+  estoqueAba = aba;
+  document.querySelectorAll('#page-estoque .subtab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderEstoque();
+}
+
+function renderEstoque() {
+  if (estoqueAba === 'movimentos') return renderEstoqueMovimentos();
+  if (estoqueAba === 'fichas') return renderEstoqueFichas();
+  if (estoqueAba === 'alertas') return renderEstoqueAlertas();
+  if (estoqueAba === 'relatorios') return renderEstoqueRelatorio();
+  renderEstoqueInsumos();
+}
+
+function renderEstoqueInsumos() {
+  document.getElementById('estoque-content').innerHTML = `
+    <div class="tabela-wrap"><table class="tabela">
+      <thead><tr><th>Insumo</th><th>Un.</th><th>Atual</th><th>Mínimo</th><th>Custo</th><th>Fornecedor</th><th>Status</th><th>Ações</th></tr></thead>
+      <tbody>${estoqueItems.map(i => `<tr>
+        <td><strong>${escapeHtml(i.nome)}</strong>${i.validade ? `<div class="rest-slug">Validade ${escapeHtml(i.validade)}</div>` : ''}</td>
+        <td>${escapeHtml(i.unidade)}</td>
+        <td class="mono">${fmt(i.estoque_atual || 0)}</td>
+        <td class="mono">${fmt(i.estoque_minimo || 0)}</td>
+        <td>R$ ${fmt(i.custo_unitario || 0)}</td>
+        <td>${escapeHtml(i.fornecedor || '-')}</td>
+        <td><span class="inventory-status ${escapeAttr(i.status_estoque || 'ok')}">${escapeHtml(i.ativo === false ? 'inativo' : i.status_estoque || 'ok')}</span></td>
+        <td><button class="btn btn-sm" onclick="abrirModalInsumo('${escapeAttr(i.id)}')">Editar</button> ${i.ativo === false ? '' : `<button class="btn btn-sm btn-danger" onclick="desativarInsumo('${escapeAttr(i.id)}')">Inativar</button>`}</td>
+      </tr>`).join('') || '<tr><td colspan="8" class="tabela-empty">Nenhum insumo cadastrado.</td></tr>'}</tbody>
+    </table></div>`;
+}
+
+function renderEstoqueMovimentos() {
+  document.getElementById('estoque-content').innerHTML = `
+    <div class="tabela-wrap"><table class="tabela">
+      <thead><tr><th>Data</th><th>Insumo</th><th>Tipo</th><th>Qtd</th><th>Antes</th><th>Depois</th><th>Motivo</th></tr></thead>
+      <tbody>${estoqueMovimentos.map(m => `<tr>
+        <td class="mono" style="font-size:11px">${fmtDate(m.created_at)}</td>
+        <td>${escapeHtml(m.inventory_items?.nome || '-')}</td>
+        <td><span class="badge badge-plan">${escapeHtml(labelMovimento(m.movement_type))}</span></td>
+        <td class="mono">${fmt(m.quantity || 0)}</td>
+        <td class="mono">${fmt(m.stock_before || 0)}</td>
+        <td class="mono">${fmt(m.stock_after || 0)}</td>
+        <td>${escapeHtml(m.reason || '-')}</td>
+      </tr>`).join('') || '<tr><td colspan="7" class="tabela-empty">Nenhuma movimentação.</td></tr>'}</tbody>
+    </table></div>`;
+}
+
+function renderEstoqueFichas() {
+  const opts = produtosLista.map(p => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.nome)}</option>`).join('');
+  document.getElementById('estoque-content').innerHTML = `
+    <div class="config-grid"><div class="config-card">
+      <div class="config-title">Ficha técnica por produto</div>
+      <div class="form-row"><label class="form-label">Produto</label><select class="form-input" id="recipe-product" onchange="carregarFichaTecnica()">${opts}</select></div>
+      <div id="recipe-editor"><div class="tabela-empty">Selecione um produto.</div></div>
+    </div></div>`;
+  if (produtosLista.length) carregarFichaTecnica();
+}
+
+async function carregarFichaTecnica() {
+  const productId = document.getElementById('recipe-product')?.value;
+  if (!productId) return;
+  const el = document.getElementById('recipe-editor');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await apiCall('GET', `/api/admin/products/${productId}/recipe`);
+    const recipe = data.recipe || [];
+    el.innerHTML = `
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Custo</div><div class="stat-val">R$ ${fmt(data.cost || 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Margem</div><div class="stat-val green">R$ ${fmt(data.margin || 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Margem %</div><div class="stat-val amber">${fmt(data.margin_percent || 0)}%</div></div>
+      </div>
+      <div id="recipe-lines">${recipe.map(r => recipeLine(r.inventory_item_id, r.quantity, r.notes)).join('') || recipeLine('', '', '')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-sm" onclick="adicionarLinhaReceita()">+ Insumo</button><button class="btn btn-sm btn-primary" onclick="salvarFichaTecnica()">Salvar ficha</button></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="tabela-empty">Erro ao carregar ficha: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function recipeLine(itemId = '', quantity = '', notes = '') {
+  const opts = estoqueItems.filter(i => i.ativo !== false).map(i => `<option value="${escapeAttr(i.id)}" ${itemId === i.id ? 'selected' : ''}>${escapeHtml(i.nome)} (${escapeHtml(i.unidade)})</option>`).join('');
+  return `<div class="form-row-2 recipe-line"><select class="form-input recipe-item">${opts}</select><input class="form-input recipe-qty" type="number" step="0.001" placeholder="Quantidade" value="${escapeAttr(quantity)}"><input class="form-input recipe-notes" placeholder="Observação" value="${escapeAttr(notes || '')}"></div>`;
+}
+
+function adicionarLinhaReceita() {
+  document.getElementById('recipe-lines').insertAdjacentHTML('beforeend', recipeLine('', '', ''));
+}
+
+async function salvarFichaTecnica() {
+  const productId = document.getElementById('recipe-product')?.value;
+  const items = [...document.querySelectorAll('.recipe-line')].map(row => ({
+    inventory_item_id: row.querySelector('.recipe-item')?.value,
+    quantity: Number(row.querySelector('.recipe-qty')?.value || 0),
+    notes: row.querySelector('.recipe-notes')?.value || '',
+  })).filter(i => i.inventory_item_id && i.quantity > 0);
+  try {
+    await apiCall('PUT', `/api/admin/products/${productId}/recipe`, { items });
+    showToast('Ficha técnica salva', 'success');
+    carregarFichaTecnica();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function renderEstoqueAlertas() {
+  const alerts = estoqueItems.filter(i => i.ativo !== false && (i.status_estoque === 'baixo' || i.status_estoque === 'zerado'));
+  document.getElementById('estoque-content').innerHTML = `<div class="tabela-wrap"><table class="tabela"><thead><tr><th>Insumo</th><th>Atual</th><th>Mínimo</th><th>Status</th></tr></thead><tbody>${alerts.map(i => `<tr><td>${escapeHtml(i.nome)}</td><td class="mono">${fmt(i.estoque_atual || 0)}</td><td class="mono">${fmt(i.estoque_minimo || 0)}</td><td><span class="inventory-status ${escapeAttr(i.status_estoque)}">${escapeHtml(i.status_estoque)}</span></td></tr>`).join('') || '<tr><td colspan="4" class="tabela-empty">Sem alertas de estoque.</td></tr>'}</tbody></table></div>`;
+}
+
+async function renderEstoqueRelatorio() {
+  const el = document.getElementById('estoque-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await apiCall('GET', '/api/admin/inventory/reports/summary');
+    const s = data.summary || {};
+    el.innerHTML = `<div class="stats-row"><div class="stat-card"><div class="stat-label">Insumos ativos</div><div class="stat-val">${escapeHtml(s.items_active || 0)}</div></div><div class="stat-card"><div class="stat-label">Valor em estoque</div><div class="stat-val green">R$ ${fmt(s.inventory_value || 0)}</div></div><div class="stat-card"><div class="stat-label">Baixo</div><div class="stat-val amber">${escapeHtml(s.low_stock || 0)}</div></div><div class="stat-card"><div class="stat-label">Zerado</div><div class="stat-val red">${escapeHtml(s.zero_stock || 0)}</div></div></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="tabela-empty">Erro ao carregar relatório: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function abrirModalInsumo(id = '') {
+  const i = estoqueItems.find(item => item.id === id) || {};
+  document.getElementById('inv-id').value = i.id || '';
+  document.getElementById('inv-nome').value = i.nome || '';
+  document.getElementById('inv-unidade').value = i.unidade || 'unidade';
+  document.getElementById('inv-validade').value = i.validade || '';
+  document.getElementById('inv-estoque').value = i.estoque_atual ?? 0;
+  document.getElementById('inv-estoque').disabled = Boolean(i.id);
+  document.getElementById('inv-minimo').value = i.estoque_minimo ?? 0;
+  document.getElementById('inv-custo').value = i.custo_unitario ?? 0;
+  document.getElementById('inv-fornecedor').value = i.fornecedor || '';
+  document.getElementById('modal-insumo').classList.add('show');
+}
+
+async function salvarInsumo() {
+  const id = document.getElementById('inv-id').value;
+  const payload = { nome: val('inv-nome'), unidade: val('inv-unidade'), estoque_minimo: Number(val('inv-minimo') || 0), custo_unitario: Number(val('inv-custo') || 0), fornecedor: val('inv-fornecedor') || null, validade: val('inv-validade') || null };
+  if (!id) payload.estoque_atual = Number(val('inv-estoque') || 0);
+  try {
+    if (id) await apiCall('PATCH', `/api/admin/inventory/items/${id}`, payload);
+    else await apiCall('POST', '/api/admin/inventory/items', payload);
+    fecharModal('modal-insumo');
+    showToast('Insumo salvo', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function abrirModalMovimento() {
+  document.getElementById('mov-item').innerHTML = estoqueItems.filter(i => i.ativo !== false).map(i => `<option value="${escapeAttr(i.id)}">${escapeHtml(i.nome)} (${escapeHtml(i.unidade)})</option>`).join('');
+  ['mov-qtd','mov-custo','mov-motivo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mov-tipo').value = 'entrada';
+  document.getElementById('modal-movimento').classList.add('show');
+}
+
+async function salvarMovimento() {
+  const payload = { inventory_item_id: val('mov-item'), movement_type: val('mov-tipo'), quantity: Number(val('mov-qtd') || 0), reason: val('mov-motivo') || null };
+  const custo = val('mov-custo');
+  if (custo !== '') payload.unit_cost = Number(custo);
+  try {
+    await apiCall('POST', '/api/admin/inventory/movements', payload);
+    fecharModal('modal-movimento');
+    showToast('Movimentação registrada', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function desativarInsumo(id) {
+  if (!await appConfirm('Inativar este insumo?', { title: 'Inativar insumo', danger: true })) return;
+  try {
+    await apiCall('POST', `/api/admin/inventory/items/${id}/deactivate`, {});
+    showToast('Insumo inativado', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function labelMovimento(tipo) {
+  return ({ entrada:'Entrada', saida_manual:'Saída manual', ajuste:'Ajuste', perda:'Perda', inventario:'Inventário', baixa_por_venda:'Baixa por venda' })[tipo] || tipo;
+}
+
 async function carregarFinanceiro() {
   const ini = document.getElementById('fin-inicio').value;
   const fim = document.getElementById('fin-fim').value;

@@ -70,6 +70,13 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 .page.active { display:block; }
 .section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
 .section-title { font-family:var(--mono); font-size:13px; font-weight:600; letter-spacing:.5px; color:var(--muted); text-transform:uppercase; }
+.subtabs { display:flex; gap:8px; flex-wrap:wrap; margin:-6px 0 18px; }
+.subtab { border:1px solid var(--border); border-radius:7px; background:var(--panel); color:var(--muted); padding:8px 11px; font-size:12px; font-weight:700; cursor:pointer; }
+.subtab.active, .subtab:hover { border-color:var(--color-primary); color:var(--color-primary); background:rgba(255,77,28,.08); }
+.inventory-status { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
+.inventory-status.ok { color:var(--green); }
+.inventory-status.baixo { color:var(--amber); }
+.inventory-status.zerado { color:var(--red); }
 
 /* CARDS STATS */
 .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
@@ -86,6 +93,7 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 .stat-val.amber { color:var(--amber); }
 .stat-val.accent { color:var(--color-primary); }
 .stat-val.blue  { color:var(--blue); }
+.stat-val.red { color:var(--red); }
 
 /* TABELA */
 .tabela-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; overflow-x:auto; }
