@@ -9,12 +9,11 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT / ".env")
+load_dotenv(ROOT / "backend" / ".env")
 sys.path.insert(0, str(ROOT))
 
 import main as backend  # noqa: E402
-
-load_dotenv(ROOT / ".env")
-load_dotenv(ROOT / "backend" / ".env")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
@@ -205,13 +204,13 @@ def main() -> None:
 
         print("OK smoke real de estoque concluido.")
     finally:
+        delete_where(sb, "pedido_itens", "pedido_id", order_id)
         for table in [
             "inventory_count_items",
             "inventory_counts",
             "product_recipe_items",
             "product_recipes",
             "inventory_movements",
-            "pedido_itens",
             "pedidos",
             "sessao_mesa",
             "mesas",
