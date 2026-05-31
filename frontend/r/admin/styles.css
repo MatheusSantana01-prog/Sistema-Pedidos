@@ -86,6 +86,7 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 .stat-val.amber { color:var(--amber); }
 .stat-val.accent { color:var(--color-primary); }
 .stat-val.blue  { color:var(--blue); }
+.stat-val.red  { color:var(--red); }
 
 /* TABELA */
 .tabela-wrap { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; overflow-x:auto; }
@@ -249,6 +250,41 @@ body { background:var(--color-bg); color:var(--color-text); font-family:var(--sa
 .produto-editor-preview { display:grid; grid-template-columns:112px 1fr; gap:14px; align-items:center; margin-bottom:18px; padding:12px; border:1px solid var(--border); border-radius:10px; background:rgba(255,255,255,.025); }
 .produto-editor-preview img { width:112px; height:86px; border-radius:8px; object-fit:cover; background:var(--border); }
 .produto-editor-hint { font-size:12px; line-height:1.45; color:var(--muted); }
+
+/* ESTOQUE */
+.muted-line { color:var(--muted); font-size:12px; margin-top:4px; }
+.inventory-layout { display:grid; grid-template-columns:minmax(340px,.9fr) minmax(380px,1fr); gap:16px; align-items:start; }
+.inventory-panel { background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012)),var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; min-width:0; }
+.inventory-panel.wide { grid-column:1 / -1; }
+.inventory-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.inventory-list,.inventory-alerts { display:grid; gap:10px; }
+.inventory-item { display:grid; grid-template-columns:minmax(160px,1fr) auto auto; gap:12px; align-items:center; border:1px solid var(--border); border-radius:8px; padding:12px; background:rgba(0,0,0,.13); }
+.inventory-item.baixo { border-color:rgba(245,166,35,.45); }
+.inventory-item.zerado { border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.07); }
+.inventory-item b,.recipe-card b { display:block; font-size:14px; margin-bottom:3px; }
+.inventory-item span,.recipe-card span,.inventory-qty small { display:block; color:var(--muted); font-size:12px; line-height:1.35; }
+.inventory-qty { text-align:right; }
+.inventory-qty strong { display:block; font-family:var(--mono); font-size:14px; color:var(--color-text); }
+.inventory-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.inventory-move-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.inventory-move-form .btn { justify-content:center; }
+.inventory-alert { border:1px solid var(--border); border-radius:8px; padding:10px; background:rgba(0,0,0,.12); }
+.inventory-alert.baixo { border-color:rgba(245,166,35,.45); color:var(--amber); }
+.inventory-alert.zerado { border-color:rgba(239,68,68,.5); color:#fecaca; }
+.inventory-alert b { display:block; font-size:13px; margin-bottom:3px; color:var(--color-text); }
+.inventory-alert span { display:block; font-size:12px; color:inherit; }
+.recipe-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
+.recipe-card { display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--border); border-radius:8px; padding:12px; background:rgba(0,0,0,.13); min-width:0; }
+@media (max-width: 980px) {
+  .inventory-layout { grid-template-columns:1fr; }
+  .inventory-panel.wide { grid-column:auto; }
+  .inventory-item { grid-template-columns:1fr; align-items:flex-start; }
+  .inventory-qty { text-align:left; }
+  .inventory-actions { justify-content:flex-start; }
+}
+@media (max-width: 640px) {
+  .inventory-move-form { grid-template-columns:1fr; }
+}
 
 @media (max-width: 760px) {
   .topbar { height:auto; padding:12px 14px; align-items:flex-start; gap:10px; }

@@ -979,6 +979,193 @@ def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, d
 
     return forma_db, {"total": total, "pagamentos": pagamentos, "por_forma": por_forma}
 
+def _inventory_delta(movement_type: str, quantity: float) -> float:
+    quantity = _money(quantity)
+    if movement_type in {"entrada", "estorno"}:
+        return abs(quantity)
+    if movement_type in {"saida", "perda", "venda"}:
+        return -abs(quantity)
+    return quantity
+
+def buscar_inventory_item(restaurant_id: str, item_id: str, fields: str = "*") -> dict:
+    resp = sb.table("inventory_items").select(fields).eq("id", item_id).eq("restaurant_id", restaurant_id).limit(1).execute()
+    item = _first(_rows(resp))
+    if not item:
+        raise HTTPException(404, "Insumo não encontrado")
+    return item
+
+def calcular_estoque_alerta(item: dict) -> str:
+    atual = float(item.get("current_quantity") or 0)
+    minimo = float(item.get("minimum_quantity") or 0)
+    if atual <= 0:
+        return "zerado"
+    if minimo > 0 and atual <= minimo:
+        return "baixo"
+    return "ok"
+
+def registrar_inventory_movement(restaurant_id: str, body: InventoryMovementInput | dict, user: dict | None = None) -> dict:
+    data = body.model_dump() if isinstance(body, BaseModel) else dict(body)
+    item_id = str(data.get("inventory_item_id"))
+    item = buscar_inventory_item(restaurant_id, item_id, "id,name,unit,current_quantity,unit_cost,is_active")
+    if item.get("is_active") is False:
+        raise HTTPException(409, "Insumo inativo não pode receber movimentação")
+
+    movement_type = data.get("movement_type")
+    quantity = float(data.get("quantity") or 0)
+    previous = float(item.get("current_quantity") or 0)
+    if movement_type == "inventario":
+        delta = _money(quantity - previous)
+        balance_after = _money(quantity)
+    else:
+        delta = _inventory_delta(movement_type, quantity)
+        balance_after = _money(previous + delta)
+
+    unit_cost = data.get("unit_cost")
+    if unit_cost is None:
+        unit_cost = float(item.get("unit_cost") or 0)
+    unit_cost = float(unit_cost or 0)
+
+    payload = {
+        "restaurant_id": restaurant_id,
+        "inventory_item_id": item_id,
+        "movement_type": movement_type,
+        "quantity": abs(quantity) if movement_type != "ajuste" else quantity,
+        "quantity_delta": delta,
+        "previous_quantity": previous,
+        "balance_after": balance_after,
+        "unit_cost": unit_cost,
+        "supplier_id": str(data.get("supplier_id")) if data.get("supplier_id") else None,
+        "expiration_date": data.get("expiration_date"),
+        "reason": (data.get("reason") or "")[:240],
+        "reference_type": data.get("reference_type"),
+        "reference_id": data.get("reference_id"),
+        "created_by": (user or {}).get("sub"),
+        "created_by_name": (user or {}).get("nome"),
+    }
+    resp = sb.table("inventory_movements").insert(payload).select("*").execute()
+    movement = _first(_rows(resp)) or payload
+    update_item = {"current_quantity": balance_after, "updated_at": utcnow()}
+    if movement_type == "entrada" and unit_cost > 0:
+        update_item["unit_cost"] = unit_cost
+    if data.get("supplier_id"):
+        update_item["supplier_id"] = str(data.get("supplier_id"))
+    if data.get("expiration_date"):
+        update_item["expiration_date"] = data.get("expiration_date")
+    sb.table("inventory_items").update(update_item).eq("id", item_id).eq("restaurant_id", restaurant_id).execute()
+    return movement
+
+def recipe_cost_summary(recipe: dict, items: list[dict], product_price: float = 0) -> dict:
+    total = 0.0
+    for item in items:
+        inv = item.get("inventory_items") or {}
+        qty = float(item.get("quantity") or 0)
+        waste = float(item.get("waste_percent") or 0)
+        cost = float(inv.get("unit_cost") or item.get("unit_cost_snapshot") or 0)
+        total += qty * (1 + waste / 100) * cost
+    yield_quantity = float((recipe or {}).get("yield_quantity") or 1)
+    cost_per_unit = _money(total / yield_quantity) if yield_quantity else _money(total)
+    price = float(product_price or 0)
+    margin_amount = _money(price - cost_per_unit)
+    margin_percent = round((margin_amount / price) * 100, 2) if price > 0 else 0
+    return {
+        "total_cost": _money(total),
+        "cost_per_unit": cost_per_unit,
+        "margin_amount": margin_amount,
+        "margin_percent": margin_percent,
+    }
+
+def baixar_estoque_pedido_entregue(restaurant_id: str, pedido_id: str, user: dict | None = None) -> dict:
+    pedido = _first(_rows(sb.table("pedidos").select("id,status").eq("id", pedido_id).eq("restaurant_id", restaurant_id).limit(1).execute()))
+    if not pedido or pedido.get("status") != "entregue":
+        return {"movements": [], "skipped": "pedido_nao_entregue"}
+
+    itens = _rows(sb.table("pedido_itens").select("id,produto_id,quantidade,nome_produto").eq("pedido_id", pedido_id).execute())
+    movements = []
+    for pedido_item in itens:
+        item_id = str(pedido_item.get("id"))
+        exists = _first(_rows(
+            sb.table("inventory_movements")
+            .select("id")
+            .eq("restaurant_id", restaurant_id)
+            .eq("reference_type", "pedido_item")
+            .eq("reference_id", item_id)
+            .limit(1)
+            .execute()
+        ))
+        if exists:
+            continue
+        recipe = _first(_rows(
+            sb.table("product_recipes")
+            .select("id,yield_quantity")
+            .eq("restaurant_id", restaurant_id)
+            .eq("product_id", pedido_item.get("produto_id"))
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        ))
+        if not recipe:
+            continue
+        recipe_items = _rows(
+            sb.table("product_recipe_items")
+            .select("inventory_item_id,quantity,waste_percent")
+            .eq("restaurant_id", restaurant_id)
+            .eq("recipe_id", recipe["id"])
+            .execute()
+        )
+        yield_quantity = float(recipe.get("yield_quantity") or 1)
+        order_qty = float(pedido_item.get("quantidade") or 1)
+        for recipe_item in recipe_items:
+            qty = float(recipe_item.get("quantity") or 0)
+            waste = float(recipe_item.get("waste_percent") or 0)
+            consume = _money((qty * order_qty * (1 + waste / 100)) / yield_quantity)
+            if consume <= 0:
+                continue
+            movements.append(registrar_inventory_movement(restaurant_id, {
+                "inventory_item_id": recipe_item["inventory_item_id"],
+                "movement_type": "venda",
+                "quantity": consume,
+                "reason": f"Baixa automática do pedido {pedido_id}",
+                "reference_type": "pedido_item",
+                "reference_id": item_id,
+            }, user))
+    return {"movements": movements}
+
+def estornar_estoque_pedido(restaurant_id: str, pedido_id: str, user: dict | None = None) -> dict:
+    pedido_itens = _rows(sb.table("pedido_itens").select("id").eq("pedido_id", pedido_id).execute())
+    item_ids = [str(i["id"]) for i in pedido_itens if i.get("id")]
+    if not item_ids:
+        return {"movements": []}
+    vendas = _rows(
+        sb.table("inventory_movements")
+        .select("*")
+        .eq("restaurant_id", restaurant_id)
+        .eq("reference_type", "pedido_item")
+        .in_("reference_id", item_ids)
+        .execute()
+    )
+    estornos = []
+    for venda in vendas:
+        exists = _first(_rows(
+            sb.table("inventory_movements")
+            .select("id")
+            .eq("restaurant_id", restaurant_id)
+            .eq("reference_type", "pedido_estorno")
+            .eq("reference_id", venda.get("id"))
+            .limit(1)
+            .execute()
+        ))
+        if exists:
+            continue
+        estornos.append(registrar_inventory_movement(restaurant_id, {
+            "inventory_item_id": venda["inventory_item_id"],
+            "movement_type": "estorno",
+            "quantity": abs(float(venda.get("quantity_delta") or venda.get("quantity") or 0)),
+            "reason": f"Estorno automático do pedido cancelado {pedido_id}",
+            "reference_type": "pedido_estorno",
+            "reference_id": venda.get("id"),
+        }, user))
+    return {"movements": estornos}
+
 def _somar_pagamento_dashboard(por_pagamento: dict, forma_pagamento: str, total: float):
     total = _money(total)
     if not forma_pagamento:
@@ -1375,6 +1562,123 @@ class FecharTurnoCaixaInput(BaseModel):
     closing_amount: Optional[float] = None
     left_for_next_shift: float = 0
     notes: Optional[str] = None
+
+
+class InventoryItemInput(BaseModel):
+    name: str
+    unit: str = "un"
+    current_quantity: float = 0
+    minimum_quantity: float = 0
+    unit_cost: float = 0
+    supplier_id: Optional[UUID] = None
+    expiration_date: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def val_name(cls, v):
+        v = (v or "").strip()
+        if len(v) < 2:
+            raise ValueError("Nome do insumo precisa ter pelo menos 2 caracteres")
+        return v[:120]
+
+    @field_validator("unit")
+    @classmethod
+    def val_unit(cls, v):
+        v = (v or "un").strip().lower()
+        valid = {"un", "kg", "g", "l", "ml", "cx", "pct", "porcao"}
+        if v not in valid:
+            raise ValueError(f"Unidade inválida: {sorted(valid)}")
+        return v
+
+    @field_validator("current_quantity", "minimum_quantity", "unit_cost")
+    @classmethod
+    def val_non_negative(cls, v):
+        if float(v or 0) < 0:
+            raise ValueError("Valor não pode ser negativo")
+        return float(v or 0)
+
+
+class InventoryMovementInput(BaseModel):
+    inventory_item_id: UUID
+    movement_type: str
+    quantity: float
+    unit_cost: Optional[float] = None
+    supplier_id: Optional[UUID] = None
+    expiration_date: Optional[str] = None
+    reason: Optional[str] = None
+    reference_type: Optional[str] = None
+    reference_id: Optional[str] = None
+
+    @field_validator("movement_type")
+    @classmethod
+    def val_type(cls, v):
+        valid = {"entrada", "saida", "ajuste", "perda", "venda", "estorno", "inventario"}
+        if v not in valid:
+            raise ValueError(f"Tipo de movimentação inválido: {sorted(valid)}")
+        return v
+
+    @field_validator("quantity")
+    @classmethod
+    def val_quantity(cls, v):
+        v = float(v or 0)
+        if v == 0:
+            raise ValueError("Quantidade precisa ser diferente de zero")
+        return v
+
+
+class SupplierInput(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    document: Optional[str] = None
+    notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def val_supplier_name(cls, v):
+        v = (v or "").strip()
+        if len(v) < 2:
+            raise ValueError("Nome do fornecedor precisa ter pelo menos 2 caracteres")
+        return v[:120]
+
+
+class RecipeItemInput(BaseModel):
+    inventory_item_id: UUID
+    quantity: float
+    unit: Optional[str] = None
+    waste_percent: float = 0
+
+    @field_validator("quantity")
+    @classmethod
+    def val_recipe_quantity(cls, v):
+        v = float(v or 0)
+        if v <= 0:
+            raise ValueError("Quantidade da ficha técnica precisa ser maior que zero")
+        return v
+
+    @field_validator("waste_percent")
+    @classmethod
+    def val_waste(cls, v):
+        v = float(v or 0)
+        if v < 0 or v > 100:
+            raise ValueError("Perda precisa ficar entre 0 e 100%")
+        return v
+
+
+class ProductRecipeInput(BaseModel):
+    yield_quantity: float = 1
+    notes: Optional[str] = None
+    items: list[RecipeItemInput] = []
+
+    @field_validator("yield_quantity")
+    @classmethod
+    def val_yield(cls, v):
+        v = float(v or 1)
+        if v <= 0:
+            raise ValueError("Rendimento precisa ser maior que zero")
+        return v
 
 
 class FiscalConfigInput(BaseModel):
@@ -1944,9 +2248,14 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
         extra["motivo_cancelamento"] = body.motivo_cancelamento
 
     sb.table("pedidos").update({"status": body.status, **extra}).eq("id", pedido_id).execute()
+    inventory_result = None
+    if body.status == "entregue":
+        inventory_result = baixar_estoque_pedido_entregue(rid, pedido_id, u)
+    if body.status == "cancelado":
+        inventory_result = estornar_estoque_pedido(rid, pedido_id, u)
     resp = sb.table("pedidos").select("id,numero,status").eq("id", pedido_id).execute()
-    log_acao(u, f"status_{body.status}", "pedidos", pedido_id, {"status": ant.data["status"]}, {"status": body.status}, request)
-    return {"pedido": _row(resp)}
+    log_acao(u, f"status_{body.status}", "pedidos", pedido_id, {"status": ant.data["status"]}, {"status": body.status, "inventory": inventory_result}, request)
+    return {"pedido": _row(resp), "inventory": inventory_result}
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -2256,9 +2565,10 @@ def cancelar_pedido(pedido_id: str, body: AtualizarStatusPedidoInput,
         "motivo_cancelamento": body.motivo_cancelamento,
         "updated_at": utcnow(),
     }).eq("id", pedido_id).select("id,numero,status").execute()
+    inventory_result = estornar_estoque_pedido(rid, pedido_id, u)
     log_acao(u, "cancelar_pedido", "pedidos", pedido_id,
-             {"status": ant.data["status"]}, {"status": "cancelado", "motivo": body.motivo_cancelamento}, request)
-    return {"pedido": _row(resp)}
+             {"status": ant.data["status"]}, {"status": "cancelado", "motivo": body.motivo_cancelamento, "inventory": inventory_result}, request)
+    return {"pedido": _row(resp), "inventory": inventory_result}
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -2373,6 +2683,235 @@ def atualizar_produto(produto_id: str, body: dict, request: Request,
     resp = sb.table("produtos").update(body).eq("id", produto_id).select("id,nome,preco,disponivel").execute()
     log_acao(u, "atualizar_produto", "produtos", produto_id, ant.data, body, request)
     return {"produto": _row(resp)}
+
+
+# ═════════════════════════════════════════════════════════════════
+# ADMIN — ESTOQUE E FICHA TÉCNICA
+# ═════════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/inventory/items", tags=["estoque"])
+def listar_inventory_items(status: Optional[str] = None, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    q = sb.table("inventory_items").select("*,suppliers(name)").eq("restaurant_id", rid).order("name")
+    if status == "active":
+        q = q.eq("is_active", True)
+    elif status == "inactive":
+        q = q.eq("is_active", False)
+    rows = _rows(q.execute())
+    for item in rows:
+        item["stock_status"] = calcular_estoque_alerta(item)
+    return {"items": rows}
+
+
+@app.post("/api/admin/inventory/items", tags=["estoque"])
+def criar_inventory_item(body: InventoryItemInput, request: Request,
+                         u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    payload = body.model_dump()
+    payload["restaurant_id"] = rid
+    payload["supplier_id"] = str(payload["supplier_id"]) if payload.get("supplier_id") else None
+    payload["is_active"] = True
+    resp = sb.table("inventory_items").insert(payload).select("*").execute()
+    item = _row(resp)
+    if item.get("current_quantity"):
+        registrar_inventory_movement(rid, {
+            "inventory_item_id": item["id"],
+            "movement_type": "inventario",
+            "quantity": float(item.get("current_quantity") or 0),
+            "unit_cost": float(item.get("unit_cost") or 0),
+            "supplier_id": item.get("supplier_id"),
+            "expiration_date": item.get("expiration_date"),
+            "reason": "Saldo inicial do insumo",
+        }, u)
+    log_acao(u, "criar_insumo", "inventory_items", item.get("id"), None, {"name": item.get("name")}, request)
+    return {"item": item}
+
+
+@app.patch("/api/admin/inventory/items/{item_id}", tags=["estoque"])
+def atualizar_inventory_item(item_id: str, body: dict, request: Request,
+                             u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    ant = buscar_inventory_item(rid, item_id, "*")
+    allowed = {"name", "unit", "minimum_quantity", "unit_cost", "supplier_id", "expiration_date", "category", "notes"}
+    payload = {k: v for k, v in body.items() if k in allowed}
+    if "name" in payload:
+        payload["name"] = str(payload["name"]).strip()[:120]
+        if len(payload["name"]) < 2:
+            raise HTTPException(400, "Nome do insumo inválido")
+    if "unit" in payload:
+        payload["unit"] = str(payload["unit"] or "un").lower()
+    if "supplier_id" in payload and payload["supplier_id"]:
+        payload["supplier_id"] = str(payload["supplier_id"])
+    payload["updated_at"] = utcnow()
+    resp = sb.table("inventory_items").update(payload).eq("id", item_id).eq("restaurant_id", rid).select("*").execute()
+    log_acao(u, "atualizar_insumo", "inventory_items", item_id, ant, payload, request)
+    return {"item": _row(resp)}
+
+
+@app.post("/api/admin/inventory/items/{item_id}/deactivate", tags=["estoque"])
+def desativar_inventory_item(item_id: str, request: Request,
+                             u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    ant = buscar_inventory_item(rid, item_id, "*")
+    resp = sb.table("inventory_items").update({"is_active": False, "updated_at": utcnow()}).eq("id", item_id).eq("restaurant_id", rid).select("*").execute()
+    log_acao(u, "desativar_insumo", "inventory_items", item_id, ant, {"is_active": False}, request)
+    return {"item": _row(resp)}
+
+
+@app.get("/api/admin/inventory/movements", tags=["estoque"])
+def listar_inventory_movements(item_id: Optional[str] = None, limite: int = 100,
+                               u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    q = sb.table("inventory_movements").select("*,inventory_items(name,unit),suppliers(name)").eq("restaurant_id", rid).order("created_at", desc=True).limit(min(max(limite, 1), 300))
+    if item_id:
+        q = q.eq("inventory_item_id", item_id)
+    return {"movements": _rows(q.execute())}
+
+
+@app.post("/api/admin/inventory/movements", tags=["estoque"])
+def criar_inventory_movement(body: InventoryMovementInput, request: Request,
+                             u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    movement = registrar_inventory_movement(rid, body, u)
+    log_acao(u, "movimentar_estoque", "inventory_movements", movement.get("id"), None,
+             {"item": str(body.inventory_item_id), "type": body.movement_type, "quantity": body.quantity}, request)
+    return {"movement": movement}
+
+
+@app.get("/api/admin/inventory/alerts", tags=["estoque"])
+def inventory_alerts(u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    items = _rows(sb.table("inventory_items").select("*,suppliers(name)").eq("restaurant_id", rid).eq("is_active", True).order("name").execute())
+    alerts = []
+    for item in items:
+        status_alert = calcular_estoque_alerta(item)
+        if status_alert != "ok":
+            item["stock_status"] = status_alert
+            alerts.append(item)
+    return {"alerts": alerts, "count": len(alerts)}
+
+
+@app.get("/api/admin/inventory/reports/summary", tags=["estoque"])
+def inventory_summary(u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    items = _rows(sb.table("inventory_items").select("*").eq("restaurant_id", rid).execute())
+    active = [i for i in items if i.get("is_active") is not False]
+    total_value = round(sum(float(i.get("current_quantity") or 0) * float(i.get("unit_cost") or 0) for i in active), 2)
+    low = [i for i in active if calcular_estoque_alerta(i) == "baixo"]
+    zero = [i for i in active if calcular_estoque_alerta(i) == "zerado"]
+    recent = _rows(sb.table("inventory_movements").select("movement_type,quantity_delta,unit_cost,created_at,inventory_items(name,unit)").eq("restaurant_id", rid).order("created_at", desc=True).limit(20).execute())
+    return {
+        "summary": {
+            "active_items": len(active),
+            "total_stock_value": total_value,
+            "low_stock": len(low),
+            "zero_stock": len(zero),
+        },
+        "low_stock": low[:20],
+        "zero_stock": zero[:20],
+        "recent_movements": recent,
+    }
+
+
+@app.get("/api/admin/suppliers", tags=["estoque"])
+def listar_suppliers(u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    return {"suppliers": _rows(sb.table("suppliers").select("*").eq("restaurant_id", rid).eq("is_active", True).order("name").execute())}
+
+
+@app.post("/api/admin/suppliers", tags=["estoque"])
+def criar_supplier(body: SupplierInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    payload = body.model_dump()
+    payload["restaurant_id"] = rid
+    payload["is_active"] = True
+    resp = sb.table("suppliers").insert(payload).select("*").execute()
+    supplier = _row(resp)
+    log_acao(u, "criar_fornecedor", "suppliers", supplier.get("id"), None, {"name": supplier.get("name")}, request)
+    return {"supplier": supplier}
+
+
+@app.get("/api/admin/products/{produto_id}/recipe", tags=["estoque"])
+def get_product_recipe(produto_id: str, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    product = _first(_rows(sb.table("produtos").select("id,nome,preco").eq("id", produto_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not product:
+        raise HTTPException(404, "Produto não encontrado")
+    recipe = _first(_rows(sb.table("product_recipes").select("*").eq("restaurant_id", rid).eq("product_id", produto_id).eq("is_active", True).limit(1).execute()))
+    items = []
+    if recipe:
+        items = _rows(
+            sb.table("product_recipe_items")
+            .select("*,inventory_items(name,unit,unit_cost,current_quantity)")
+            .eq("restaurant_id", rid)
+            .eq("recipe_id", recipe["id"])
+            .execute()
+        )
+    return {
+        "product": product,
+        "recipe": recipe,
+        "items": items,
+        "cost": recipe_cost_summary(recipe or {"yield_quantity": 1}, items, product.get("preco")),
+    }
+
+
+@app.put("/api/admin/products/{produto_id}/recipe", tags=["estoque"])
+def put_product_recipe(produto_id: str, body: ProductRecipeInput, request: Request,
+                       u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    product = _first(_rows(sb.table("produtos").select("id,nome,preco").eq("id", produto_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not product:
+        raise HTTPException(404, "Produto não encontrado")
+    item_ids = [str(i.inventory_item_id) for i in body.items]
+    if item_ids:
+        found = _rows(sb.table("inventory_items").select("id").eq("restaurant_id", rid).in_("id", item_ids).execute())
+        if len(found) != len(set(item_ids)):
+            raise HTTPException(403, "Ficha técnica contém insumo de outro restaurante ou inexistente")
+    current = _first(_rows(sb.table("product_recipes").select("*").eq("restaurant_id", rid).eq("product_id", produto_id).eq("is_active", True).limit(1).execute()))
+    if current:
+        recipe_id = current["id"]
+        sb.table("product_recipes").update({"yield_quantity": body.yield_quantity, "notes": body.notes, "updated_at": utcnow()}).eq("id", recipe_id).eq("restaurant_id", rid).execute()
+        sb.table("product_recipe_items").delete().eq("restaurant_id", rid).eq("recipe_id", recipe_id).execute()
+    else:
+        resp = sb.table("product_recipes").insert({
+            "restaurant_id": rid,
+            "product_id": produto_id,
+            "yield_quantity": body.yield_quantity,
+            "notes": body.notes,
+            "is_active": True,
+        }).select("*").execute()
+        recipe_id = _row(resp)["id"]
+    rows = []
+    for item in body.items:
+        inv = buscar_inventory_item(rid, str(item.inventory_item_id), "id,unit,unit_cost")
+        rows.append({
+            "restaurant_id": rid,
+            "recipe_id": recipe_id,
+            "product_id": produto_id,
+            "inventory_item_id": str(item.inventory_item_id),
+            "quantity": item.quantity,
+            "unit": item.unit or inv.get("unit") or "un",
+            "waste_percent": item.waste_percent,
+            "unit_cost_snapshot": float(inv.get("unit_cost") or 0),
+        })
+    if rows:
+        sb.table("product_recipe_items").insert(rows).execute()
+    data = get_product_recipe(produto_id, u)
+    log_acao(u, "salvar_ficha_tecnica", "product_recipes", recipe_id, None,
+             {"product_id": produto_id, "items": len(rows), "cost": data.get("cost")}, request)
+    return data
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -2975,6 +3514,12 @@ def apagar_restaurante_dados(restaurant_id: str):
         "pedido_itens",
         "movimentacao_estoque",
         "produto_insumos",
+        "product_recipe_items",
+        "product_recipes",
+        "inventory_count_items",
+        "inventory_counts",
+        "inventory_movements",
+        "inventory_items",
         "produto_ingredientes",
         "integration_events",
         "restaurant_integrations",
@@ -2988,6 +3533,7 @@ def apagar_restaurante_dados(restaurant_id: str):
         "produtos",
         "ingredientes",
         "insumos",
+        "suppliers",
         "fornecedores",
         "categorias",
         "mesas",
@@ -3392,6 +3938,13 @@ def exportar_restaurante(restaurant_id: str, u: dict = Depends(require_super_adm
         "tables": table_rows("mesas"),
         "categories": table_rows("categorias"),
         "products": table_rows("produtos"),
+        "suppliers": table_rows("suppliers"),
+        "inventory_items": table_rows("inventory_items"),
+        "inventory_movements": table_rows("inventory_movements"),
+        "product_recipes": table_rows("product_recipes"),
+        "product_recipe_items": table_rows("product_recipe_items"),
+        "inventory_counts": table_rows("inventory_counts"),
+        "inventory_count_items": table_rows("inventory_count_items"),
         "sessions": table_rows("sessao_mesa"),
         "orders": pedidos,
         "order_items": itens,
@@ -3510,6 +4063,13 @@ def backup_plataforma(u: dict = Depends(require_super_admin)):
         "tables": rows("mesas"),
         "categories": rows("categorias"),
         "products": rows("produtos"),
+        "suppliers": rows("suppliers"),
+        "inventory_items": rows("inventory_items"),
+        "inventory_movements": rows("inventory_movements"),
+        "product_recipes": rows("product_recipes"),
+        "product_recipe_items": rows("product_recipe_items"),
+        "inventory_counts": rows("inventory_counts"),
+        "inventory_count_items": rows("inventory_count_items"),
         "sessions": rows("sessao_mesa"),
         "orders": pedidos,
         "order_items": itens,

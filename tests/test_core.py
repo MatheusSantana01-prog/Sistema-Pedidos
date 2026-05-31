@@ -54,6 +54,48 @@ def test_cash_denominations_summary():
     assert resumo["denominations"]["100"] == 1
 
 
+def test_inventory_movement_delta_rules():
+    assert main._inventory_delta("entrada", 10) == 10
+    assert main._inventory_delta("saida", 10) == -10
+    assert main._inventory_delta("perda", 3) == -3
+    assert main._inventory_delta("venda", 2.5) == -2.5
+    assert main._inventory_delta("estorno", 2.5) == 2.5
+    assert main._inventory_delta("ajuste", -4) == -4
+
+
+def test_inventory_alert_status():
+    assert main.calcular_estoque_alerta({"current_quantity": 0, "minimum_quantity": 5}) == "zerado"
+    assert main.calcular_estoque_alerta({"current_quantity": 3, "minimum_quantity": 5}) == "baixo"
+    assert main.calcular_estoque_alerta({"current_quantity": 8, "minimum_quantity": 5}) == "ok"
+
+
+def test_recipe_cost_and_margin_summary():
+    recipe = {"yield_quantity": 2}
+    items = [
+        {"quantity": 1, "waste_percent": 10, "inventory_items": {"unit_cost": 20}},
+        {"quantity": 2, "waste_percent": 0, "inventory_items": {"unit_cost": 5}},
+    ]
+
+    summary = main.recipe_cost_summary(recipe, items, product_price=30)
+
+    assert summary["total_cost"] == 32.0
+    assert summary["cost_per_unit"] == 16.0
+    assert summary["margin_amount"] == 14.0
+    assert summary["margin_percent"] == pytest.approx(46.67)
+
+
+def test_inventory_inputs_validate_permissions_surface():
+    with pytest.raises(ValueError):
+        main.InventoryItemInput(name="x", unit="kg")
+
+    with pytest.raises(ValueError):
+        main.InventoryMovementInput(
+            inventory_item_id="00000000-0000-0000-0000-000000000001",
+            movement_type="invalido",
+            quantity=1,
+        )
+
+
 def test_payment_normalization_for_split_payment():
     body = main.FecharContaInput(
         pagamentos=[

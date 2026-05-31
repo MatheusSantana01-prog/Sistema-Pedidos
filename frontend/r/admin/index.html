@@ -57,6 +57,7 @@
     <div class="nav-tab active"  onclick="irPara('mesas',this)"    ><span class="nav-icon i-tables"></span>Mesas</div>
     <div class="nav-tab"         onclick="irPara('pedidos',this)"  ><span class="nav-icon i-orders"></span>Pedidos</div>
     <div class="nav-tab role-manager role-owner" onclick="irPara('cardapio',this)"><span class="nav-icon i-menu"></span>Cardápio</div>
+    <div class="nav-tab role-manager role-owner" onclick="irPara('estoque',this)"><span class="nav-icon i-box"></span>Estoque</div>
     <div class="nav-tab role-owner" onclick="irPara('financeiro',this)"><span class="nav-icon i-finance"></span>Financeiro</div>
     <div class="nav-tab role-owner" onclick="irPara('fiscal',this)"><span class="nav-icon i-receipt"></span>Fiscal</div>
     <div class="nav-tab role-owner" onclick="irPara('usuarios',this)"><span class="nav-icon i-users"></span>Usuários</div>
@@ -117,6 +118,22 @@
         </select>
       </div>
       <div id="produtos-lista"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- ESTOQUE -->
+    <div class="page" id="page-estoque">
+      <div class="section-head">
+        <div>
+          <div class="section-title">Estoque e ficha técnica</div>
+          <div class="muted-line">Controle insumos, entradas, perdas, alertas e custo real dos produtos.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="carregarEstoque()">Atualizar</button>
+          <button class="btn btn-sm" onclick="abrirEstoqueFornecedor()">+ Fornecedor</button>
+          <button class="btn btn-sm btn-primary" onclick="abrirEstoqueInsumo()">+ Insumo</button>
+        </div>
+      </div>
+      <div id="estoque-content"><div class="loading"><div class="spinner"></div></div></div>
     </div>
 
     <!-- FINANCEIRO -->

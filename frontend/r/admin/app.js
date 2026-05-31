@@ -11,6 +11,11 @@ let pagamentosConta = [];
 let produtosMap    = {};
 let categoriasLista = [];
 let produtosLista  = [];
+let estoqueItems = [];
+let estoqueMovements = [];
+let estoqueSuppliers = [];
+let estoqueAlerts = [];
+let estoqueSummary = null;
 let pollingHandle  = null;
 let supportPollingHandle = null;
 
@@ -177,6 +182,7 @@ function irPara(pagina, tabEl) {
     mesas:         carregarMesas,
     pedidos:       carregarPedidos,
     cardapio:      carregarCardapio,
+    estoque:       carregarEstoque,
     financeiro:    carregarFinanceiro,
     fiscal:        carregarFiscal,
     usuarios:      carregarUsuarios,
@@ -687,6 +693,189 @@ async function toggleProduto(id, atual, btn) {
     showToast(!atual ? 'Produto ativado' : 'Produto pausado', 'success');
     carregarCardapio();
   } catch (e) { showToast(e.message, 'error'); btn.disabled = false; }
+}
+
+/* ── ESTOQUE ───────────────────────────────────────── */
+async function carregarEstoque() {
+  const el = document.getElementById('estoque-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const [itemsResp, movResp, alertsResp, summaryResp, suppliersResp, productsResp] = await Promise.all([
+      apiCall('GET', '/api/admin/inventory/items?status=active'),
+      apiCall('GET', '/api/admin/inventory/movements?limite=50'),
+      apiCall('GET', '/api/admin/inventory/alerts'),
+      apiCall('GET', '/api/admin/inventory/reports/summary'),
+      apiCall('GET', '/api/admin/suppliers'),
+      apiCall('GET', '/api/admin/products'),
+    ]);
+    estoqueItems = itemsResp.items || [];
+    estoqueMovements = movResp.movements || [];
+    estoqueAlerts = alertsResp.alerts || [];
+    estoqueSummary = summaryResp.summary || {};
+    estoqueSuppliers = suppliersResp.suppliers || [];
+    produtosLista = productsResp.produtos || produtosLista || [];
+    renderEstoque();
+  } catch (e) {
+    el.innerHTML = `<div class="tabela-empty">Erro ao carregar estoque: ${escapeHtml(e.message)}<br><small>Verifique se as tabelas novas foram criadas no Supabase.</small></div>`;
+  }
+}
+
+function renderEstoque() {
+  const s = estoqueSummary || {};
+  document.getElementById('estoque-content').innerHTML = `
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">Insumos ativos</div><div class="stat-val accent">${escapeHtml(s.active_items || 0)}</div></div>
+      <div class="stat-card"><div class="stat-label">Valor em estoque</div><div class="stat-val green">R$ ${fmt(s.total_stock_value || 0)}</div></div>
+      <div class="stat-card"><div class="stat-label">Estoque baixo</div><div class="stat-val amber">${escapeHtml(s.low_stock || 0)}</div></div>
+      <div class="stat-card"><div class="stat-label">Zerados</div><div class="stat-val red">${escapeHtml(s.zero_stock || 0)}</div></div>
+    </div>
+    <div class="inventory-layout">
+      <section class="inventory-panel">
+        <div class="inventory-head"><div class="section-title">Insumos</div><button class="btn btn-sm btn-primary" onclick="abrirEstoqueInsumo()">+ Insumo</button></div>
+        <div class="inventory-list">${estoqueItems.map(renderEstoqueItem).join('') || '<div class="tabela-empty">Nenhum insumo cadastrado.</div>'}</div>
+      </section>
+      <section class="inventory-panel">
+        <div class="inventory-head"><div class="section-title">Movimentação rápida</div></div>
+        ${renderMovimentoForm()}
+        <div class="inventory-head" style="margin-top:18px"><div class="section-title">Alertas</div></div>
+        <div class="inventory-alerts">${estoqueAlerts.map(renderEstoqueAlert).join('') || '<div class="split-empty">Sem alerta de estoque.</div>'}</div>
+      </section>
+      <section class="inventory-panel wide">
+        <div class="inventory-head"><div class="section-title">Ficha técnica dos produtos</div><button class="btn btn-sm" onclick="carregarEstoque()">Atualizar custos</button></div>
+        <div class="recipe-grid">${(produtosLista || []).map(renderRecipeProduct).join('') || '<div class="tabela-empty">Cadastre produtos para criar ficha técnica.</div>'}</div>
+      </section>
+      <section class="inventory-panel wide">
+        <div class="inventory-head"><div class="section-title">Últimas movimentações</div></div>
+        <div class="tabela-wrap">
+          <table class="tabela">
+            <thead><tr><th>Data</th><th>Insumo</th><th>Tipo</th><th>Qtd</th><th>Saldo</th><th>Motivo</th></tr></thead>
+            <tbody>${estoqueMovements.map(renderMovimentoRow).join('') || '<tr><td colspan="6" class="tabela-empty">Sem movimentações.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>`;
+}
+
+function renderEstoqueItem(item) {
+  const status = item.stock_status || estoqueStatus(item);
+  return `
+    <div class="inventory-item ${escapeAttr(status)}">
+      <div><b>${escapeHtml(item.name)}</b><span>${escapeHtml(item.category || 'Sem categoria')} · ${escapeHtml(item.suppliers?.name || 'Sem fornecedor')}</span></div>
+      <div class="inventory-qty"><strong>${fmt(item.current_quantity || 0)} ${escapeHtml(item.unit || '')}</strong><small>Mín. ${fmt(item.minimum_quantity || 0)} · R$ ${fmt(item.unit_cost || 0)}</small></div>
+      <div class="inventory-actions"><button class="btn btn-sm" onclick="editarEstoqueInsumo('${escapeAttr(item.id)}')">Editar</button><button class="btn btn-sm btn-danger" onclick="desativarEstoqueInsumo('${escapeAttr(item.id)}')">Desativar</button></div>
+    </div>`;
+}
+
+function renderEstoqueAlert(item) {
+  const status = item.stock_status || estoqueStatus(item);
+  return `<div class="inventory-alert ${escapeAttr(status)}"><b>${escapeHtml(item.name)}</b><span>${status === 'zerado' ? 'Zerado' : 'Abaixo do mínimo'} · ${fmt(item.current_quantity || 0)} ${escapeHtml(item.unit || '')}</span></div>`;
+}
+
+function renderMovimentoForm() {
+  return `
+    <div class="inventory-move-form">
+      <select class="form-input" id="inv-move-item">${estoqueItems.map(i => `<option value="${escapeAttr(i.id)}">${escapeHtml(i.name)} (${escapeHtml(i.unit)})</option>`).join('')}</select>
+      <select class="form-input" id="inv-move-type"><option value="entrada">Entrada</option><option value="saida">Saída manual</option><option value="perda">Perda</option><option value="ajuste">Ajuste +/-</option><option value="inventario">Inventário</option></select>
+      <input class="form-input" id="inv-move-qty" type="number" step="0.001" placeholder="Quantidade">
+      <input class="form-input" id="inv-move-cost" type="number" step="0.01" placeholder="Custo unit.">
+      <select class="form-input" id="inv-move-supplier"><option value="">Fornecedor</option>${estoqueSuppliers.map(s => `<option value="${escapeAttr(s.id)}">${escapeHtml(s.name)}</option>`).join('')}</select>
+      <input class="form-input" id="inv-move-exp" type="date">
+      <input class="form-input" id="inv-move-reason" placeholder="Motivo">
+      <button class="btn btn-primary" onclick="salvarEstoqueMovimento()">Registrar</button>
+    </div>`;
+}
+
+function renderMovimentoRow(m) {
+  return `<tr><td class="mono" style="font-size:11px">${escapeHtml(fmtDate(m.created_at))}</td><td>${escapeHtml(m.inventory_items?.name || '-')}</td><td><span class="status-pill ${escapeAttr(m.movement_type)}">${escapeHtml(m.movement_type || '-')}</span></td><td>${fmt(m.quantity_delta ?? m.quantity)} ${escapeHtml(m.inventory_items?.unit || '')}</td><td>${fmt(m.balance_after || 0)}</td><td>${escapeHtml(m.reason || '-')}</td></tr>`;
+}
+
+function renderRecipeProduct(p) {
+  return `<div class="recipe-card"><div><b>${escapeHtml(p.nome)}</b><span>Preço R$ ${fmt(p.preco || 0)} · Custo cadastrado R$ ${fmt(p.custo || 0)}</span></div><button class="btn btn-sm" onclick="abrirFichaTecnica('${escapeAttr(p.id)}')">Ficha técnica</button></div>`;
+}
+
+async function abrirEstoqueInsumo(itemId = '') {
+  const item = estoqueItems.find(i => i.id === itemId) || {};
+  const nome = await appPrompt('Nome do insumo', item.name || '', { title: itemId ? 'Editar insumo' : 'Novo insumo' });
+  if (nome === null) return;
+  const unidade = await appPrompt('Unidade: un, kg, g, l, ml, cx, pct ou porcao', item.unit || 'un', { title: 'Unidade' });
+  if (unidade === null) return;
+  const minimo = await appPrompt('Estoque mínimo', String(item.minimum_quantity ?? 0), { title: 'Estoque mínimo' });
+  if (minimo === null) return;
+  const custo = await appPrompt('Custo unitário', String(item.unit_cost ?? 0), { title: 'Custo unitário' });
+  if (custo === null) return;
+  const payload = { name: nome, unit: unidade, minimum_quantity: Number(minimo || 0), unit_cost: Number(custo || 0), category: item.category || '' };
+  if (!itemId) payload.current_quantity = Number(await appPrompt('Saldo inicial', '0', { title: 'Saldo inicial' }) || 0);
+  try {
+    if (itemId) await apiCall('PATCH', `/api/admin/inventory/items/${itemId}`, payload);
+    else await apiCall('POST', '/api/admin/inventory/items', payload);
+    showToast(itemId ? 'Insumo atualizado' : 'Insumo criado', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function editarEstoqueInsumo(itemId) { abrirEstoqueInsumo(itemId); }
+
+async function desativarEstoqueInsumo(itemId) {
+  if (!await appConfirm('Desativar este insumo?', { title: 'Desativar insumo', danger: true })) return;
+  try {
+    await apiCall('POST', `/api/admin/inventory/items/${itemId}/deactivate`);
+    showToast('Insumo desativado', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function abrirEstoqueFornecedor() {
+  const name = await appPrompt('Nome do fornecedor', '', { title: 'Novo fornecedor' });
+  if (!name) return;
+  const phone = await appPrompt('Telefone/WhatsApp', '', { title: 'Contato do fornecedor' });
+  try {
+    await apiCall('POST', '/api/admin/suppliers', { name, phone });
+    showToast('Fornecedor criado', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function salvarEstoqueMovimento() {
+  const payload = {
+    inventory_item_id: val('inv-move-item'),
+    movement_type: val('inv-move-type'),
+    quantity: Number(val('inv-move-qty') || 0),
+    unit_cost: val('inv-move-cost') ? Number(val('inv-move-cost')) : null,
+    supplier_id: val('inv-move-supplier') || null,
+    expiration_date: val('inv-move-exp') || null,
+    reason: val('inv-move-reason') || null,
+  };
+  try {
+    await apiCall('POST', '/api/admin/inventory/movements', payload);
+    showToast('Movimentação registrada', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function abrirFichaTecnica(produtoId) {
+  try {
+    const data = await apiCall('GET', `/api/admin/products/${produtoId}/recipe`);
+    const linhas = (data.items || []).map(i => `${i.inventory_item_id}|${i.quantity}|${i.waste_percent || 0}`).join('\n');
+    const modelo = 'Uma linha por insumo: ID_DO_INSUMO|quantidade|perda_percentual\n\n' + estoqueItems.map(i => `${i.id} - ${i.name} (${i.unit})`).join('\n') + '\n\nFicha atual:\n' + linhas;
+    const txt = await appPrompt(modelo, linhas, { title: `Ficha técnica - ${data.product?.nome || 'Produto'}` });
+    if (txt === null) return;
+    const items = String(txt || '').split('\n').map(l => l.trim()).filter(l => l && l.includes('|')).map(l => {
+      const [inventory_item_id, quantity, waste_percent] = l.split('|').map(x => x.trim());
+      return { inventory_item_id, quantity: Number(quantity || 0), waste_percent: Number(waste_percent || 0) };
+    });
+    await apiCall('PUT', `/api/admin/products/${produtoId}/recipe`, { yield_quantity: 1, items });
+    showToast('Ficha técnica salva', 'success');
+    carregarEstoque();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function estoqueStatus(item) {
+  const atual = Number(item.current_quantity || 0);
+  const minimo = Number(item.minimum_quantity || 0);
+  if (atual <= 0) return 'zerado';
+  if (minimo > 0 && atual <= minimo) return 'baixo';
+  return 'ok';
 }
 
 /* ── FINANCEIRO ───────────────────────────────────── */
