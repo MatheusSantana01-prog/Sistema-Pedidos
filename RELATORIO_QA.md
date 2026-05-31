@@ -92,11 +92,13 @@ Rotas verificadas com status `200`:
 
 ## Bugs corrigidos
 
-- Não houve bug de código corrigido nesta etapa. O dashboard exige período por contrato; o teste foi ajustado para chamar com datas.
+- Em 2026-05-31, na branch `produto-comercial-restaurantes`, o caixa foi corrigido para habilitar o fechamento quando o pagamento é preenchido pela UI, por teclado ou programaticamente. O botão agora considera o valor digitado no campo de pagamento e o fechamento consolida esse valor antes de enviar para `/api/admin/tables/{mesa_id}/close`.
+- Foram adicionados testes unitários para normalização de dinheiro, Pix, cartão de crédito, cartão de débito, pagamento misto, rejeição de soma divergente e atualização do turno de caixa.
+- O dashboard exige período por contrato; o teste anterior foi ajustado para chamar com datas.
 
 ## Bugs pendentes
 
-- Revalidar presencialmente o fechamento de conta no caixa usando navegador físico, com pagamento dinheiro, pix, cartão e misto.
+- Reexecutar o fechamento de conta no caixa em Playwright/navegador real usando dinheiro, Pix, cartão de crédito, cartão de débito e pagamento misto após preparar o ambiente local.
 - Teste E2E automatizado com Playwright ainda não está versionado no repositório.
 - CSP ainda depende de `unsafe-inline`, então a redução de risco XSS continua pendente.
 - O uso de `localStorage` para JWT continua aceito por enquanto, mas deve ser revisado antes de escala maior.
@@ -105,7 +107,7 @@ Rotas verificadas com status `200`:
 
 - O sistema está funcional para piloto controlado, mas ainda precisa de acompanhamento no primeiro restaurante real.
 - A duplicação `main.py` e `backend/main.py` exige cuidado em mudanças futuras.
-- Testes automatizados ainda cobrem regras principais, não todos os endpoints com mock de Supabase.
+- Nesta máquina, `python -m pytest -q` não concluiu porque FastAPI/Pydantic não estão instalados e a instalação no Python 3.14 local falhou. Reexecutar em venv/Python suportado antes de declarar pronto para venda.
 - Impressão e rotina fiscal dependem de validação no ambiente físico do restaurante.
 
 ## Recomendação final

@@ -47,9 +47,22 @@ Rotas que precisam responder:
 
 O backend usa service role. Essa chave nunca deve aparecer no frontend. A anon key, se usada no futuro, só pode ser usada para operações públicas controladas por RLS.
 
+Para a branch `produto-comercial-restaurantes`, aplicar primeiro `backend/supabase_inventory_schema.sql` antes de habilitar o modulo de estoque. O arquivo `SUPABASE_SCHEMA_COMERCIAL.sql` fica como referencia complementar para delivery/fiscal e nao deve ser aplicado em producao sem revisao.
+
 Antes de piloto:
 
 - Confirmar tabelas e RPCs esperadas pelo backend.
 - Confirmar backups.
 - Confirmar usuários reais com senhas alteradas.
 - Confirmar restaurante demo separado de clientes reais.
+- Confirmar tabelas `inventory_items`, `inventory_movements`, `suppliers`, `product_recipes`, `product_recipe_items`, `inventory_counts` e `inventory_count_items`.
+- Confirmar colunas fiscais em `produtos` apenas quando a etapa fiscal for habilitada.
+
+## Critério para deploy comercial
+
+Não publicar em produção sem:
+
+- schema aplicado;
+- `python -m pytest -q` passando em venv compatível;
+- `node --check` em todos os JS;
+- smoke real de caixa e estoque.

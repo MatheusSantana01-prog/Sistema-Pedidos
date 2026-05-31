@@ -119,6 +119,44 @@ def test_payment_normalization_rejects_wrong_total():
     assert exc.value.status_code == 400
 
 
+@pytest.mark.parametrize("forma", ["dinheiro", "pix", "cartao_credito", "cartao_debito"])
+def test_payment_normalization_accepts_required_cashier_methods(forma):
+    body = main.FecharContaInput(pagamentos=[{"forma_pagamento": forma, "valor": 123.45}])
+
+    forma_db, resumo = main._normalizar_pagamentos(body, 123.45)
+
+    assert forma_db == forma
+    assert resumo["total"] == 123.45
+    assert resumo["por_forma"] == {forma: 123.45}
+
+
+def test_cash_shift_updates_when_account_is_closed(monkeypatch):
+    saved = {}
+    shift_id = "shift-1"
+    monkeypatch.setattr(
+        main,
+        "listar_turnos_caixa",
+        lambda restaurant_id: [{
+            "id": shift_id,
+            "status": "open",
+            "sales_total": 50,
+            "transactions_count": 1,
+            "payments_by_method": {"dinheiro": 50},
+        }],
+    )
+    monkeypatch.setattr(main, "salvar_turnos_caixa", lambda restaurant_id, turnos: saved.update({"turnos": turnos}))
+
+    turno = main.atualizar_turno_com_fechamento("restaurant-a", shift_id, {
+        "total": 100,
+        "payments_by_method": {"pix": 40, "cartao_debito": 60},
+    })
+
+    assert turno["sales_total"] == 150.0
+    assert turno["transactions_count"] == 2
+    assert turno["payments_by_method"] == {"dinheiro": 50, "pix": 40.0, "cartao_debito": 60.0}
+    assert saved["turnos"][0]["account_closures"][0]["total"] == 100
+
+
 def test_kitchen_status_transition_rules():
     assert "em_preparo" in main.ORDER_TRANSITIONS["pendente"]
     assert "pronto" in main.ORDER_TRANSITIONS["em_preparo"]

@@ -21,7 +21,7 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 ## Validacoes executadas
 
 - `python -m py_compile main.py backend/main.py backend/app/core/config.py backend/app/core/database.py backend/app/core/security.py`: passou.
-- `python -m pytest -q`: 22 testes passaram.
+- `python -m pytest -q`: 27 testes passaram.
 - `node --check` em todos os JavaScript do frontend: passou.
 - `node --check` em `playwright.config.js` e testes E2E: passou.
 - `npx playwright test`: 12 testes passaram e 4 foram pulados por falta de variaveis `E2E_*`, sem uso de dados reais.
