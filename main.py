@@ -1456,6 +1456,11 @@ class CriarProdutoInput(BaseModel):
     disponivel: bool = True
     destaque: bool = False
     tempo_preparo_minutos: int = 10
+    ncm: Optional[str] = None
+    cfop: Optional[str] = None
+    cest: Optional[str] = None
+    origem: Optional[str] = None
+    unidade_fiscal: Optional[str] = None
 
     @field_validator("preco")
     @classmethod

@@ -16,6 +16,7 @@ let estoqueMovimentos = [];
 let estoqueAba = 'insumos';
 let deliveryOrders = [];
 let deliveryDrivers = [];
+let ultimoFinanceiro = null;
 let pollingHandle  = null;
 let supportPollingHandle = null;
 
@@ -632,6 +633,11 @@ function abrirModalProduto(p = null) {
   document.getElementById('prod-desc').value  = p?.descricao || '';
   document.getElementById('prod-preco').value = p?.preco || '';
   document.getElementById('prod-custo').value = p?.custo || 0;
+  document.getElementById('prod-ncm').value = p?.ncm || '';
+  document.getElementById('prod-cfop').value = p?.cfop || '';
+  document.getElementById('prod-cest').value = p?.cest || '';
+  document.getElementById('prod-origem').value = p?.origem || '';
+  document.getElementById('prod-unidade-fiscal').value = p?.unidade_fiscal || '';
   document.getElementById('prod-foto').value  = p?.foto_url || '';
   const file = document.getElementById('prod-foto-file');
   if (file) file.value = '';
@@ -673,6 +679,11 @@ async function salvarProduto() {
     nome, descricao: document.getElementById('prod-desc').value || null,
     preco, custo: parseFloat(document.getElementById('prod-custo').value)||0,
     categoria_id: catId,
+    ncm: document.getElementById('prod-ncm').value.trim() || null,
+    cfop: document.getElementById('prod-cfop').value.trim() || null,
+    cest: document.getElementById('prod-cest').value.trim() || null,
+    origem: document.getElementById('prod-origem').value.trim() || null,
+    unidade_fiscal: document.getElementById('prod-unidade-fiscal').value.trim() || null,
     foto_url: document.getElementById('prod-foto').value || null,
     disponivel: document.getElementById('prod-disp').checked,
     destaque:   document.getElementById('prod-dest').checked,
@@ -1001,6 +1012,7 @@ async function carregarFinanceiro() {
   document.getElementById('financeiro-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const d = await apiCall('GET', `/api/admin/dashboard?data_inicio=${ini}&data_fim=${fim}`);
+    ultimoFinanceiro = d;
     document.getElementById('financeiro-content').innerHTML = `
       <div class="stats-row">
         <div class="stat-card"><div class="stat-label">Faturamento bruto</div><div class="stat-val green">R$ ${fmt(d.total_bruto)}</div></div>
@@ -1033,6 +1045,35 @@ async function carregarFinanceiro() {
   } catch (e) {
     document.getElementById('financeiro-content').innerHTML = '<div class="tabela-empty">Erro: ' + e.message + '</div>';
   }
+}
+
+function exportarFinanceiro(tipo) {
+  if (!ultimoFinanceiro) return showToast('Consulte um período antes de exportar', 'error');
+  const base = {
+    periodo: { inicio: val('fin-inicio'), fim: val('fin-fim') },
+    ...ultimoFinanceiro,
+  };
+  if (tipo === 'json') return baixarJson(base, `relatorio-financeiro-${base.periodo.inicio}-${base.periodo.fim}.json`);
+  const linhas = [
+    ['Métrica', 'Valor'],
+    ['Faturamento bruto', base.total_bruto],
+    ['Descontos', base.total_descontos],
+    ['Faturamento líquido', base.total_liquido],
+    ['Pedidos', base.total_pedidos],
+    ['Ticket médio', base.ticket_medio],
+    ...Object.entries(base.por_pagamento || {}).map(([k, v]) => [`Pagamento ${labelPagamento(k)}`, v]),
+    ...((base.top_produtos || []).map(p => [`Produto ${p.nome} (${p.quantidade} un)`, p.total])),
+  ];
+  baixarTexto(linhas.map(cols => cols.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'), `relatorio-financeiro-${base.periodo.inicio}-${base.periodo.fim}.csv`, 'text/csv');
+}
+
+function imprimirFinanceiro() {
+  const html = document.getElementById('financeiro-content')?.innerHTML;
+  if (!html) return showToast('Consulte um período antes de imprimir', 'error');
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(`<html><head><title>Relatório financeiro</title><style>body{font-family:Arial;padding:24px;color:#111}.stat-card,.config-card{border:1px solid #ddd;padding:12px;margin:8px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;text-align:left}</style></head><body>${html}</body></html>`);
+  w.document.close();
+  w.print();
 }
 
 async function carregarCaixasFinanceiro() {
@@ -1711,6 +1752,20 @@ function showToast(msg, tipo = '') {
   t.className = 'toast' + (tipo ? ' ' + tipo : '') + ' show';
   clearTimeout(t._t);
   t._t = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+function baixarTexto(text, filename, type = 'text/plain') {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function baixarJson(data, filename) {
+  baixarTexto(JSON.stringify(data, null, 2), filename, 'application/json');
 }
 
 function fecharModal(id) { document.getElementById(id).classList.remove('show'); }

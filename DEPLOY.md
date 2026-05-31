@@ -47,9 +47,22 @@ Rotas que precisam responder:
 
 O backend usa service role. Essa chave nunca deve aparecer no frontend. A anon key, se usada no futuro, só pode ser usada para operações públicas controladas por RLS.
 
+Para a branch `produto-comercial-restaurantes`, aplicar `SUPABASE_SCHEMA_COMERCIAL.sql` antes do deploy comercial.
+
 Antes de piloto:
 
 - Confirmar tabelas e RPCs esperadas pelo backend.
 - Confirmar backups.
 - Confirmar usuários reais com senhas alteradas.
 - Confirmar restaurante demo separado de clientes reais.
+- Confirmar tabelas `inventory_items`, `inventory_movements`, `product_recipes`, `delivery_drivers` e `delivery_orders`.
+- Confirmar colunas fiscais em `produtos`.
+
+## Critério para deploy comercial
+
+Não publicar em produção sem:
+
+- schema aplicado;
+- `python -m pytest -q` passando em venv compatível;
+- `node --check` em todos os JS;
+- smoke real de caixa, estoque e delivery.

@@ -63,6 +63,20 @@ python -m py_compile main.py backend/main.py
 
 Fluxos completos com Supabase real devem ser testados em ambiente de staging ou produção controlada.
 
+## Módulos comerciais
+
+A branch `produto-comercial-restaurantes` adiciona base de estoque, ficha técnica, baixa por venda, delivery/logística, exportações simples e preparação fiscal sem emissão real.
+
+Antes de vender fora de piloto controlado:
+
+- aplicar `SUPABASE_SCHEMA_COMERCIAL.sql` no Supabase;
+- revisar RLS e permissões;
+- rodar `python -m pytest -q` em venv compatível;
+- rodar Playwright E2E do fluxo mesa -> cozinha -> caixa -> estoque;
+- validar Render e Vercel depois do schema.
+
+Documentos principais: `RELATORIO_COMERCIAL_FINAL.md`, `CHECKLIST_VENDA.md`, `CHECKLIST_IMPLANTACAO_CLIENTE.md`, `SECURITY_REVIEW.md` e `FISCAL_ROADMAP.md`.
+
 ## Deploy
 
 Render usa a pasta `backend/` com:
