@@ -262,6 +262,7 @@ function selecionarMesa(el, mesaId, sessaoId, numero, total, status) {
   pagamentos = [];
   totalContaAtual = Number(total || 0);
   document.getElementById('split-forma').innerHTML = formasPagamentoOptions();
+  configurarEventosPagamento();
   document.getElementById('btn-fechar').disabled = true;
   document.getElementById('btn-fechar').textContent = '✓ Fechar conta';
   document.getElementById('conta-mesa-num').textContent = `Mesa ${numero}`;
@@ -339,13 +340,47 @@ function totalPagamentos() {
   return pagamentos.reduce((a, p) => a + Number(p.valor || 0), 0);
 }
 
+function valorPagamentoDigitado() {
+  const valor = Number(document.getElementById('split-valor')?.value || 0);
+  return Number.isFinite(valor) ? Number(valor.toFixed(2)) : 0;
+}
+
 function restantePagamento() {
   return Math.max(0, Number((totalContaAtual - totalPagamentos()).toFixed(2)));
 }
 
+function restanteComPagamentoDigitado() {
+  return Math.max(0, Number((restantePagamento() - valorPagamentoDigitado()).toFixed(2)));
+}
+
+function pagamentoDigitadoValido() {
+  const valor = valorPagamentoDigitado();
+  return valor > 0 && valor - restantePagamento() <= 0.02;
+}
+
+function configurarEventosPagamento() {
+  const input = document.getElementById('split-valor');
+  const forma = document.getElementById('split-forma');
+  if (input && !input.dataset.bound) {
+    input.dataset.bound = '1';
+    input.addEventListener('input', renderPagamentos);
+    input.addEventListener('change', renderPagamentos);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      if (pagamentoDigitadoValido() && restanteComPagamentoDigitado() <= 0.02) fecharConta();
+      else adicionarPagamento();
+    });
+  }
+  if (forma && !forma.dataset.bound) {
+    forma.dataset.bound = '1';
+    forma.addEventListener('change', renderPagamentos);
+  }
+}
+
 function adicionarPagamento() {
   const forma = document.getElementById('split-forma').value;
-  const valor = Number(document.getElementById('split-valor').value || 0);
+  const valor = valorPagamentoDigitado();
   if (!valor || valor <= 0) return showToast('Informe um valor válido', 'error');
   if (valor - restantePagamento() > 0.02) return showToast('Valor maior que o restante', 'error');
   pagamentos.push({ forma_pagamento: forma, valor: Number(valor.toFixed(2)) });
@@ -355,7 +390,10 @@ function adicionarPagamento() {
 
 function preencherRestante() {
   const restante = restantePagamento();
-  if (restante > 0) document.getElementById('split-valor').value = restante.toFixed(2);
+  if (restante > 0) {
+    document.getElementById('split-valor').value = restante.toFixed(2);
+    renderPagamentos();
+  }
 }
 
 function removerPagamento(idx) {
@@ -368,17 +406,30 @@ function renderPagamentos() {
   const resumo = document.getElementById('split-resumo');
   if (!lista || !resumo) return;
   const restante = restantePagamento();
-  resumo.textContent = `Pago: R$ ${fmt(totalPagamentos())} · Restante: R$ ${fmt(restante)}`;
+  const digitado = valorPagamentoDigitado();
+  const restanteFinal = pagamentoDigitadoValido() ? restanteComPagamentoDigitado() : restante;
+  resumo.textContent = `Pago: R$ ${fmt(totalPagamentos())} · Digitado: R$ ${fmt(digitado)} · Restante: R$ ${fmt(restanteFinal)}`;
   lista.innerHTML = pagamentos.length ? pagamentos.map((p, idx) => `
     <div class="split-pay-item">
       <span>${labelPagamento(p.forma_pagamento)}</span>
       <strong>R$ ${fmt(p.valor)}</strong>
       <button onclick="removerPagamento(${idx})">✕</button>
     </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
-  document.getElementById('btn-fechar').disabled = restante > 0.02 || !pagamentos.length || !turnoAtivo;
+  document.getElementById('btn-fechar').disabled = restanteFinal > 0.02 || (!pagamentos.length && !pagamentoDigitadoValido()) || !turnoAtivo;
+}
+
+function consolidarPagamentoDigitado() {
+  if (!pagamentoDigitadoValido()) return;
+  pagamentos.push({
+    forma_pagamento: document.getElementById('split-forma').value,
+    valor: valorPagamentoDigitado(),
+  });
+  document.getElementById('split-valor').value = '';
+  renderPagamentos();
 }
 
 async function fecharConta() {
+  consolidarPagamentoDigitado();
   if (!mesaSelecionada || !pagamentos.length || restantePagamento() > 0.02) return;
   if (!turnoAtivo) {
     showToast('Abra um turno de caixa antes de fechar contas', 'error');

@@ -35,7 +35,7 @@ Dados usados: restaurantes temporários `qa-visual-*`, removidos ao final de cad
 | Caixa | cashier | Desktop 1366x900 | Abrir turno | Turno abre | Turno aberto | PASSOU | Caixa temporário |
 | Caixa | cashier | Desktop 1366x900 | Impedir segundo turno | Botão não permite duplicar | Validação visual observada | PASSOU | Mesmo caixa |
 | Caixa | cashier | Desktop 1366x900 | Soma divergente | Fechar conta fica desabilitado | Botão ficou desabilitado | PASSOU | Proteção visual validada |
-| Caixa | cashier | Desktop 1366x900 | Fechar conta pela UI | Conta fecha | Automação não conseguiu habilitar o botão após preencher pagamento | PENDENTE | Backend/API já validado no QA funcional anterior |
+| Caixa | cashier | Desktop 1366x900 | Fechar conta pela UI | Conta fecha | Correção local aplicada para habilitar o botão com pagamento digitado/programático e consolidar o valor antes da API | CORRIGIDO LOCAL | Requer novo Playwright/ambiente real após instalar dependências |
 | Caixa | cashier | Desktop 1366x900 | Fechar turno/imprimir | Ações disponíveis | Fechamento/impressão acionáveis | PASSOU | Impressão em headless apenas acionada |
 
 ## Observações
@@ -43,4 +43,6 @@ Dados usados: restaurantes temporários `qa-visual-*`, removidos ao final de cad
 - O QA visual não usou dados reais de cliente.
 - Os restaurantes temporários foram removidos ao final dos testes.
 - O fluxo operacional principal cliente -> cozinha -> TV -> garçom -> admin passou no navegador.
-- O fechamento de conta do caixa já passou no smoke E2E anterior via API real, mas no runner visual headless o botão permaneceu desabilitado após manipulação programática do pagamento. Deve ser revalidado manualmente no navegador físico antes do primeiro piloto.
+- Em 2026-05-31, na branch `produto-comercial-restaurantes`, o caixa foi corrigido para revalidar o botão de fechamento quando o pagamento é digitado, alterado por script ou preenchido por "Usar restante". O fechamento também consolida o pagamento pendente antes de chamar a API.
+- Validação local executada: `python -m py_compile main.py backend/main.py backend/app/core/config.py backend/app/core/database.py backend/app/core/security.py` e `node --check frontend/r/caixa/app.js`.
+- `python -m pytest -q` ficou bloqueado neste computador por dependências Python ausentes; `pytest` foi instalado, mas FastAPI/Pydantic não instalaram no Python 3.14 local. Reexecutar com Python suportado/venv do projeto.
