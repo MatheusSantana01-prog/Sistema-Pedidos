@@ -814,6 +814,13 @@ def enforce_platform_control(restaurant_id: str, area: str):
     if area in modules and modules.get(area) is False:
         raise HTTPException(403, f"Módulo {area} não está liberado no plano")
 
+def table_access_area_for_role(role: str | None) -> str:
+    if role == "waiter":
+        return "garcom"
+    if role == "cashier":
+        return "financeiro"
+    return "admin"
+
 def enforce_plan_limit(restaurant_id: str, limit_key: str, current_count: int, extra: int = 1):
     control = get_platform_control(restaurant_id)
     limit = int((control.get("limits") or {}).get(limit_key) or 0)
@@ -1949,8 +1956,7 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
 @app.get("/api/admin/tables", tags=["admin"])
 def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
-    if u.get("role") == "waiter":
-        enforce_platform_control(rid, "garcom")
+    enforce_platform_control(rid, table_access_area_for_role(u.get("role")))
     resp = sb.table("mesas").select(
         "id,numero,status,capacidade,qr_code_token,"
         "sessao_mesa!left(id,status,aberta_em,total_consumido,observacao)"

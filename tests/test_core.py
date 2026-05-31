@@ -122,6 +122,27 @@ def test_platform_block_modes(monkeypatch):
     assert "Novos pedidos bloqueados" in exc.value.detail
 
 
+def test_table_access_area_depends_on_role():
+    assert main.table_access_area_for_role("waiter") == "garcom"
+    assert main.table_access_area_for_role("cashier") == "financeiro"
+    assert main.table_access_area_for_role("manager") == "admin"
+    assert main.table_access_area_for_role("owner") == "admin"
+
+
+def test_platform_admin_block_blocks_admin_area(monkeypatch):
+    monkeypatch.setattr(
+        main,
+        "get_platform_control",
+        lambda restaurant_id: {"billing_status": "em_dia", "block_mode": "admin", "modules": {}},
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        main.enforce_platform_control("restaurant-a", main.table_access_area_for_role("owner"))
+
+    assert exc.value.status_code == 403
+    assert "Painel administrativo bloqueado" in exc.value.detail
+
+
 def test_platform_full_block_blocks_admin(monkeypatch):
     monkeypatch.setattr(
         main,
