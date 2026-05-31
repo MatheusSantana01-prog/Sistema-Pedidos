@@ -717,8 +717,21 @@ async function carregarEstoque() {
     produtosLista = productsResp.produtos || produtosLista || [];
     renderEstoque();
   } catch (e) {
-    el.innerHTML = `<div class="tabela-empty">Erro ao carregar estoque: ${escapeHtml(e.message)}<br><small>Verifique se as tabelas novas foram criadas no Supabase.</small></div>`;
+    el.innerHTML = renderEstoqueSchemaErro(e);
   }
+}
+
+function renderEstoqueSchemaErro(error) {
+  const message = String(error?.message || error || 'Falha desconhecida');
+  const schemaMissing = /not found|404|relation .* does not exist|schema cache|inventory_items|inventory_movements|product_recipes|suppliers/i.test(message);
+  if (!schemaMissing) {
+    return `<div class="tabela-empty">Erro ao carregar estoque: ${escapeHtml(message)}</div>`;
+  }
+  return `
+    <div class="tabela-empty">
+      <b>Estoque ainda não foi habilitado neste ambiente.</b><br>
+      <small>Aplique o arquivo <code>backend/supabase_inventory_schema.sql</code> no Supabase e faça um novo deploy/reload do backend. Detalhe técnico: ${escapeHtml(message)}</small>
+    </div>`;
 }
 
 function renderEstoque() {

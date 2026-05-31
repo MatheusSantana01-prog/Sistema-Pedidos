@@ -2,6 +2,18 @@
 -- Execute no Supabase SQL Editor antes de liberar a aba Estoque em produção.
 -- Todas as tabelas usam restaurant_id; o backend sempre grava pelo JWT, nunca pelo frontend.
 
+create extension if not exists pgcrypto;
+
+do $$
+begin
+  if to_regclass('public.restaurants') is null then
+    raise exception 'Tabela public.restaurants não existe. Aplique primeiro o schema base do Sistema-Pedidos.';
+  end if;
+  if to_regclass('public.produtos') is null then
+    raise exception 'Tabela public.produtos não existe. Aplique primeiro o schema base do Sistema-Pedidos.';
+  end if;
+end $$;
+
 create table if not exists public.suppliers (
   id uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurants(id) on delete cascade,
@@ -60,8 +72,7 @@ create table if not exists public.product_recipes (
   notes text,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (restaurant_id, product_id, is_active)
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.product_recipe_items (
@@ -105,5 +116,23 @@ create index if not exists idx_inventory_items_restaurant on public.inventory_it
 create index if not exists idx_inventory_movements_restaurant on public.inventory_movements(restaurant_id, created_at desc);
 create index if not exists idx_inventory_movements_reference on public.inventory_movements(restaurant_id, reference_type, reference_id);
 create index if not exists idx_product_recipes_restaurant_product on public.product_recipes(restaurant_id, product_id);
+create unique index if not exists idx_product_recipes_one_active on public.product_recipes(restaurant_id, product_id) where is_active = true;
 create index if not exists idx_product_recipe_items_recipe on public.product_recipe_items(restaurant_id, recipe_id);
 create index if not exists idx_inventory_counts_restaurant on public.inventory_counts(restaurant_id, created_at desc);
+
+alter table public.suppliers enable row level security;
+alter table public.inventory_items enable row level security;
+alter table public.inventory_movements enable row level security;
+alter table public.product_recipes enable row level security;
+alter table public.product_recipe_items enable row level security;
+alter table public.inventory_counts enable row level security;
+alter table public.inventory_count_items enable row level security;
+
+grant usage on schema public to service_role;
+grant all on table public.suppliers to service_role;
+grant all on table public.inventory_items to service_role;
+grant all on table public.inventory_movements to service_role;
+grant all on table public.product_recipes to service_role;
+grant all on table public.product_recipe_items to service_role;
+grant all on table public.inventory_counts to service_role;
+grant all on table public.inventory_count_items to service_role;

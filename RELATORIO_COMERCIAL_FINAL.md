@@ -21,10 +21,20 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 ## Validacoes executadas
 
 - `python -m py_compile main.py backend/main.py backend/app/core/config.py backend/app/core/database.py backend/app/core/security.py`: passou.
-- `python -m pytest -q`: 27 testes passaram.
+- `python -m pytest -q`: 37 testes passaram apos a revisao de estoque.
 - `node --check` em todos os JavaScript do frontend: passou.
 - `node --check` em `playwright.config.js` e testes E2E: passou.
 - `npx playwright test`: 12 testes passaram e 4 foram pulados por falta de variaveis `E2E_*`, sem uso de dados reais.
+
+## Evidencia do smoke de estoque
+
+- Arquivo: `tests/test_inventory_smoke.py`.
+- Dados usados: fornecedor QA, insumo QA, produto QA, ficha tecnica QA, pedido QA e dois restaurantes temporarios em memoria.
+- Fluxo validado: entrada de estoque, entrega do pedido, baixa automatica por ficha tecnica, protecao contra baixa duplicada, cancelamento/estorno e protecao contra estorno duplicado.
+- Multi-tenant validado: insumo do restaurante A nao e encontrado pelo restaurante B.
+- Permissoes validadas: `owner` e `manager` passam; `cashier`, `waiter`, `kitchen` e `tv` recebem 403.
+- Schema validado por teste: tabelas obrigatorias, RLS habilitado, grants para `service_role`, pre-checagem de `restaurants`/`produtos` e indice unico para uma ficha ativa por produto.
+- Frontend validado por teste: aba Estoque possui mensagem clara quando o schema ainda nao foi aplicado.
 
 ## Regras de seguranca preservadas
 
