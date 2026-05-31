@@ -19,6 +19,7 @@ SaaS de pedidos para restaurantes com operação multi-tenant por slug. O sistem
 - `frontend/`: telas publicadas na Vercel.
 - `frontend/shared/`: configuração, autenticação e utilitários compartilhados.
 - `tests/`: testes básicos com mocks/env de teste.
+- `e2e/`: testes Playwright de smoke e fluxos QA opcionais.
 
 As telas ativas do frontend mantêm o padrão `index.html`, `styles.css` e `app.js`. Evite voltar a juntar HTML, CSS e JS em um único arquivo.
 
@@ -37,6 +38,21 @@ Configure no Render ou `.env` local:
 - `KITCHEN_READY_VISIBLE_MINUTES`
 
 Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET` ou senhas reais no frontend ou no GitHub.
+
+## Estoque
+
+O modulo de estoque comercial fica no painel admin do restaurante, aba `Estoque`, e cobre insumos, fornecedores, movimentacoes, alertas, relatorios e ficha tecnica por produto.
+
+Antes de usar em ambiente publicado, aplique o schema em [backend/supabase_inventory_schema.sql](backend/supabase_inventory_schema.sql) no Supabase. As rotas usam sempre o `restaurant_id` do JWT; o frontend nao envia nem controla esse escopo.
+
+Rotas principais:
+
+- `GET/POST/PATCH /api/admin/inventory/items`
+- `POST /api/admin/inventory/items/{id}/deactivate`
+- `GET/POST /api/admin/inventory/movements`
+- `GET /api/admin/inventory/alerts`
+- `GET /api/admin/inventory/reports/summary`
+- `GET/PUT /api/admin/products/{id}/recipe`
 
 ## Rodar local
 
@@ -62,6 +78,16 @@ python -m py_compile main.py backend/main.py
 ```
 
 Fluxos completos com Supabase real devem ser testados em ambiente de staging ou produção controlada.
+
+Playwright:
+
+```bash
+npm install
+npx playwright install chromium
+npx playwright test
+```
+
+Os testes autenticados só rodam quando as variáveis `E2E_RESTAURANT_SLUG`, `E2E_OWNER_EMAIL`, `E2E_OWNER_PASSWORD` e, para mesa, `E2E_TABLE_TOKEN` forem informadas. Use apenas restaurantes QA.
 
 ## Deploy
 
@@ -99,3 +125,6 @@ Por padrão a senha demo é `demo123`. Para piloto real, defina `DEMO_PASSWORD` 
 - [AUDITORIA_TECNICA.md](AUDITORIA_TECNICA.md)
 - [CHECKLIST_PILOTO.md](CHECKLIST_PILOTO.md)
 - [ROADMAP.md](ROADMAP.md)
+- [MANUAL_ESTOQUE.md](MANUAL_ESTOQUE.md)
+- [CHECKLIST_VENDA.md](CHECKLIST_VENDA.md)
+- [CHECKLIST_IMPLANTACAO_CLIENTE.md](CHECKLIST_IMPLANTACAO_CLIENTE.md)

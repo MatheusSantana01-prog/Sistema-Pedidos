@@ -63,6 +63,29 @@
 - Confirmar limite de caixas.
 - Tentar exceder um limite em ambiente de teste e validar mensagem.
 
+## Estoque comercial
+
+- Schema `backend/supabase_inventory_schema.sql` aplicado no Supabase.
+- Owner/manager acessa aba `Estoque`.
+- Caixa, garcom, cozinha e TV nao conseguem alterar estoque.
+- Cadastrar insumo QA.
+- Editar insumo QA.
+- Registrar entrada QA.
+- Registrar perda QA.
+- Configurar estoque minimo.
+- Ver alerta baixo/zerado.
+- Criar ficha tecnica de produto QA.
+- Entregar pedido QA e confirmar baixa automatica.
+- Cancelar pedido QA ja entregue e confirmar estorno quando aplicavel.
+- Confirmar isolamento de estoque entre dois restaurantes QA.
+
+## Playwright E2E
+
+- Rodar `npm install`.
+- Rodar `npx playwright install chromium`.
+- Rodar `npx playwright test`.
+- Para fluxo autenticado, usar apenas variaveis `E2E_*` de restaurante temporario QA.
+
 ## Pós-instalação
 
 - Fazer pedido real acompanhado.

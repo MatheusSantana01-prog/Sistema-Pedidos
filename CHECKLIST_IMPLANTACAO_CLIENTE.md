@@ -1,0 +1,56 @@
+# Checklist de Implantacao em Cliente
+
+## Preparacao
+
+- Criar restaurante no super-admin.
+- Definir plano, mensalidade e vencimento.
+- Criar usuario owner do restaurante.
+- Criar usuarios reais por perfil.
+- Remover ou trocar qualquer senha demo.
+- Configurar mesas e tokens QR.
+- Configurar categorias e produtos.
+- Aplicar schema de estoque no Supabase, se ainda nao aplicado.
+
+## Operacao
+
+- Testar login owner.
+- Testar login caixa.
+- Testar login cozinha.
+- Testar login garcom, se contratado.
+- Abrir mesa por QR Code no celular.
+- Fazer pedido real de teste.
+- Confirmar pedido na cozinha.
+- Marcar em preparo, pronto e entregue.
+- Fechar conta no caixa.
+- Conferir dashboard admin.
+
+## Estoque
+
+- Cadastrar fornecedores principais.
+- Cadastrar insumos principais.
+- Registrar estoque inicial.
+- Configurar estoque minimo.
+- Configurar ficha tecnica dos produtos mais vendidos.
+- Fazer pedido de teste e conferir baixa automatica.
+- Conferir alertas baixo/zerado.
+
+## Go-live
+
+- Fixar QR Codes nas mesas.
+- Treinar cozinha por 15 minutos.
+- Treinar caixa por 20 minutos.
+- Treinar dono/admin por 30 minutos.
+- Deixar suporte via WhatsApp visivel.
+- Fazer primeiro fechamento acompanhado.
+- Revisar logs e auditoria apos o primeiro turno.
+
+## Criterio minimo para piloto
+
+- Caixa abre e fecha turno sem erro.
+- Pedido entra na cozinha sem duplicar tela.
+- Conta fecha com pagamento correto.
+- Admin consegue alterar produtos.
+- Restaurante bloqueado perde acesso conforme regra.
+- Backup/exportacao foi validado.
+- Nenhuma chave secreta foi exposta no frontend.
+
