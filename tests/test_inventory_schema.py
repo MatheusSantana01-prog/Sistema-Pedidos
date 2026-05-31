@@ -31,3 +31,4 @@ def test_inventory_frontend_has_clear_missing_schema_message():
     assert "renderEstoqueSchemaErro" in js
     assert "Estoque ainda não foi habilitado neste ambiente." in js
     assert "backend/supabase_inventory_schema.sql" in js
+    assert "Detalhe técnico para suporte" in js

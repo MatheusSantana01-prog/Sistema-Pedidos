@@ -2,6 +2,7 @@
 
 Data: 2026-05-31
 Branch: `produto-comercial-restaurantes`
+Ultimo commit revisado: `9dad7c1 Revisa estoque e adiciona smoke automatizado`
 
 ## Status
 
@@ -25,16 +26,30 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 - `node --check` em todos os JavaScript do frontend: passou.
 - `node --check` em `playwright.config.js` e testes E2E: passou.
 - `npx playwright test`: 12 testes passaram e 4 foram pulados por falta de variaveis `E2E_*`, sem uso de dados reais.
+- `python backend/scripts/check_inventory_schema.py`: bloqueado localmente por falta de `SUPABASE_URL`/credencial QA configurada.
+- `python backend/scripts/smoke_inventory_real.py`: nao executado porque nao havia ambiente Supabase QA/staging configurado; nao foi usado dado real.
 
 ## Evidencia do smoke de estoque
 
 - Arquivo: `tests/test_inventory_smoke.py`.
+- Scripts operacionais adicionados:
+  - `backend/scripts/check_inventory_schema.py`
+  - `backend/scripts/smoke_inventory_real.py`
 - Dados usados: fornecedor QA, insumo QA, produto QA, ficha tecnica QA, pedido QA e dois restaurantes temporarios em memoria.
 - Fluxo validado: entrada de estoque, entrega do pedido, baixa automatica por ficha tecnica, protecao contra baixa duplicada, cancelamento/estorno e protecao contra estorno duplicado.
 - Multi-tenant validado: insumo do restaurante A nao e encontrado pelo restaurante B.
 - Permissoes validadas: `owner` e `manager` passam; `cashier`, `waiter`, `kitchen` e `tv` recebem 403.
 - Schema validado por teste: tabelas obrigatorias, RLS habilitado, grants para `service_role`, pre-checagem de `restaurants`/`produtos` e indice unico para uma ficha ativa por produto.
 - Frontend validado por teste: aba Estoque possui mensagem clara quando o schema ainda nao foi aplicado.
+
+## Pendencias humanas
+
+- Abrir PR manualmente se a integracao GitHub nao tiver permissao: `https://github.com/MatheusSantana01-prog/Sistema-Pedidos/pull/new/produto-comercial-restaurantes`.
+- Aplicar `backend/supabase_inventory_schema.sql` no Supabase QA/staging antes de producao.
+- Configurar `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` localmente ou no ambiente CI seguro.
+- Rodar `python backend/scripts/check_inventory_schema.py` com variaveis de ambiente QA/staging.
+- Rodar `python backend/scripts/smoke_inventory_real.py` somente em QA/staging ou em producao autorizada com restaurante temporario `qa-inventory-*`.
+- Autorizar qualquer aplicacao de schema em producao.
 
 ## Regras de seguranca preservadas
 
@@ -55,3 +70,9 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 ## Recomendacao
 
 Pronto para demonstracao comercial controlada e piloto com restaurante pequeno/medio que aceite acompanhamento. Para restaurante grande, concluir antes: inventario completo, relatorios gerenciais de margem/CMV, delivery/logistica e auditoria expandida.
+
+## Marcadores de prontidao
+
+- Pronto para demo: sim, apos deploy da branch em ambiente de teste e schema aplicado.
+- Pronto para venda controlada: sim, se `check_inventory_schema.py` e `smoke_inventory_real.py` passarem no ambiente do cliente/QA.
+- Pronto para grande empresa: nao. Ainda faltam inventario completo, conversao de unidades, relatorios gerenciais avancados, delivery operacional e fiscal real.

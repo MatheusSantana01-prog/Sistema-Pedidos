@@ -730,7 +730,8 @@ function renderEstoqueSchemaErro(error) {
   return `
     <div class="tabela-empty">
       <b>Estoque ainda não foi habilitado neste ambiente.</b><br>
-      <small>Aplique o arquivo <code>backend/supabase_inventory_schema.sql</code> no Supabase e faça um novo deploy/reload do backend. Detalhe técnico: ${escapeHtml(message)}</small>
+      <small>Peça ao suporte/admin da plataforma para aplicar o arquivo <code>backend/supabase_inventory_schema.sql</code> no Supabase e recarregar o backend.</small>
+      <details class="schema-error-details"><summary>Detalhe técnico para suporte</summary>${escapeHtml(message)}</details>
     </div>`;
 }
 
