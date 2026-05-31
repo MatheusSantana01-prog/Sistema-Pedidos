@@ -10,6 +10,20 @@ SaaS de pedidos para restaurantes com operação multi-tenant por slug. O sistem
 - Backend deploy: Render.
 - Frontend deploy: Vercel.
 
+## Modularização por tipo de negocio
+
+O sistema agora expõe `business_type` por restaurante e usa perfis modulares para:
+
+- restaurante
+- pizzaria
+- padaria
+- cafeteria
+- hamburgueria
+- bar
+- delivery_only
+
+O super-admin escolhe o tipo de negócio e o admin herda as abas relevantes do perfil.
+
 ## Estrutura
 
 - `main.py`: entrada legada/local do backend.
@@ -39,11 +53,13 @@ Configure no Render ou `.env` local:
 
 Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET` ou senhas reais no frontend ou no GitHub.
 
-## Estoque
+## Estoque e schema extra
 
 O modulo de estoque comercial fica no painel admin do restaurante, aba `Estoque`, e cobre insumos, fornecedores, movimentacoes, alertas, relatorios e ficha tecnica por produto.
 
 Antes de usar em ambiente publicado, aplique o schema em [backend/supabase_inventory_schema.sql](backend/supabase_inventory_schema.sql) no Supabase. As rotas usam sempre o `restaurant_id` do JWT; o frontend nao envia nem controla esse escopo.
+
+O contrato modular por tipo de negocio pode ser preparado com [backend/supabase_business_type_schema.sql](backend/supabase_business_type_schema.sql), que adiciona `business_type` e `modules_config` em `restaurants` quando a migracao for aplicada.
 
 Rotas principais:
 
@@ -126,5 +142,11 @@ Por padrão a senha demo é `demo123`. Para piloto real, defina `DEMO_PASSWORD` 
 - [CHECKLIST_PILOTO.md](CHECKLIST_PILOTO.md)
 - [ROADMAP.md](ROADMAP.md)
 - [MANUAL_ESTOQUE.md](MANUAL_ESTOQUE.md)
+- [MODULOS_POR_TIPO_NEGOCIO.md](MODULOS_POR_TIPO_NEGOCIO.md)
+- [RELATORIO_MODULARIZACAO.md](RELATORIO_MODULARIZACAO.md)
+- [MANUAL_RESTAURANTE.md](MANUAL_RESTAURANTE.md)
+- [MANUAL_PIZZARIA.md](MANUAL_PIZZARIA.md)
+- [MANUAL_PADARIA.md](MANUAL_PADARIA.md)
+- [MANUAL_DELIVERY.md](MANUAL_DELIVERY.md)
 - [CHECKLIST_VENDA.md](CHECKLIST_VENDA.md)
 - [CHECKLIST_IMPLANTACAO_CLIENTE.md](CHECKLIST_IMPLANTACAO_CLIENTE.md)

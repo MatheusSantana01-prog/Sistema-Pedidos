@@ -3,6 +3,8 @@
 ## Preparacao
 
 - Criar restaurante no super-admin.
+- Escolher o tipo de negocio correto no super-admin.
+- Conferir quais modulos devem ficar ativos para o perfil.
 - Definir plano, mensalidade e vencimento.
 - Criar usuario owner do restaurante.
 - Criar usuarios reais por perfil.
@@ -10,6 +12,7 @@
 - Configurar mesas e tokens QR.
 - Configurar categorias e produtos.
 - Aplicar schema de estoque no Supabase, se ainda nao aplicado.
+- Aplicar schema de business_type/modules_config no Supabase, se ainda nao aplicado.
 
 ## Operacao
 
@@ -53,4 +56,5 @@
 - Restaurante bloqueado perde acesso conforme regra.
 - Backup/exportacao foi validado.
 - Nenhuma chave secreta foi exposta no frontend.
+- O tipo de negocio foi conferido antes do go-live.
 

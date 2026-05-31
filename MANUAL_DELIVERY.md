@@ -1,11 +1,28 @@
-# Manual Delivery
+# Manual do Delivery
 
-Este modulo esta planejado para a proxima etapa comercial. Ainda nao deve ser vendido como pronto.
+## O que existe agora
 
-Escopo previsto:
+- Tipo de negocio `delivery_only`.
+- Operacao sem salão como perfil de negocio.
+- Base de módulos para:
+  - cozinha;
+  - caixa;
+  - estoque;
+  - ficha tecnica;
+  - delivery;
+  - encomendas;
+  - balcão rapido.
 
-- Cadastrar entregadores.
-- Criar pedido delivery com cliente, telefone, endereco, bairro, taxa e total.
-- Atribuir entregador quando necessario.
-- Atualizar status: recebido, confirmado, em preparo, pronto, saiu para entrega, entregue ou cancelado.
-- Consultar relatorio de taxas e tempo medio.
+## O que ainda é parcial
+
+- Painel de expedição e rota do entregador.
+- Painel operacional dedicado para taxa de entrega por bairro.
+- Relatorio por entregador.
+
+## Como operar hoje
+
+1. Crie o restaurante como `delivery_only`.
+2. O admin deve usar o fluxo sem mesas.
+3. Teste cozinha, caixa e entrega em QA.
+4. Valide regras de bloqueio e permissões antes do go-live.
+

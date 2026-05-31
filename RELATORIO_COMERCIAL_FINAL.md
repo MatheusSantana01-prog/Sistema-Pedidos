@@ -2,17 +2,20 @@
 
 Data: 2026-05-31
 Branch: `produto-comercial-restaurantes`
-Ultimo commit revisado: `9dad7c1 Revisa estoque e adiciona smoke automatizado`
+Ultimo commit revisado: `47bbf82 Corrige smoke real de estoque`
 
 ## Status
 
 O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modulo comercial voltado a restaurantes maiores: estoque basico com ficha tecnica, baixa automatica por venda, alertas e relatorio resumido.
+
+Nesta rodada, o sistema ganhou modularizacao por tipo de negocio com `business_type`, `modules_config` e ocultacao de abas no admin conforme o perfil do restaurante.
 
 ## Entregue nesta etapa
 
 - Schema SQL de estoque para Supabase.
 - Rotas admin de insumos, movimentacoes, fornecedores, alertas, resumo e ficha tecnica.
 - Aba `Estoque` no painel admin.
+- Modularizacao por tipo de negocio no super-admin e no admin.
 - Baixa automatica de estoque quando pedido e entregue.
 - Estorno quando pedido cancelado ja tinha baixado estoque.
 - Testes backend para regras de estoque.
@@ -26,6 +29,7 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 - `node --check` em todos os JavaScript do frontend: passou.
 - `node --check` em `playwright.config.js` e testes E2E: passou.
 - `npx playwright test`: 12 testes passaram e 4 foram pulados por falta de variaveis `E2E_*`, sem uso de dados reais.
+- `npm install` foi necessario localmente para carregar `@playwright/test` antes do runner.
 - `python backend/scripts/check_inventory_schema.py`: bloqueado localmente por falta de `SUPABASE_URL`/credencial QA configurada.
 - `python backend/scripts/smoke_inventory_real.py`: nao executado porque nao havia ambiente Supabase QA/staging configurado; nao foi usado dado real.
 
@@ -41,6 +45,8 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 - Permissoes validadas: `owner` e `manager` passam; `cashier`, `waiter`, `kitchen` e `tv` recebem 403.
 - Schema validado por teste: tabelas obrigatorias, RLS habilitado, grants para `service_role`, pre-checagem de `restaurants`/`produtos` e indice unico para uma ficha ativa por produto.
 - Frontend validado por teste: aba Estoque possui mensagem clara quando o schema ainda nao foi aplicado.
+- Schema complementar de modularizacao adicionado em `backend/supabase_business_type_schema.sql`.
+- Testes novos validam `business_type`, visibilidade de tabs e contrato modular.
 
 ## Pendencias humanas
 
@@ -66,6 +72,7 @@ O Sistema-Pedidos saiu da etapa de validacao do caixa e recebeu o primeiro modul
 - Inventario fisico completo ainda precisa de tela dedicada.
 - Relatorios de dono ainda sao iniciais.
 - Fiscal segue apenas preparado, sem emissao real.
+- Pizzaria, padaria e delivery estao em base modular, mas ainda faltam regras operacionais completas.
 
 ## Recomendacao
 
@@ -73,6 +80,6 @@ Pronto para demonstracao comercial controlada e piloto com restaurante pequeno/m
 
 ## Marcadores de prontidao
 
-- Pronto para demo: sim, apos deploy da branch em ambiente de teste e schema aplicado.
+- Pronto para demo: sim, com schema aplicado e business type configurado.
 - Pronto para venda controlada: sim, se `check_inventory_schema.py` e `smoke_inventory_real.py` passarem no ambiente do cliente/QA.
 - Pronto para grande empresa: nao. Ainda faltam inventario completo, conversao de unidades, relatorios gerenciais avancados, delivery operacional e fiscal real.

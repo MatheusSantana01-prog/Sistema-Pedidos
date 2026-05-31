@@ -29,6 +29,26 @@ const PLANOS = {
   },
 };
 
+const BUSINESS_TYPE_OPTIONS = [
+  ['restaurante', 'Restaurante'],
+  ['pizzaria', 'Pizzaria'],
+  ['padaria', 'Padaria'],
+  ['cafeteria', 'Cafeteria'],
+  ['hamburgueria', 'Hamburgueria'],
+  ['bar', 'Bar'],
+  ['delivery_only', 'Delivery only'],
+];
+
+const BUSINESS_TYPE_PRESETS = {
+  restaurante: { mesas: true, comandas: true, qr_code: true, garcom: true, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: false, venda_peso: false, codigo_barras: false, pizza_meio_a_meio: false, pizza_bordas: false, pizza_tamanhos: false, producao_padaria: false, lotes_validade: false, balcao_rapido: false, fiscal: true, relatorios_avancados: true },
+  pizzaria: { mesas: true, comandas: true, qr_code: true, garcom: true, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: true, venda_peso: false, codigo_barras: false, pizza_meio_a_meio: true, pizza_bordas: true, pizza_tamanhos: true, producao_padaria: false, lotes_validade: false, balcao_rapido: false, fiscal: true, relatorios_avancados: true },
+  padaria: { mesas: false, comandas: false, qr_code: false, garcom: false, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: true, venda_peso: true, codigo_barras: true, pizza_meio_a_meio: false, pizza_bordas: false, pizza_tamanhos: false, producao_padaria: true, lotes_validade: true, balcao_rapido: true, fiscal: true, relatorios_avancados: true },
+  cafeteria: { mesas: true, comandas: true, qr_code: true, garcom: false, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: true, venda_peso: false, codigo_barras: true, pizza_meio_a_meio: false, pizza_bordas: false, pizza_tamanhos: false, producao_padaria: false, lotes_validade: true, balcao_rapido: true, fiscal: true, relatorios_avancados: true },
+  hamburgueria: { mesas: true, comandas: true, qr_code: true, garcom: true, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: true, venda_peso: false, codigo_barras: false, pizza_meio_a_meio: false, pizza_bordas: false, pizza_tamanhos: false, producao_padaria: false, lotes_validade: false, balcao_rapido: false, fiscal: true, relatorios_avancados: true },
+  bar: { mesas: true, comandas: true, qr_code: true, garcom: true, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: false, venda_peso: false, codigo_barras: false, pizza_meio_a_meio: false, pizza_bordas: false, pizza_tamanhos: false, producao_padaria: false, lotes_validade: false, balcao_rapido: false, fiscal: true, relatorios_avancados: true },
+  delivery_only: { mesas: false, comandas: false, qr_code: false, garcom: false, cozinha: true, caixa: true, estoque: true, ficha_tecnica: true, delivery: true, encomendas: true, venda_peso: false, codigo_barras: false, pizza_meio_a_meio: false, pizza_bordas: false, pizza_tamanhos: false, producao_padaria: false, lotes_validade: false, balcao_rapido: true, fiscal: true, relatorios_avancados: true },
+};
+
 const MODULE_LABELS = {
   financeiro: 'Financeiro e caixa',
   cupons: 'Cupons',
@@ -42,6 +62,25 @@ const MODULE_LABELS = {
   ifood: 'iFood',
   whatsapp: 'WhatsApp',
   multiunit: 'Multiunidade',
+  mesas: 'Mesas',
+  comandas: 'Comandas',
+  qr_code: 'QR Code',
+  cozinha: 'Cozinha',
+  caixa: 'Caixa',
+  estoque: 'Estoque',
+  ficha_tecnica: 'Ficha técnica',
+  delivery: 'Delivery',
+  encomendas: 'Encomendas',
+  venda_peso: 'Venda por peso',
+  codigo_barras: 'Código de barras',
+  pizza_meio_a_meio: 'Pizza meio a meio',
+  pizza_bordas: 'Bordas de pizza',
+  pizza_tamanhos: 'Tamanhos de pizza',
+  producao_padaria: 'Produção padaria',
+  lotes_validade: 'Lotes e validade',
+  balcao_rapido: 'Balcão rápido',
+  fiscal: 'Fiscal',
+  relatorios_avancados: 'Relatórios avançados',
 };
 
 const FUTURE_MODULES = new Set(['api_integrations', 'ifood', 'whatsapp', 'multiunit']);
@@ -305,7 +344,7 @@ function renderDetalhesRestaurante() {
     .filter(m => m.is_active !== false && m.usuarios && m.usuarios.ativo !== false)
     .map(m => m.role));
   document.getElementById('detalhes-title').textContent = r.name;
-  document.getElementById('detalhes-subtitle').textContent = `/r/${r.slug} • ${planLabel(r.plan)} • ${r.is_active ? 'ativo' : 'inativo'}`;
+  document.getElementById('detalhes-subtitle').textContent = `/r/${r.slug} • ${planLabel(r.plan)} • ${escapeHtml(r.business_type || c.business_type || c.segment || 'restaurante')} • ${r.is_active ? 'ativo' : 'inativo'}`;
   document.getElementById('detalhes-body').innerHTML = `
     <div class="plan-banner ${r.plan === 'pro' ? 'recommended' : ''}">
       <div>
@@ -344,7 +383,7 @@ function renderDetalhesRestaurante() {
         <div class="detail-panel-title">Plano e operação</div>
         <div class="form-grid">
           ${selectField('ctrl-plan', 'Plano', r.plan, [['starter','Básico'],['pro','Pro - recomendado'],['enterprise','Premium']])}
-          ${selectField('ctrl-segment', 'Segmento', c.segment, [['restaurante','Restaurante'],['padaria','Padaria'],['pizzaria','Pizzaria'],['bar','Bar'],['hamburgueria','Hamburgueria'],['delivery','Delivery']])}
+          ${selectField('ctrl-business-type', 'Tipo de negócio', c.business_type || r.business_type || c.segment || 'restaurante', BUSINESS_TYPE_OPTIONS)}
           ${inputField('ctrl-city', 'Cidade', c.city || '')}
         </div>
         <div class="billing-alert ${escapeAttr(c.billing_status || 'em_dia')}" style="margin-top:12px">
@@ -418,6 +457,7 @@ function renderDetalhesRestaurante() {
       <button class="btn btn-primary" onclick="salvarControleRestaurante('${r.id}')">Salvar controle</button>
     </div>`;
   document.getElementById('ctrl-plan')?.addEventListener('change', aplicarPlanoControle);
+  document.getElementById('ctrl-business-type')?.addEventListener('change', aplicarTipoNegocioControle);
 }
 
 function profileLink(label, url, enabled) {
@@ -446,7 +486,13 @@ function moduleToggle(id, label, checked) {
 }
 
 function renderModules(modules) {
-  const keys = ['financeiro', 'garcom', 'relatorios', 'custom_branding', 'cupons', 'backups', 'advanced_reports', 'priority_support', 'api_integrations', 'ifood', 'whatsapp', 'multiunit'];
+  const keys = [
+    'mesas', 'comandas', 'qr_code', 'garcom', 'cozinha', 'caixa', 'estoque', 'ficha_tecnica',
+    'delivery', 'encomendas', 'venda_peso', 'codigo_barras', 'pizza_meio_a_meio', 'pizza_bordas',
+    'pizza_tamanhos', 'producao_padaria', 'lotes_validade', 'balcao_rapido', 'fiscal', 'relatorios_avancados',
+    'financeiro', 'relatorios', 'custom_branding', 'cupons', 'backups', 'advanced_reports', 'priority_support',
+    'api_integrations', 'ifood', 'whatsapp', 'multiunit'
+  ];
   return `<div class="module-grid">
     ${keys.map(key => {
       const checkedValue = modules?.[key] === true;
@@ -463,7 +509,8 @@ function renderModules(modules) {
 async function salvarControleRestaurante(restId) {
   const payload = {
     plan: val('ctrl-plan'),
-    segment: val('ctrl-segment'),
+    business_type: val('ctrl-business-type'),
+    segment: val('ctrl-business-type'),
     city: val('ctrl-city'),
     block_mode: val('ctrl-block'),
     support_status: val('support-status'),
@@ -478,9 +525,28 @@ async function salvarControleRestaurante(restId) {
     },
     desired_tables: Number(val('desired-tables') || 0),
     modules: {
+      mesas: checked('mod-mesas'),
+      comandas: checked('mod-comandas'),
+      qr_code: checked('mod-qr_code'),
+      garcom: checked('mod-garcom'),
+      cozinha: checked('mod-cozinha'),
+      caixa: checked('mod-caixa'),
+      estoque: checked('mod-estoque'),
+      ficha_tecnica: checked('mod-ficha_tecnica'),
+      delivery: checked('mod-delivery'),
+      encomendas: checked('mod-encomendas'),
+      venda_peso: checked('mod-venda_peso'),
+      codigo_barras: checked('mod-codigo_barras'),
+      pizza_meio_a_meio: checked('mod-pizza_meio_a_meio'),
+      pizza_bordas: checked('mod-pizza_bordas'),
+      pizza_tamanhos: checked('mod-pizza_tamanhos'),
+      producao_padaria: checked('mod-producao_padaria'),
+      lotes_validade: checked('mod-lotes_validade'),
+      balcao_rapido: checked('mod-balcao_rapido'),
+      fiscal: checked('mod-fiscal'),
+      relatorios_avancados: checked('mod-relatorios_avancados'),
       financeiro: checked('mod-financeiro'),
       cupons: checked('mod-cupons'),
-      garcom: checked('mod-garcom'),
       relatorios: checked('mod-relatorios'),
       custom_branding: checked('mod-custom_branding'),
       backups: checked('mod-backups'),
@@ -553,28 +619,32 @@ function abrirModalNovoRest() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  document.getElementById('r-template').value = 'restaurante';
+  document.getElementById('r-business-type').value = 'restaurante';
   document.getElementById('r-mesas').value = 10;
   document.getElementById('r-plano').value = 'starter';
-  aplicarPlanoComercial();
+  aplicarTipoNegocioRestaurante();
   document.getElementById('modal-rest').classList.add('show');
 }
 
-function aplicarTemplateRestaurante() {
-  const template = document.getElementById('r-template').value;
+function aplicarTipoNegocioRestaurante() {
+  const businessType = document.getElementById('r-business-type').value;
   const presets = {
     restaurante: { mesas: 10, plano: 'starter', cor: '#ff4d1c' },
     padaria: { mesas: 6, plano: 'starter', cor: '#c0843d' },
     pizzaria: { mesas: 12, plano: 'pro', cor: '#d92d20' },
     bar: { mesas: 16, plano: 'pro', cor: '#22c55e' },
     hamburgueria: { mesas: 8, plano: 'pro', cor: '#f59e0b' },
-    delivery: { mesas: 0, plano: 'starter', cor: '#7c3aed' },
+    delivery_only: { mesas: 0, plano: 'starter', cor: '#7c3aed' },
   };
-  const p = presets[template] || presets.restaurante;
+  const p = presets[businessType] || presets.restaurante;
   document.getElementById('r-mesas').value = p.mesas;
   document.getElementById('r-plano').value = p.plano;
   document.getElementById('r-cor').value = p.cor;
   aplicarPlanoComercial();
+}
+
+function aplicarTemplateRestaurante() {
+  aplicarTipoNegocioRestaurante();
 }
 
 function aplicarPlanoComercial() {
@@ -607,6 +677,18 @@ function aplicarPlanoControle() {
     const el = document.getElementById('mod-' + key);
     if (el && !FUTURE_MODULES.has(key)) el.checked = modules[key] === true;
   });
+  aplicarTipoNegocioControle();
+}
+
+function aplicarTipoNegocioControle() {
+  const businessType = document.getElementById('ctrl-business-type')?.value || 'restaurante';
+  const preset = BUSINESS_TYPE_PRESETS[businessType] || BUSINESS_TYPE_PRESETS.restaurante;
+  Object.keys(MODULE_LABELS).forEach(key => {
+    const el = document.getElementById('mod-' + key);
+    if (el && key in preset && !FUTURE_MODULES.has(key)) {
+      el.checked = preset[key] === true;
+    }
+  });
 }
 
 function gerarSlug() {
@@ -624,7 +706,7 @@ async function criarRestaurante() {
   const nome  = document.getElementById('r-nome').value.trim();
   const slug  = document.getElementById('r-slug').value.trim();
   const email = document.getElementById('r-email').value.trim() || null;
-  const template = document.getElementById('r-template').value;
+  const businessType = document.getElementById('r-business-type').value;
   const plano = document.getElementById('r-plano').value;
   const cor   = document.getElementById('r-cor').value;
   const mesas = Number(document.getElementById('r-mesas').value || 0);
@@ -642,7 +724,8 @@ async function criarRestaurante() {
       slug,
       email,
       plan: plano,
-      template,
+      business_type: businessType,
+      template: businessType,
       primary_color: cor,
       initial_table_count: mesas,
       create_default_categories: false,

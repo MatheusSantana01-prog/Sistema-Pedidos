@@ -18,6 +18,15 @@ let estoqueAlerts = [];
 let estoqueSummary = null;
 let pollingHandle  = null;
 let supportPollingHandle = null;
+let BUSINESS_TYPE = 'restaurante';
+let VISIBLE_TABS = new Set();
+let ACTIVE_MODULES = {};
+const TAB_MODULE_REQUIREMENTS = {
+  mesas: 'mesas',
+  estoque: 'estoque',
+  financeiro: 'financeiro',
+  fiscal: 'fiscal',
+};
 
 const ADMIN_FOOD_IMAGES = {
   pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=700&q=80',
@@ -27,12 +36,39 @@ const ADMIN_FOOD_IMAGES = {
   default: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80',
 };
 
+function normalizeBusinessType(value) {
+  const key = String(value || 'restaurante').trim().toLowerCase();
+  const aliases = { delivery: 'delivery_only' };
+  return aliases[key] || key || 'restaurante';
+}
+
+function applyBusinessVisibility() {
+  const tabs = VISIBLE_TABS.size ? VISIBLE_TABS : new Set(['mesas', 'pedidos', 'cardapio', 'estoque', 'financeiro', 'fiscal', 'usuarios', 'suporte', 'configuracoes', 'auditoria']);
+  document.querySelectorAll('.nav-tab[data-tab]').forEach(tab => {
+    const key = tab.dataset.tab;
+    const moduleKey = TAB_MODULE_REQUIREMENTS[key];
+    const moduleEnabled = moduleKey ? ACTIVE_MODULES[moduleKey] !== false : true;
+    const visible = tabs.has(key) && moduleEnabled;
+    tab.classList.toggle('hidden', !visible);
+  });
+  const firstVisible = [...document.querySelectorAll('.nav-tab[data-tab]')].find(t => !t.classList.contains('hidden'));
+  const active = document.querySelector('.nav-tab.active:not(.hidden)');
+  if (!active && firstVisible) {
+    irPara(firstVisible.dataset.tab, firstVisible);
+  }
+}
+
 /* ── INIT ─────────────────────────────────────────── */
 async function init() {
   // 1. Resolver restaurante pelo slug da URL
   RESTAURANT = await initTenant();
   if (!RESTAURANT) return;
+  BUSINESS_TYPE = normalizeBusinessType(RESTAURANT.business_type || RESTAURANT.segment || 'restaurante');
+  ACTIVE_MODULES = RESTAURANT.modules || RESTAURANT.modules_config || {};
+  VISIBLE_TABS = new Set(RESTAURANT.visible_tabs || ['mesas', 'pedidos', 'cardapio', 'estoque', 'financeiro', 'fiscal', 'usuarios', 'suporte', 'configuracoes', 'auditoria']);
+  if (BUSINESS_TYPE === 'delivery_only') VISIBLE_TABS.delete('mesas');
   setupRememberedLogin('admin');
+  applyBusinessVisibility();
 
   // 2. Se já tem sessão válida, entrar direto
   if (isLoggedIn() && sessaoDoRestaurante(RESTAURANT)) {
@@ -111,6 +147,7 @@ function iniciarApp() {
       }
     }
   });
+  applyBusinessVisibility();
 
   // Datas financeiro
   const hoje = new Date().toISOString().slice(0,10);
@@ -174,6 +211,8 @@ function iniciarPolling() {
 
 /* ── NAV ──────────────────────────────────────────── */
 function irPara(pagina, tabEl) {
+  if (tabEl?.classList.contains('hidden')) return;
+  if (VISIBLE_TABS.size && !VISIBLE_TABS.has(pagina)) return;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + pagina).classList.add('active');
@@ -1246,6 +1285,7 @@ async function carregarConfiguracoes() {
       <div class="config-grid">
         <div class="config-card">
           <div class="config-title">Identidade visual</div>
+          <div class="muted-line" style="margin-bottom:10px">Tipo de negócio: <b>${escapeHtml(BUSINESS_TYPE)}</b></div>
           <div class="form-row"><label class="form-label">Nome do restaurante</label>
             <input class="form-input" id="cfg-nome" value="${escapeAttr(restaurant.name || '')}"></div>
           <div class="form-row"><label class="form-label">Logo (URL)</label>

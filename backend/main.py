@@ -166,6 +166,212 @@ PLAN_MODULES = {
     },
 }
 
+BUSINESS_TYPE_ALIASES = {
+    "delivery": "delivery_only",
+    "delivery-only": "delivery_only",
+    "delivery_only": "delivery_only",
+    "restaurante": "restaurante",
+    "pizzaria": "pizzaria",
+    "padaria": "padaria",
+    "cafeteria": "cafeteria",
+    "hamburgueria": "hamburgueria",
+    "bar": "bar",
+}
+
+BUSINESS_TYPE_PROFILES = {
+    "restaurante": {
+        "label": "Restaurante",
+        "headline": "Operação de salão com pedidos, cozinha, caixa e estoque.",
+        "tabs": ["mesas", "pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": True,
+            "comandas": True,
+            "qr_code": True,
+            "garcom": True,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": False,
+            "venda_peso": False,
+            "codigo_barras": False,
+            "pizza_meio_a_meio": False,
+            "pizza_bordas": False,
+            "pizza_tamanhos": False,
+            "producao_padaria": False,
+            "lotes_validade": False,
+            "balcao_rapido": False,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+    "pizzaria": {
+        "label": "Pizzaria",
+        "headline": "Pizzas, bordas, tamanhos, meio a meio e cozinha detalhada.",
+        "tabs": ["mesas", "pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": True,
+            "comandas": True,
+            "qr_code": True,
+            "garcom": True,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": True,
+            "venda_peso": False,
+            "codigo_barras": False,
+            "pizza_meio_a_meio": True,
+            "pizza_bordas": True,
+            "pizza_tamanhos": True,
+            "producao_padaria": False,
+            "lotes_validade": False,
+            "balcao_rapido": False,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+    "padaria": {
+        "label": "Padaria",
+        "headline": "Balcão rápido, peso, lotes, validade e encomendas.",
+        "tabs": ["pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": False,
+            "comandas": False,
+            "qr_code": False,
+            "garcom": False,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": True,
+            "venda_peso": True,
+            "codigo_barras": True,
+            "pizza_meio_a_meio": False,
+            "pizza_bordas": False,
+            "pizza_tamanhos": False,
+            "producao_padaria": True,
+            "lotes_validade": True,
+            "balcao_rapido": True,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+    "cafeteria": {
+        "label": "Cafeteria",
+        "headline": "Balcão, mesas leves e atendimento rápido.",
+        "tabs": ["mesas", "pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": True,
+            "comandas": True,
+            "qr_code": True,
+            "garcom": False,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": True,
+            "venda_peso": False,
+            "codigo_barras": True,
+            "pizza_meio_a_meio": False,
+            "pizza_bordas": False,
+            "pizza_tamanhos": False,
+            "producao_padaria": False,
+            "lotes_validade": True,
+            "balcao_rapido": True,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+    "hamburgueria": {
+        "label": "Hamburgueria",
+        "headline": "Menu enxuto, cozinha rápida e delivery integrado.",
+        "tabs": ["mesas", "pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": True,
+            "comandas": True,
+            "qr_code": True,
+            "garcom": True,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": True,
+            "venda_peso": False,
+            "codigo_barras": False,
+            "pizza_meio_a_meio": False,
+            "pizza_bordas": False,
+            "pizza_tamanhos": False,
+            "producao_padaria": False,
+            "lotes_validade": False,
+            "balcao_rapido": False,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+    "bar": {
+        "label": "Bar",
+        "headline": "Mesas, comando por garçom, porções e alto giro.",
+        "tabs": ["mesas", "pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": True,
+            "comandas": True,
+            "qr_code": True,
+            "garcom": True,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": False,
+            "venda_peso": False,
+            "codigo_barras": False,
+            "pizza_meio_a_meio": False,
+            "pizza_bordas": False,
+            "pizza_tamanhos": False,
+            "producao_padaria": False,
+            "lotes_validade": False,
+            "balcao_rapido": False,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+    "delivery_only": {
+        "label": "Delivery Only",
+        "headline": "Operação sem salão, focada em pedidos e expedição.",
+        "tabs": ["pedidos", "cardapio", "estoque", "financeiro", "fiscal", "usuarios", "suporte", "configuracoes", "auditoria"],
+        "modules": {
+            "mesas": False,
+            "comandas": False,
+            "qr_code": False,
+            "garcom": False,
+            "cozinha": True,
+            "caixa": True,
+            "estoque": True,
+            "ficha_tecnica": True,
+            "delivery": True,
+            "encomendas": True,
+            "venda_peso": False,
+            "codigo_barras": False,
+            "pizza_meio_a_meio": False,
+            "pizza_bordas": False,
+            "pizza_tamanhos": False,
+            "producao_padaria": False,
+            "lotes_validade": False,
+            "balcao_rapido": True,
+            "fiscal": True,
+            "relatorios_avancados": True,
+        },
+    },
+}
+
+BUSINESS_TYPES = tuple(BUSINESS_TYPE_PROFILES.keys())
+
 PLAN_MARKETING = {
     "starter": {
         "label": "Básico",
@@ -353,6 +559,68 @@ def normalize_plan(plan: str | None) -> str:
     key = (plan or "starter").strip().lower()
     return PLAN_ALIASES.get(key, key)
 
+def normalize_business_type(business_type: str | None) -> str:
+    key = (business_type or "restaurante").strip().lower()
+    key = BUSINESS_TYPE_ALIASES.get(key, key)
+    return key if key in BUSINESS_TYPE_PROFILES else "restaurante"
+
+def business_type_profile(business_type: str | None) -> dict:
+    return BUSINESS_TYPE_PROFILES[normalize_business_type(business_type)].copy()
+
+def business_type_modules(business_type: str | None) -> dict:
+    return business_type_profile(business_type)["modules"].copy()
+
+def business_type_tabs(business_type: str | None) -> list[str]:
+    return list(business_type_profile(business_type)["tabs"])
+
+def combine_plan_and_business_modules(plan: str | None, business_type: str | None, overrides: dict | None = None) -> dict:
+    plan_key = normalize_plan(plan)
+    business_key = normalize_business_type(business_type)
+    combined = PLAN_MODULES.get(plan_key, PLAN_MODULES["starter"]).copy()
+    business_modules = business_type_modules(business_key)
+    for module_key, allowed in business_modules.items():
+        if module_key in combined:
+            combined[module_key] = bool(combined[module_key] and allowed)
+        else:
+            combined[module_key] = bool(allowed)
+    if isinstance(overrides, dict):
+        for module_key, value in overrides.items():
+            if module_key in business_modules:
+                combined[module_key] = bool(value) and bool(business_modules[module_key])
+            elif module_key in combined:
+                combined[module_key] = bool(value)
+    return combined
+
+def business_type_visible_tabs(business_type: str | None) -> list[str]:
+    tabs = business_type_tabs(business_type)
+    # Mantém compatibilidade com telas antigas que não existem para todos os perfis.
+    if normalize_business_type(business_type) == "delivery_only":
+        return [tab for tab in tabs if tab != "mesas"]
+    return tabs
+
+def enrich_restaurant_business_contract(restaurant: dict | None, control: dict | None = None) -> dict:
+    restaurant = dict(restaurant or {})
+    control = dict(control or {})
+    business_type = normalize_business_type(
+        restaurant.get("business_type")
+        or control.get("business_type")
+        or control.get("segment")
+        or "restaurante"
+    )
+    plan = normalize_plan(restaurant.get("plan") or control.get("plan") or "starter")
+    modules = combine_plan_and_business_modules(plan, business_type, control.get("modules"))
+    restaurant["business_type"] = business_type
+    restaurant["modules_config"] = business_type_modules(business_type)
+    restaurant["visible_tabs"] = business_type_visible_tabs(business_type)
+    restaurant["modules"] = modules
+    if control:
+        control["business_type"] = business_type
+        control["segment"] = business_type
+        control["modules_config"] = restaurant["modules_config"]
+        control["visible_tabs"] = restaurant["visible_tabs"]
+        control["modules"] = modules
+    return restaurant
+
 def _platform_control_defaults() -> dict:
     return {
         "customer_code": "",
@@ -376,6 +644,9 @@ def _platform_control_defaults() -> dict:
         "support_notes": "",
         "block_mode": "none",
         "broadcast_message": "",
+        "business_type": "restaurante",
+        "modules_config": business_type_modules("restaurante"),
+        "visible_tabs": business_type_visible_tabs("restaurante"),
         "limits": PLAN_LIMITS["starter"].copy(),
         "modules": PLAN_MODULES["starter"].copy(),
         "future_modules": FUTURE_MODULES.copy(),
@@ -450,6 +721,10 @@ def get_platform_control(restaurant_id: str) -> dict:
         data["modules"].update(saved.get("modules") or {})
         data["future_modules"].update(saved.get("future_modules") or {})
         data["plan_marketing"].update(saved.get("plan_marketing") or {})
+    data["business_type"] = normalize_business_type(data.get("business_type") or data.get("segment"))
+    data["segment"] = data["business_type"]
+    data["modules_config"] = business_type_modules(data["business_type"])
+    data["visible_tabs"] = business_type_visible_tabs(data["business_type"])
     return calcular_status_financeiro(data)
 
 def next_customer_code() -> str:
@@ -472,6 +747,12 @@ def next_customer_code() -> str:
 
 def save_platform_control(restaurant_id: str, control: dict):
     control = dict(control or {})
+    control["business_type"] = normalize_business_type(control.get("business_type") or control.get("segment"))
+    control["segment"] = control["business_type"]
+    control["modules_config"] = business_type_modules(control["business_type"])
+    control["visible_tabs"] = business_type_visible_tabs(control["business_type"])
+    if not isinstance(control.get("modules"), dict):
+        control["modules"] = business_type_modules(control["business_type"])
     if not control.get("customer_code"):
         control["customer_code"] = next_customer_code()
     if not control.get("branch_code"):
@@ -490,6 +771,18 @@ def save_platform_control(restaurant_id: str, control: dict):
         sb.table("configuracoes").update(payload).eq("restaurant_id", restaurant_id).eq("chave", "platform_control").execute()
     else:
         sb.table("configuracoes").insert(payload).execute()
+
+def try_persist_restaurant_business_columns(restaurant_id: str, business_type: str, modules_config: dict | None = None):
+    payload = {
+        "business_type": normalize_business_type(business_type),
+        "updated_at": utcnow(),
+    }
+    if isinstance(modules_config, dict):
+        payload["modules_config"] = modules_config
+    try:
+        sb.table("restaurants").update(payload).eq("id", restaurant_id).execute()
+    except Exception as exc:
+        logger.debug("Falha ao persistir colunas de business_type em restaurants: %s", exc)
 
 def support_ticket_public(ticket: dict) -> dict:
     ticket = dict(ticket or {})
@@ -771,9 +1064,14 @@ def listar_pedidos_fechamento(restaurant_id: str, sessao_id: str) -> list[dict]:
 def aplicar_limites_plano(control: dict, plan: str, force: bool = False) -> dict:
     plan = normalize_plan(plan)
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"]).copy()
-    modules = PLAN_MODULES.get(plan, PLAN_MODULES["starter"]).copy()
+    business_type = normalize_business_type(control.get("business_type") or control.get("segment"))
+    modules = combine_plan_and_business_modules(plan, business_type, None if force else control.get("modules"))
+    control["business_type"] = business_type
+    control["segment"] = business_type
     control["limits"] = limits if force else {**limits, **(control.get("limits") or {})}
     control["modules"] = modules if force else {**modules, **(control.get("modules") or {})}
+    control["modules_config"] = business_type_modules(business_type)
+    control["visible_tabs"] = business_type_visible_tabs(business_type)
     if force or not control.get("monthly_amount"):
         control["monthly_amount"] = PLAN_BASE_PRICES.get(plan, PLAN_BASE_PRICES["starter"])
     control["future_modules"] = FUTURE_MODULES.copy()
@@ -1315,6 +1613,7 @@ class CriarRestauranteInput(BaseModel):
     background_color: str = "#0a0a0a"
     text_color: str = "#f2f0eb"
     plan: str = "starter"
+    business_type: str = "restaurante"
     template: str = "restaurante"
     initial_table_count: int = 10
     create_default_categories: bool = False
@@ -1349,11 +1648,19 @@ class CriarRestauranteInput(BaseModel):
             raise ValueError(f"Template inválido: {list(TEMPLATE_CATEGORIES.keys())}")
         return v
 
+    @field_validator("business_type")
+    @classmethod
+    def val_business_type(cls, v):
+        if normalize_business_type(v) not in BUSINESS_TYPES:
+            raise ValueError(f"Tipo de negócio inválido: {list(BUSINESS_TYPES)}")
+        return normalize_business_type(v)
+
 
 class AtualizarRestauranteInput(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    business_type: Optional[str] = None
     logo_url: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
@@ -1787,6 +2094,9 @@ def get_restaurant_public(slug: str):
     data = _first(resp.data)
     if not data:
         raise HTTPException(404, f"Restaurante '{slug}' não encontrado ou inativo")
+    control = get_platform_control(data.get("id"))
+    data = enrich_restaurant_business_contract(data, control)
+    data["restaurant_settings"] = data.get("restaurant_settings") or []
     return data
 
 
@@ -3041,6 +3351,7 @@ def get_meu_restaurante(u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
     resp = sb.table("restaurants").select("*,restaurant_settings(*)").eq("id", rid).single().execute()
     restaurant = _row(resp)
+    control = get_platform_control(rid)
     flags = get_restaurant_feature_flags(rid)
     settings = restaurant.get("restaurant_settings")
     if isinstance(settings, list):
@@ -3051,6 +3362,7 @@ def get_meu_restaurante(u: dict = Depends(authorize(["manager", "owner"]))):
         normalized_settings = {}
     normalized_settings.update(flags)
     restaurant["restaurant_settings"] = [normalized_settings]
+    restaurant = enrich_restaurant_business_contract(restaurant, control)
     return {"restaurant": restaurant}
 
 
@@ -3060,11 +3372,21 @@ def atualizar_restaurante(body: AtualizarRestauranteInput, request: Request,
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "admin")
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
-    payload["updated_at"] = utcnow()
-    sb.table("restaurants").update(payload).eq("id", rid).execute()
+    business_type = normalize_business_type(payload.pop("business_type", None))
+    control = get_platform_control(rid)
+    control["business_type"] = business_type
+    control["segment"] = business_type
+    control["modules_config"] = business_type_modules(business_type)
+    control["visible_tabs"] = business_type_visible_tabs(business_type)
+    save_platform_control(rid, control)
+    try_persist_restaurant_business_columns(rid, business_type, control["modules_config"])
+    if payload:
+        payload["updated_at"] = utcnow()
+        sb.table("restaurants").update(payload).eq("id", rid).execute()
     resp = sb.table("restaurants").select("*").eq("id", rid).execute()
-    log_acao(u, "atualizar_restaurante", "restaurants", rid, None, payload, request)
-    return {"restaurant": _row(resp)}
+    restaurant = enrich_restaurant_business_contract(_row(resp), control)
+    log_acao(u, "atualizar_restaurante", "restaurants", rid, None, {**payload, "business_type": business_type}, request)
+    return {"restaurant": restaurant}
 
 
 @app.put("/api/admin/restaurant/settings", tags=["restaurante"])
@@ -3441,7 +3763,8 @@ def require_super_admin(u: dict = Depends(verificar_token)) -> dict:
 @app.get("/api/super-admin/restaurants", tags=["super-admin"])
 def listar_todos_restaurantes(u: dict = Depends(require_super_admin)):
     resp = sb.table("restaurants").select("*,restaurant_settings(*)").order("name").execute()
-    return {"restaurants": _rows(resp)}
+    restaurants = _rows(resp)
+    return {"restaurants": [enrich_restaurant_business_contract(r, get_platform_control(r.get("id"))) for r in restaurants]}
 
 
 @app.post("/api/super-admin/restaurants", tags=["super-admin"])
@@ -3457,12 +3780,18 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
     if body.initial_table_count > plan_limits["tables"]:
         raise HTTPException(400, f"Quantidade inicial de mesas acima do limite do plano ({plan_limits['tables']})")
 
-    payload = body.model_dump(exclude={"initial_table_count", "create_default_categories", "create_sample_products", "template"})
+    payload = body.model_dump(exclude={"initial_table_count", "create_default_categories", "create_sample_products", "template", "business_type"})
     rest = insert_restaurant(payload)
     try:
+        business_type = normalize_business_type(body.business_type or body.template or "restaurante")
         control = aplicar_limites_plano(_platform_control_defaults(), body.plan, force=True)
-        control["segment"] = body.template
+        control["business_type"] = business_type
+        control["segment"] = business_type
+        control["modules_config"] = business_type_modules(business_type)
+        control["visible_tabs"] = business_type_visible_tabs(business_type)
+        control["modules"] = combine_plan_and_business_modules(body.plan, business_type, control.get("modules"))
         save_platform_control(rest["id"], control)
+        try_persist_restaurant_business_columns(rest["id"], business_type, control["modules_config"])
 
         plano_modules = PLAN_MODULES.get(body.plan, PLAN_MODULES["starter"])
         # Criar settings padrão
@@ -3487,7 +3816,7 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
         raise HTTPException(500, f"Erro ao preparar restaurante inicial: {exc}")
 
     log_acao(u, "criar_restaurante", "restaurants", rest["id"], None, {"slug": body.slug, "name": body.name}, request)
-    return {"restaurant": rest}
+    return {"restaurant": enrich_restaurant_business_contract(rest, control)}
 
 
 def apagar_restaurante_dados(restaurant_id: str):
@@ -3707,8 +4036,8 @@ def detalhes_restaurante_plataforma(restaurant_id: str, u: dict = Depends(requir
     rest = sb.table("restaurants").select("*,restaurant_settings(*)").eq("id", restaurant_id).single().execute()
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
-    restaurant = rest.data
     control = get_platform_control(restaurant_id)
+    restaurant = enrich_restaurant_business_contract(rest.data, control)
 
     users = _rows(sb.table("restaurant_memberships").select(
         "id,role,is_active,created_at,usuarios(id,nome,email,ativo,ultimo_acesso)"
@@ -3788,13 +4117,18 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
     control = get_platform_control(restaurant_id)
     if requested_plan:
         control = aplicar_limites_plano(control, requested_plan, force=True)
-    for key in ("billing_status", "trial_until", "due_date", "segment", "city", "internal_notes", "support_status", "support_priority", "support_notes", "block_mode", "broadcast_message"):
+    for key in ("billing_status", "trial_until", "due_date", "segment", "business_type", "city", "internal_notes", "support_status", "support_priority", "support_notes", "block_mode", "broadcast_message"):
         if key in body:
             control[key] = body.get(key)
+    control["business_type"] = normalize_business_type(control.get("business_type") or control.get("segment"))
+    control["segment"] = control["business_type"]
     if isinstance(body.get("limits"), dict):
         control["limits"].update(body["limits"])
     if isinstance(body.get("modules"), dict):
         control["modules"].update(body["modules"])
+    control["modules"] = combine_plan_and_business_modules(requested_plan or rest.data.get("plan"), control["business_type"], control.get("modules"))
+    control["modules_config"] = business_type_modules(control["business_type"])
+    control["visible_tabs"] = business_type_visible_tabs(control["business_type"])
     if isinstance(body.get("feature_flags"), dict):
         flags = get_restaurant_feature_flags(restaurant_id)
         flags.update({k: bool(v) for k, v in body["feature_flags"].items() if k in {"allow_waiter_payment", "allow_waiter_delivery"}})
@@ -3835,6 +4169,7 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
             control[key] = body.get(key)
     control = calcular_status_financeiro(control)
     save_platform_control(restaurant_id, control)
+    try_persist_restaurant_business_columns(restaurant_id, control["business_type"], control.get("modules_config"))
     tables_created = 0
     if "desired_tables" in body:
         tables_created = ensure_active_tables_count(restaurant_id, int(body.get("desired_tables") or 0))

@@ -146,14 +146,15 @@
       <div class="form-row"><label class="form-label">Nome do restaurante</label><input class="form-input" id="r-nome" placeholder="Ex: Pizzaria Bella Massa"></div>
       <div class="form-row"><label class="form-label">Slug (URL única)</label><input class="form-input" id="r-slug" placeholder="Ex: pizzaria-bella-massa" oninput="gerarSlug()"></div>
       <div class="form-row"><label class="form-label">E-mail de contato</label><input class="form-input" id="r-email" type="email" placeholder="contato@restaurante.com"></div>
-      <div class="form-row"><label class="form-label">Template operacional</label>
-        <select class="form-input" id="r-template" onchange="aplicarTemplateRestaurante()">
+      <div class="form-row"><label class="form-label">Tipo de negócio</label>
+        <select class="form-input" id="r-business-type" onchange="aplicarTipoNegocioRestaurante()">
           <option value="restaurante">Restaurante</option>
           <option value="padaria">Padaria</option>
           <option value="pizzaria">Pizzaria</option>
           <option value="bar">Bar</option>
           <option value="hamburgueria">Hamburgueria</option>
-          <option value="delivery">Delivery</option>
+          <option value="cafeteria">Cafeteria</option>
+          <option value="delivery_only">Delivery only</option>
         </select>
       </div>
       <div class="form-row"><label class="form-label">Plano</label>

@@ -3,10 +3,12 @@
 ## Antes da demonstracao
 
 - Confirmar tipo de restaurante: mesa, balcao, delivery ou misto.
+- Confirmar tipo de negocio: restaurante, pizzaria, padaria, cafeteria, hamburgueria, bar ou delivery_only.
 - Confirmar quantidade de mesas, usuarios, caixas e produtos.
 - Confirmar se precisa de garcom avancado.
 - Confirmar se precisa de estoque e ficha tecnica.
 - Confirmar se exige emissao fiscal real agora.
+- Confirmar quais modulos devem ficar visiveis no perfil.
 - Preparar restaurante QA com dados ficticios.
 
 ## Demonstracao recomendada
@@ -24,6 +26,7 @@
 ## Pontos comerciais fortes
 
 - Multi-tenant por restaurante.
+- Modularizacao por tipo de negocio.
 - Operacao completa: mesa, cozinha, garcom, caixa, admin e super-admin.
 - Caixa validado em producao.
 - Estoque com baixa automatica por venda.
@@ -38,4 +41,5 @@
 - WhatsApp automatizado completo.
 - App mobile nativo.
 - Compras/cotacao automatica de fornecedor.
+- Pizzaria, padaria e delivery ainda precisam da camada operacional final.
 
