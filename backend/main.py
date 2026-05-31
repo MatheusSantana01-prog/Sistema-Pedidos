@@ -1615,6 +1615,62 @@ class ProductRecipeInput(BaseModel):
     items: list[dict] = []
 
 
+DELIVERY_STATUSES = {"recebido", "confirmado", "em_preparo", "pronto", "saiu_para_entrega", "entregue", "cancelado"}
+ORDER_TYPES = {"mesa", "balcao", "delivery"}
+
+
+class DeliveryDriverInput(BaseModel):
+    nome: str
+    telefone: Optional[str] = None
+    veiculo: Optional[str] = None
+    ativo: bool = True
+
+    @field_validator("nome")
+    @classmethod
+    def val_nome(cls, v):
+        v = (v or "").strip()
+        if len(v) < 2:
+            raise ValueError("Nome do entregador obrigatÃ³rio")
+        return v
+
+
+class DeliveryOrderInput(BaseModel):
+    customer_name: str
+    customer_phone: str
+    address: str
+    neighborhood: Optional[str] = None
+    delivery_fee: float = 0
+    total: float = 0
+    notes: Optional[str] = None
+    driver_id: Optional[str] = None
+    status: str = "recebido"
+
+    @field_validator("status")
+    @classmethod
+    def val_status(cls, v):
+        if v not in DELIVERY_STATUSES:
+            raise ValueError(f"Status invÃ¡lido: {sorted(DELIVERY_STATUSES)}")
+        return v
+
+    @field_validator("delivery_fee", "total")
+    @classmethod
+    def val_money(cls, v):
+        if v < 0:
+            raise ValueError("Valor nÃ£o pode ser negativo")
+        return v
+
+
+class DeliveryStatusInput(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def val_status(cls, v):
+        if v not in DELIVERY_STATUSES:
+            raise ValueError(f"Status invÃ¡lido: {sorted(DELIVERY_STATUSES)}")
+        return v
+
+
 class FiscalConfigInput(BaseModel):
     enabled: Optional[bool] = None
     mode: Optional[str] = None
@@ -2767,6 +2823,138 @@ def salvar_product_recipe(produto_id: str, body: ProductRecipeInput, request: Re
     sb.table("produtos").update({"custo": calc["cost"], "updated_at": utcnow()}).eq("id", produto_id).eq("restaurant_id", rid).execute()
     log_acao(u, "salvar_ficha_tecnica", "product_recipes", produto_id, ant, {"items": rows, "cost": calc["cost"]}, request)
     return {"product": produto, "recipe": calc["items"], "cost": calc["cost"]}
+
+
+@app.get("/api/admin/delivery/drivers", tags=["delivery"])
+def listar_delivery_drivers(include_inactive: bool = False, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    q = sb.table("delivery_drivers").select("*").eq("restaurant_id", rid).order("nome")
+    if not include_inactive:
+        q = q.eq("ativo", True)
+    return {"drivers": _rows(q.execute())}
+
+
+@app.post("/api/admin/delivery/drivers", tags=["delivery"])
+def criar_delivery_driver(body: DeliveryDriverInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    payload = body.model_dump()
+    payload["restaurant_id"] = rid
+    payload["created_at"] = utcnow()
+    payload["updated_at"] = utcnow()
+    driver = _first(_rows(sb.table("delivery_drivers").insert(payload).select("*").execute())) or payload
+    log_acao(u, "criar_entregador", "delivery_drivers", driver.get("id"), None, payload, request)
+    return {"driver": driver}
+
+
+@app.patch("/api/admin/delivery/drivers/{driver_id}", tags=["delivery"])
+def atualizar_delivery_driver(driver_id: str, body: dict, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "admin")
+    ant = _first(_rows(sb.table("delivery_drivers").select("*").eq("id", driver_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not ant:
+        raise HTTPException(404, "Entregador nÃ£o encontrado")
+    body.pop("restaurant_id", None)
+    body["updated_at"] = utcnow()
+    driver = _first(_rows(sb.table("delivery_drivers").update(body).eq("id", driver_id).eq("restaurant_id", rid).select("*").execute())) or {**ant, **body}
+    log_acao(u, "atualizar_entregador", "delivery_drivers", driver_id, ant, body, request)
+    return {"driver": driver}
+
+
+@app.get("/api/admin/delivery/orders", tags=["delivery"])
+def listar_delivery_orders(status_filtro: Optional[str] = None, limite: int = 100, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    q = sb.table("delivery_orders").select("*,delivery_drivers(nome,telefone)").eq("restaurant_id", rid).order("created_at", desc=True).limit(min(max(limite, 1), 300))
+    if status_filtro:
+        q = q.eq("status", status_filtro)
+    return {"orders": _rows(q.execute())}
+
+
+@app.post("/api/admin/delivery/orders", tags=["delivery"])
+def criar_delivery_order(body: DeliveryOrderInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "orders")
+    payload = body.model_dump()
+    payload["restaurant_id"] = rid
+    payload["order_type"] = "delivery"
+    payload["created_by"] = u.get("sub")
+    payload["created_by_name"] = u.get("nome") or ""
+    payload["created_at"] = utcnow()
+    payload["updated_at"] = utcnow()
+    order = _first(_rows(sb.table("delivery_orders").insert(payload).select("*").execute())) or payload
+    log_acao(u, "criar_pedido_delivery", "delivery_orders", order.get("id"), None, payload, request)
+    return {"order": order}
+
+
+@app.patch("/api/admin/delivery/orders/{order_id}", tags=["delivery"])
+def atualizar_delivery_order(order_id: str, body: dict, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "orders")
+    ant = _first(_rows(sb.table("delivery_orders").select("*").eq("id", order_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not ant:
+        raise HTTPException(404, "Pedido delivery nÃ£o encontrado")
+    body.pop("restaurant_id", None)
+    if "status" in body and body["status"] not in DELIVERY_STATUSES:
+        raise HTTPException(400, "Status invÃ¡lido")
+    body["updated_at"] = utcnow()
+    if body.get("status") == "entregue":
+        body["delivered_at"] = utcnow()
+    order = _first(_rows(sb.table("delivery_orders").update(body).eq("id", order_id).eq("restaurant_id", rid).select("*").execute())) or {**ant, **body}
+    log_acao(u, "atualizar_pedido_delivery", "delivery_orders", order_id, ant, body, request)
+    return {"order": order}
+
+
+@app.patch("/api/admin/delivery/orders/{order_id}/status", tags=["delivery"])
+def atualizar_delivery_order_status(order_id: str, body: DeliveryStatusInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    payload = {"status": body.status}
+    if body.status == "saiu_para_entrega":
+        payload["dispatched_at"] = utcnow()
+    if body.status == "entregue":
+        payload["delivered_at"] = utcnow()
+    return atualizar_delivery_order(order_id, payload, request, u)
+
+
+@app.post("/api/admin/delivery/orders/{order_id}/assign-driver", tags=["delivery"])
+def atribuir_delivery_driver(order_id: str, body: dict, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    driver_id = body.get("driver_id")
+    driver = _first(_rows(sb.table("delivery_drivers").select("id").eq("id", driver_id).eq("restaurant_id", rid).eq("ativo", True).limit(1).execute()))
+    if not driver:
+        raise HTTPException(404, "Entregador nÃ£o encontrado")
+    return atualizar_delivery_order(order_id, {"driver_id": driver_id}, request, u)
+
+
+@app.get("/api/admin/delivery/reports", tags=["delivery"])
+def delivery_reports(u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    orders = _rows(sb.table("delivery_orders").select("*,delivery_drivers(nome)").eq("restaurant_id", rid).order("created_at", desc=True).limit(500).execute())
+    delivered = [o for o in orders if o.get("status") == "entregue"]
+    by_driver = {}
+    delivery_fee_total = 0.0
+    total_minutes = []
+    for order in orders:
+        delivery_fee_total = _money(delivery_fee_total + _money(order.get("delivery_fee")))
+        driver_name = (order.get("delivery_drivers") or {}).get("nome") or "Sem entregador"
+        if order.get("status") == "entregue":
+            by_driver.setdefault(driver_name, {"orders": 0, "delivery_fees": 0.0})
+            by_driver[driver_name]["orders"] += 1
+            by_driver[driver_name]["delivery_fees"] = _money(by_driver[driver_name]["delivery_fees"] + _money(order.get("delivery_fee")))
+            if order.get("created_at") and order.get("delivered_at"):
+                try:
+                    total_minutes.append((datetime.fromisoformat(str(order["delivered_at"]).replace("Z", "+00:00")) - datetime.fromisoformat(str(order["created_at"]).replace("Z", "+00:00"))).total_seconds() / 60)
+                except ValueError:
+                    pass
+    avg_minutes = round(sum(total_minutes) / len(total_minutes), 1) if total_minutes else 0
+    return {
+        "summary": {
+            "orders_total": len(orders),
+            "orders_delivered": len(delivered),
+            "delivery_fee_total": _money(delivery_fee_total),
+            "avg_delivery_minutes": avg_minutes,
+        },
+        "by_driver": by_driver,
+        "recent_orders": orders[:50],
+    }
 
 
 # ═════════════════════════════════════════════════════════════════

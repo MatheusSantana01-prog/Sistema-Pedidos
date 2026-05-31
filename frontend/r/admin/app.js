@@ -14,6 +14,8 @@ let produtosLista  = [];
 let estoqueItems = [];
 let estoqueMovimentos = [];
 let estoqueAba = 'insumos';
+let deliveryOrders = [];
+let deliveryDrivers = [];
 let pollingHandle  = null;
 let supportPollingHandle = null;
 
@@ -181,6 +183,7 @@ function irPara(pagina, tabEl) {
     pedidos:       carregarPedidos,
     cardapio:      carregarCardapio,
     estoque:       carregarEstoque,
+    delivery:      carregarDelivery,
     financeiro:    carregarFinanceiro,
     fiscal:        carregarFiscal,
     usuarios:      carregarUsuarios,
@@ -890,6 +893,105 @@ async function desativarInsumo(id) {
 
 function labelMovimento(tipo) {
   return ({ entrada:'Entrada', saida_manual:'Saída manual', ajuste:'Ajuste', perda:'Perda', inventario:'Inventário', baixa_por_venda:'Baixa por venda' })[tipo] || tipo;
+}
+
+async function carregarDelivery() {
+  const el = document.getElementById('delivery-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const [ordersResp, driversResp, reportsResp] = await Promise.all([
+      apiCall('GET', '/api/admin/delivery/orders?limite=120'),
+      apiCall('GET', '/api/admin/delivery/drivers?include_inactive=true'),
+      apiCall('GET', '/api/admin/delivery/reports'),
+    ]);
+    deliveryOrders = ordersResp.orders || [];
+    deliveryDrivers = driversResp.drivers || [];
+    const s = reportsResp.summary || {};
+    el.innerHTML = `
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Pedidos</div><div class="stat-val">${escapeHtml(s.orders_total || 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Entregues</div><div class="stat-val green">${escapeHtml(s.orders_delivered || 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Taxas</div><div class="stat-val amber">R$ ${fmt(s.delivery_fee_total || 0)}</div></div>
+        <div class="stat-card"><div class="stat-label">Tempo médio</div><div class="stat-val">${escapeHtml(s.avg_delivery_minutes || 0)}min</div></div>
+      </div>
+      <div class="tabela-wrap"><table class="tabela">
+        <thead><tr><th>Cliente</th><th>Endereço</th><th>Total</th><th>Status</th><th>Entregador</th><th>Ações</th></tr></thead>
+        <tbody>${deliveryOrders.map(o => `<tr>
+          <td><strong>${escapeHtml(o.customer_name || '-')}</strong><div class="rest-slug">${escapeHtml(o.customer_phone || '')}</div></td>
+          <td>${escapeHtml(o.address || '-')}<div class="rest-slug">${escapeHtml(o.neighborhood || '')}</div></td>
+          <td>R$ ${fmt(o.total || 0)}<div class="rest-slug">Taxa R$ ${fmt(o.delivery_fee || 0)}</div></td>
+          <td><span class="status-pill ${escapeAttr(o.status || 'pendente')}">${escapeHtml(labelDeliveryStatus(o.status))}</span></td>
+          <td>${escapeHtml(o.delivery_drivers?.nome || '-')}</td>
+          <td><select class="form-input" onchange="alterarStatusDelivery('${escapeAttr(o.id)}',this.value)" style="min-width:150px">${deliveryStatusOptions(o.status)}</select></td>
+        </tr>`).join('') || '<tr><td colspan="6" class="tabela-empty">Nenhum pedido delivery.</td></tr>'}</tbody>
+      </table></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="tabela-empty">Delivery indisponível: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function abrirModalEntregador(id = '') {
+  const d = deliveryDrivers.find(item => item.id === id) || {};
+  document.getElementById('driver-id').value = d.id || '';
+  document.getElementById('driver-nome').value = d.nome || '';
+  document.getElementById('driver-telefone').value = d.telefone || '';
+  document.getElementById('driver-veiculo').value = d.veiculo || '';
+  document.getElementById('modal-entregador').classList.add('show');
+}
+
+async function salvarEntregador() {
+  const id = val('driver-id');
+  const payload = { nome: val('driver-nome'), telefone: val('driver-telefone') || null, veiculo: val('driver-veiculo') || null };
+  try {
+    if (id) await apiCall('PATCH', `/api/admin/delivery/drivers/${id}`, payload);
+    else await apiCall('POST', '/api/admin/delivery/drivers', payload);
+    fecharModal('modal-entregador');
+    showToast('Entregador salvo', 'success');
+    carregarDelivery();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function abrirModalDeliveryPedido() {
+  document.getElementById('delivery-id').value = '';
+  ['delivery-cliente','delivery-telefone','delivery-endereco','delivery-bairro','delivery-taxa','delivery-total','delivery-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('delivery-driver').innerHTML = '<option value="">Sem entregador</option>' + deliveryDrivers.filter(d => d.ativo !== false).map(d => `<option value="${escapeAttr(d.id)}">${escapeHtml(d.nome)}</option>`).join('');
+  document.getElementById('modal-delivery-pedido').classList.add('show');
+}
+
+async function salvarDeliveryPedido() {
+  const payload = {
+    customer_name: val('delivery-cliente'),
+    customer_phone: val('delivery-telefone'),
+    address: val('delivery-endereco'),
+    neighborhood: val('delivery-bairro') || null,
+    delivery_fee: Number(val('delivery-taxa') || 0),
+    total: Number(val('delivery-total') || 0),
+    notes: val('delivery-notes') || null,
+    driver_id: val('delivery-driver') || null,
+  };
+  try {
+    await apiCall('POST', '/api/admin/delivery/orders', payload);
+    fecharModal('modal-delivery-pedido');
+    showToast('Pedido delivery criado', 'success');
+    carregarDelivery();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function alterarStatusDelivery(orderId, status) {
+  try {
+    await apiCall('PATCH', `/api/admin/delivery/orders/${orderId}/status`, { status });
+    showToast('Status atualizado', 'success');
+    carregarDelivery();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function deliveryStatusOptions(value) {
+  return ['recebido','confirmado','em_preparo','pronto','saiu_para_entrega','entregue','cancelado']
+    .map(s => `<option value="${s}" ${value === s ? 'selected' : ''}>${labelDeliveryStatus(s)}</option>`).join('');
+}
+
+function labelDeliveryStatus(status) {
+  return ({ recebido:'Recebido', confirmado:'Confirmado', em_preparo:'Em preparo', pronto:'Pronto', saiu_para_entrega:'Saiu para entrega', entregue:'Entregue', cancelado:'Cancelado' })[status] || status || 'Recebido';
 }
 
 async function carregarFinanceiro() {

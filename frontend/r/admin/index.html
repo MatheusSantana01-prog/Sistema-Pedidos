@@ -58,6 +58,7 @@
     <div class="nav-tab"         onclick="irPara('pedidos',this)"  ><span class="nav-icon i-orders"></span>Pedidos</div>
     <div class="nav-tab role-manager role-owner" onclick="irPara('cardapio',this)"><span class="nav-icon i-menu"></span>Cardápio</div>
     <div class="nav-tab role-manager role-owner" onclick="irPara('estoque',this)"><span class="nav-icon i-finance"></span>Estoque</div>
+    <div class="nav-tab role-manager role-owner" onclick="irPara('delivery',this)"><span class="nav-icon i-orders"></span>Delivery</div>
     <div class="nav-tab role-owner" onclick="irPara('financeiro',this)"><span class="nav-icon i-finance"></span>Financeiro</div>
     <div class="nav-tab role-owner" onclick="irPara('fiscal',this)"><span class="nav-icon i-receipt"></span>Fiscal</div>
     <div class="nav-tab role-owner" onclick="irPara('usuarios',this)"><span class="nav-icon i-users"></span>Usuários</div>
@@ -137,6 +138,18 @@
         <button class="subtab" onclick="trocarSubEstoque('relatorios',this)">Relatórios</button>
       </div>
       <div id="estoque-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- DELIVERY -->
+    <div class="page" id="page-delivery">
+      <div class="section-head">
+        <div class="section-title">Delivery e logística</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="abrirModalEntregador()">+ Entregador</button>
+          <button class="btn btn-sm btn-primary" onclick="abrirModalDeliveryPedido()">+ Pedido delivery</button>
+        </div>
+      </div>
+      <div id="delivery-content"><div class="loading"><div class="spinner"></div></div></div>
     </div>
 
     <!-- FINANCEIRO -->
@@ -300,6 +313,45 @@
       <button class="btn" onclick="fecharModal('modal-usuario')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarUsuario()">Criar usuário</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL ENTREGADOR -->
+<div class="modal-bg" id="modal-entregador">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">Entregador</div><button class="modal-close" onclick="fecharModal('modal-entregador')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="driver-id">
+      <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="driver-nome"></div>
+      <div class="form-row"><label class="form-label">Telefone</label><input class="form-input" id="driver-telefone"></div>
+      <div class="form-row"><label class="form-label">Veículo</label><input class="form-input" id="driver-veiculo"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="fecharModal('modal-entregador')">Cancelar</button><button class="btn btn-primary" onclick="salvarEntregador()">Salvar</button></div>
+  </div>
+</div>
+
+<!-- MODAL PEDIDO DELIVERY -->
+<div class="modal-bg" id="modal-delivery-pedido">
+  <div class="modal">
+    <div class="modal-head"><div class="modal-title">Pedido delivery</div><button class="modal-close" onclick="fecharModal('modal-delivery-pedido')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="delivery-id">
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Cliente</label><input class="form-input" id="delivery-cliente"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Telefone</label><input class="form-input" id="delivery-telefone"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Endereço</label><input class="form-input" id="delivery-endereco"></div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Bairro</label><input class="form-input" id="delivery-bairro"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Taxa</label><input class="form-input" id="delivery-taxa" type="number" step="0.01"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0"><label class="form-label">Total</label><input class="form-input" id="delivery-total" type="number" step="0.01"></div>
+        <div class="form-row" style="margin:0"><label class="form-label">Entregador</label><select class="form-input" id="delivery-driver"></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">Observações</label><textarea class="form-input" id="delivery-notes" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="fecharModal('modal-delivery-pedido')">Cancelar</button><button class="btn btn-primary" onclick="salvarDeliveryPedido()">Salvar</button></div>
   </div>
 </div>
 
