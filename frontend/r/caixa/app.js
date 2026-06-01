@@ -10,6 +10,7 @@ let turnosAbertos = [];
 let turnoAtivo = null;
 let caixaSelecionadoId = null;
 let historicoTurnos = [];
+let cashFormMode = null;
 
 async function init() {
   RESTAURANT = await initTenant();
@@ -79,6 +80,7 @@ async function carregarCaixas(showErrors = true) {
 
 function renderCaixaOperacao(limits = {}) {
   const panel = document.getElementById('cash-shift-panel');
+  const formSnapshot = snapshotCashForm();
   const selected = caixas.find(c => c.id === caixaSelecionadoId) || caixas[0];
   const abertoNesteCaixa = selected ? turnosAbertos.find(t => t.register_id === selected.id) : null;
   const resumo = turnoAtivo
@@ -116,12 +118,41 @@ function renderCaixaOperacao(limits = {}) {
           <strong>R$ ${fmt(t.sales_total || 0)}</strong>
         </div>`).join('') || '<div class="split-empty">Nenhum turno registrado.</div>'}
     </div>`;
+  restoreCashForm(formSnapshot);
 }
 
 function selecionarCaixa(id) {
   caixaSelecionadoId = id;
   turnoAtivo = null;
+  cashFormMode = null;
   renderCaixaOperacao({ registers: caixas.length });
+}
+
+function snapshotCashForm() {
+  if (!cashFormMode) return null;
+  const values = {};
+  document.querySelectorAll('#cash-form-area input, #cash-form-area textarea').forEach(el => {
+    if (el.id) values[el.id] = el.value;
+  });
+  return { mode: cashFormMode, values };
+}
+
+function restoreCashForm(snapshot) {
+  if (!snapshot?.mode) return;
+  if (snapshot.mode === 'open' && turnoAtivo) {
+    cashFormMode = null;
+    return;
+  }
+  if (snapshot.mode === 'close' && !turnoAtivo) {
+    cashFormMode = null;
+    return;
+  }
+  if (snapshot.mode === 'open') renderAberturaTurnoForm();
+  if (snapshot.mode === 'close') renderFechamentoTurnoForm();
+  Object.entries(snapshot.values || {}).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
 }
 
 function denomInputs(prefix) {
@@ -139,6 +170,11 @@ function lerDenominacoes(prefix) {
 }
 
 function mostrarAberturaTurno() {
+  cashFormMode = 'open';
+  renderAberturaTurnoForm();
+}
+
+function renderAberturaTurnoForm() {
   document.getElementById('cash-form-area').innerHTML = `
     <div class="cash-form">
       <div class="cash-form-title">Abertura do turno</div>
@@ -160,6 +196,7 @@ async function abrirTurno() {
       notes: document.getElementById('open-notes').value.trim(),
     });
     showToast('Turno aberto', 'success');
+    cashFormMode = null;
     carregarCaixas();
   } catch (e) {
     showToast(e.message, 'error');
@@ -167,6 +204,11 @@ async function abrirTurno() {
 }
 
 function mostrarFechamentoTurno() {
+  cashFormMode = 'close';
+  renderFechamentoTurnoForm();
+}
+
+function renderFechamentoTurnoForm() {
   const esperado = Number(turnoAtivo?.opening_amount || 0) + Number(turnoAtivo?.payments_by_method?.dinheiro || 0);
   document.getElementById('cash-form-area').innerHTML = `
     <div class="cash-form">
@@ -192,6 +234,7 @@ async function fecharTurno() {
     });
     showToast('Turno fechado', 'success');
     turnoAtivo = null;
+    cashFormMode = null;
     carregarCaixas();
   } catch (e) {
     showToast(e.message, 'error');
