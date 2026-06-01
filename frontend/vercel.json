@@ -31,6 +31,8 @@
     { "source": "/r/:slug/tv/", "destination": "/r/tv/index.html" },
     { "source": "/r/:slug/mesa/:token", "destination": "/r/mesa/index.html" },
     { "source": "/r/:slug/mesa/:token/", "destination": "/r/mesa/index.html" },
+    { "source": "/comercial", "destination": "/comercial/index.html" },
+    { "source": "/comercial/", "destination": "/comercial/index.html" },
     { "source": "/legal", "destination": "/legal/index.html" },
     { "source": "/legal/", "destination": "/legal/index.html" },
     { "source": "/super-admin", "destination": "/super-admin/index.html" },
