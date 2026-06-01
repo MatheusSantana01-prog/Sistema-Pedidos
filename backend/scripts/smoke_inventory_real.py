@@ -13,10 +13,9 @@ load_dotenv(ROOT / ".env")
 load_dotenv(ROOT / "backend" / ".env")
 sys.path.insert(0, str(ROOT))
 
-import main as backend  # noqa: E402
-
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 
 
 def fail(message: str) -> None:
@@ -29,6 +28,8 @@ def require_env() -> None:
         fail("SUPABASE_URL nao configurado.")
     if not SUPABASE_KEY or "COLE" in SUPABASE_KEY:
         fail("SUPABASE_SERVICE_ROLE_KEY nao configurado. Rode apenas em QA/staging ou com restaurante temporario.")
+    if not JWT_SECRET:
+        fail("JWT_SECRET nao configurado. O smoke carrega o backend e precisa das mesmas variaveis do Render/QA.")
 
 
 def first(response):
@@ -62,6 +63,9 @@ def assert_quantity(sb, item_id: str, expected: float, label: str) -> None:
 
 def main() -> None:
     require_env()
+
+    import main as backend  # noqa: E402
+
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     backend.sb = sb
 
