@@ -11,6 +11,11 @@ let turnoAtivo = null;
 let caixaSelecionadoId = null;
 let historicoTurnos = [];
 let cashFormMode = null;
+let modoCaixa = 'mesas';
+let balcaoProdutos = [];
+let balcaoCarrinho = [];
+let balcaoPagamentos = [];
+let totalBalcaoAtual = 0;
 
 async function init() {
   RESTAURANT = await initTenant();
@@ -56,10 +61,42 @@ function iniciarApp() {
   }
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'flex';
+  configurarModosCaixa();
   carregarCaixas();
   carregarMesas();
-  function agendar() { polling = setTimeout(() => { carregarCaixas(false); carregarMesas(); agendar(); }, 10000); }
+  function agendar() { polling = setTimeout(() => { carregarCaixas(false); if (modoCaixa === 'mesas') carregarMesas(); agendar(); }, 10000); }
   agendar();
+}
+
+function balcaoRapidoAtivo() {
+  const modules = RESTAURANT?.modules || RESTAURANT?.modules_config || {};
+  return modules.balcao_rapido === true;
+}
+
+function configurarModosCaixa() {
+  const btn = document.getElementById('mode-balcao');
+  if (btn) btn.hidden = !balcaoRapidoAtivo();
+}
+
+function setModoCaixa(modo) {
+  if (modo === 'balcao' && !balcaoRapidoAtivo()) {
+    showToast('Venda de balcão rápido não está ativa neste restaurante', 'error');
+    return;
+  }
+  modoCaixa = modo;
+  document.getElementById('mode-mesas')?.classList.toggle('active', modo === 'mesas');
+  document.getElementById('mode-balcao')?.classList.toggle('active', modo === 'balcao');
+  if (modo === 'balcao') {
+    mesaSelecionada = null;
+    sessaoSelecionada = null;
+    carregarProdutosBalcao();
+    renderBalcaoConta();
+  } else {
+    balcaoCarrinho = [];
+    balcaoPagamentos = [];
+    carregarMesas();
+    resetContaMesa();
+  }
 }
 
 async function carregarCaixas(showErrors = true) {
@@ -303,7 +340,86 @@ function totalNaoDinheiro(map) {
   return Object.entries(map).filter(([k]) => k !== 'dinheiro').reduce((a, [, v]) => a + Number(v || 0), 0);
 }
 
+async function carregarProdutosBalcao() {
+  const grid = document.getElementById('mesas-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await apiCall('GET', '/api/admin/quick-sale/products');
+    balcaoProdutos = data.produtos || [];
+    renderProdutosBalcao();
+  } catch (e) {
+    grid.innerHTML = `<div class="cash-alert error">Erro no balcão rápido: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderProdutosBalcao() {
+  const grid = document.getElementById('mesas-grid');
+  const termo = (document.getElementById('quick-search')?.value || '').trim().toLowerCase();
+  const prods = balcaoProdutos.filter(p => `${p.nome || ''} ${p.categorias?.nome || ''}`.toLowerCase().includes(termo));
+  grid.innerHTML = `
+    <div class="quick-sale-toolbar" style="grid-column:1/-1">
+      <input class="form-input" id="quick-search" placeholder="Buscar produto de balcão" value="${escapeAttr(document.getElementById('quick-search')?.value || '')}" oninput="renderProdutosBalcao()">
+      <button class="btn btn-sm" onclick="carregarProdutosBalcao()">Atualizar</button>
+    </div>
+    ${prods.map(p => `
+      <button class="quick-product-btn" onclick="adicionarProdutoBalcao('${escapeAttr(p.id)}')">
+        <div class="quick-product-name">${escapeHtml(p.nome)}</div>
+        <div class="quick-product-meta">${escapeHtml(p.categorias?.icone || '')} ${escapeHtml(p.categorias?.nome || 'Sem categoria')}</div>
+        <div class="quick-product-price">R$ ${fmt(p.preco || 0)}</div>
+      </button>`).join('') || '<div class="split-empty">Nenhum produto disponível para venda rápida.</div>'}`;
+}
+
+function adicionarProdutoBalcao(produtoId) {
+  const produto = balcaoProdutos.find(p => String(p.id) === String(produtoId));
+  if (!produto) return;
+  const item = balcaoCarrinho.find(i => String(i.produto_id) === String(produtoId));
+  if (item) item.quantidade += 1;
+  else balcaoCarrinho.push({ produto_id: String(produtoId), nome: produto.nome, preco: Number(produto.preco || 0), quantidade: 1 });
+  renderBalcaoConta();
+}
+
+function alterarQtdBalcao(produtoId, delta) {
+  const item = balcaoCarrinho.find(i => String(i.produto_id) === String(produtoId));
+  if (!item) return;
+  item.quantidade += delta;
+  if (item.quantidade <= 0) balcaoCarrinho = balcaoCarrinho.filter(i => String(i.produto_id) !== String(produtoId));
+  renderBalcaoConta();
+}
+
+function totalBalcao() {
+  return Number(balcaoCarrinho.reduce((acc, item) => acc + Number(item.preco || 0) * Number(item.quantidade || 0), 0).toFixed(2));
+}
+
+function renderBalcaoConta() {
+  totalBalcaoAtual = totalBalcao();
+  document.getElementById('conta-mesa-num').textContent = 'Balcão';
+  document.getElementById('conta-mesa-info').textContent = balcaoCarrinho.length ? `${balcaoCarrinho.length} produto(s) na venda rápida` : 'Venda direta sem mesa';
+  document.getElementById('conta-total').textContent = 'R$ ' + fmt(totalBalcaoAtual);
+  document.getElementById('conta-body').innerHTML = `
+    <div class="quick-cart-list">
+      ${balcaoCarrinho.map(item => `
+        <div class="quick-cart-item">
+          <div>
+            <div>${escapeHtml(item.nome)}</div>
+            <div class="split-empty">R$ ${fmt(item.preco)} un.</div>
+          </div>
+          <strong>R$ ${fmt(Number(item.preco || 0) * Number(item.quantidade || 0))}</strong>
+          <div class="quick-cart-actions">
+            <button onclick="alterarQtdBalcao('${escapeAttr(item.produto_id)}', -1)">-</button>
+            <span>${escapeHtml(item.quantidade)}</span>
+            <button onclick="alterarQtdBalcao('${escapeAttr(item.produto_id)}', 1)">+</button>
+          </div>
+        </div>`).join('') || '<div class="conta-vazia"><span>Selecione produtos para vender no balcão.</span></div>'}
+    </div>`;
+  document.getElementById('conta-footer').style.display = 'block';
+  document.getElementById('split-forma').innerHTML = formasPagamentoOptions();
+  configurarEventosPagamento();
+  renderPagamentos();
+  document.getElementById('btn-fechar').textContent = '✓ Finalizar venda balcão';
+}
+
 async function carregarMesas() {
+  if (modoCaixa !== 'mesas') return;
   try {
     const { mesas } = await apiCall('GET', '/api/admin/tables');
     document.getElementById('mesas-grid').innerHTML = mesas.map(m => {
@@ -325,6 +441,19 @@ async function carregarMesas() {
   } catch(e) {
     document.getElementById('mesas-grid').innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">Erro ao carregar mesas.</div>';
   }
+}
+
+function resetContaMesa() {
+  mesaSelecionada = null;
+  sessaoSelecionada = null;
+  pgtoSelecionado = null;
+  pagamentos = [];
+  totalContaAtual = 0;
+  document.getElementById('conta-mesa-num').textContent = '—';
+  document.getElementById('conta-mesa-info').textContent = 'Selecione uma mesa';
+  document.getElementById('conta-total').textContent = 'R$ 0,00';
+  document.getElementById('conta-footer').style.display = 'none';
+  document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><div style="font-size:32px">🧾</div><span>Selecione uma mesa ocupada</span></div>';
 }
 
 function selecionarMesa(el, mesaId, sessaoId, numero, total, status) {
@@ -351,6 +480,7 @@ function selecionarMesa(el, mesaId, sessaoId, numero, total, status) {
 }
 
 async function carregarConta(numero, sessaoId) {
+  if (modoCaixa !== 'mesas') return;
   document.getElementById('conta-body').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
     const slug = getCurrentRestaurantSlug();
@@ -358,6 +488,7 @@ async function carregarConta(numero, sessaoId) {
     const pedidos = data.pedidos || [];
     const total   = pedidos.reduce((a, p) => a + Number(p.total || 0), 0);
     totalContaAtual = total;
+    if (modoCaixa !== 'mesas') return;
 
     document.getElementById('conta-total').textContent = 'R$ ' + fmt(total);
     document.getElementById('conta-mesa-info').textContent = `${pedidos.length} pedido(s) · R$ ${fmt(total)}`;
@@ -413,7 +544,12 @@ function labelPagamento(forma) {
 }
 
 function totalPagamentos() {
-  return pagamentos.reduce((a, p) => a + Number(p.valor || 0), 0);
+  const lista = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
+  return lista.reduce((a, p) => a + Number(p.valor || 0), 0);
+}
+
+function totalAtualOperacao() {
+  return modoCaixa === 'balcao' ? totalBalcaoAtual : totalContaAtual;
 }
 
 function valorPagamentoDigitado() {
@@ -422,7 +558,7 @@ function valorPagamentoDigitado() {
 }
 
 function restantePagamento() {
-  return Math.max(0, Number((totalContaAtual - totalPagamentos()).toFixed(2)));
+  return Math.max(0, Number((totalAtualOperacao() - totalPagamentos()).toFixed(2)));
 }
 
 function restanteComPagamentoDigitado() {
@@ -459,7 +595,8 @@ function adicionarPagamento() {
   const valor = valorPagamentoDigitado();
   if (!valor || valor <= 0) return showToast('Informe um valor válido', 'error');
   if (valor - restantePagamento() > 0.02) return showToast('Valor maior que o restante', 'error');
-  pagamentos.push({ forma_pagamento: forma, valor: Number(valor.toFixed(2)) });
+  const destino = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
+  destino.push({ forma_pagamento: forma, valor: Number(valor.toFixed(2)) });
   document.getElementById('split-valor').value = '';
   renderPagamentos();
 }
@@ -473,7 +610,8 @@ function preencherRestante() {
 }
 
 function removerPagamento(idx) {
-  pagamentos.splice(idx, 1);
+  if (modoCaixa === 'balcao') balcaoPagamentos.splice(idx, 1);
+  else pagamentos.splice(idx, 1);
   renderPagamentos();
 }
 
@@ -484,19 +622,22 @@ function renderPagamentos() {
   const restante = restantePagamento();
   const digitado = valorPagamentoDigitado();
   const restanteFinal = pagamentoDigitadoValido() ? restanteComPagamentoDigitado() : restante;
+  const listaPagamentos = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
   resumo.textContent = `Pago: R$ ${fmt(totalPagamentos())} · Digitado: R$ ${fmt(digitado)} · Restante: R$ ${fmt(restanteFinal)}`;
-  lista.innerHTML = pagamentos.length ? pagamentos.map((p, idx) => `
+  lista.innerHTML = listaPagamentos.length ? listaPagamentos.map((p, idx) => `
     <div class="split-pay-item">
       <span>${labelPagamento(p.forma_pagamento)}</span>
       <strong>R$ ${fmt(p.valor)}</strong>
       <button onclick="removerPagamento(${idx})">✕</button>
     </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
-  document.getElementById('btn-fechar').disabled = restanteFinal > 0.02 || (!pagamentos.length && !pagamentoDigitadoValido()) || !turnoAtivo;
+  const semItensBalcao = modoCaixa === 'balcao' && !balcaoCarrinho.length;
+  document.getElementById('btn-fechar').disabled = restanteFinal > 0.02 || (!listaPagamentos.length && !pagamentoDigitadoValido()) || !turnoAtivo || semItensBalcao;
 }
 
 function consolidarPagamentoDigitado() {
   if (!pagamentoDigitadoValido()) return;
-  pagamentos.push({
+  const destino = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
+  destino.push({
     forma_pagamento: document.getElementById('split-forma').value,
     valor: valorPagamentoDigitado(),
   });
@@ -505,6 +646,7 @@ function consolidarPagamentoDigitado() {
 }
 
 async function fecharConta() {
+  if (modoCaixa === 'balcao') return finalizarVendaBalcao();
   consolidarPagamentoDigitado();
   if (!mesaSelecionada || !pagamentos.length || restantePagamento() > 0.02) return;
   if (!turnoAtivo) {
@@ -519,17 +661,42 @@ async function fecharConta() {
       { pagamentos, cash_shift_id: turnoAtivo.id });
     showToast(`Mesa ${mesaSelecionada.numero} fechada!`, 'success');
     // Resetar
-    mesaSelecionada = null; sessaoSelecionada = null; pgtoSelecionado = null; pagamentos = []; totalContaAtual = 0;
-    document.getElementById('conta-mesa-num').textContent = '—';
-    document.getElementById('conta-mesa-info').textContent = 'Selecione uma mesa';
-    document.getElementById('conta-footer').style.display = 'none';
-    document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><div style="font-size:32px">🧾</div><span>Selecione uma mesa ocupada</span></div>';
+    resetContaMesa();
     carregarCaixas(false);
     carregarMesas();
   } catch(e) {
     showToast(e.message, 'error');
     btn.disabled = false;
     btn.textContent = '✓ Fechar conta';
+  }
+}
+
+async function finalizarVendaBalcao() {
+  consolidarPagamentoDigitado();
+  if (!balcaoCarrinho.length || !balcaoPagamentos.length || restantePagamento() > 0.02) return;
+  if (!turnoAtivo) {
+    showToast('Abra um turno de caixa antes de vender no balcão', 'error');
+    return;
+  }
+  const btn = document.getElementById('btn-fechar');
+  btn.disabled = true;
+  btn.textContent = 'Finalizando...';
+  try {
+    const resp = await apiCall('POST', '/api/admin/quick-sale', {
+      cash_shift_id: turnoAtivo.id,
+      items: balcaoCarrinho.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade })),
+      pagamentos: balcaoPagamentos,
+      observacao: 'Venda direta no caixa',
+    });
+    showToast(`Venda balcão #${resp.pedido?.numero || ''} finalizada`, 'success');
+    balcaoCarrinho = [];
+    balcaoPagamentos = [];
+    renderBalcaoConta();
+    carregarCaixas(false);
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '✓ Finalizar venda balcão';
   }
 }
 

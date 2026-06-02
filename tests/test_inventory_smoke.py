@@ -223,6 +223,57 @@ def test_inventory_smoke_sale_and_cancel_reversal(monkeypatch):
     assert fake.tables["inventory_items"][0]["current_quantity"] == 10
 
 
+def test_quick_sale_creates_paid_order_updates_shift_and_stock(monkeypatch):
+    fake = make_inventory_db()
+    fake.tables["produtos"][0]["disponivel"] = True
+    fake.tables["pedidos"] = []
+    fake.tables["pedido_itens"] = []
+    fake.tables["audit_log"] = []
+    monkeypatch.setattr(main, "sb", fake)
+    monkeypatch.setattr(main, "enforce_platform_control", lambda restaurant_id, area: None)
+    monkeypatch.setattr(main, "enforce_module_enabled", lambda restaurant_id, module, label=None: None)
+
+    shift_id = "shift-quick"
+    shifts = [{
+        "id": shift_id,
+        "status": "open",
+        "opened_by": "cashier-1",
+        "register_id": "register-1",
+        "register_name": "Caixa 1",
+        "sales_total": 0,
+        "transactions_count": 0,
+        "payments_by_method": {},
+    }]
+    monkeypatch.setattr(main, "listar_turnos_caixa", lambda restaurant_id: shifts)
+    monkeypatch.setattr(main, "salvar_turnos_caixa", lambda restaurant_id, turnos: shifts.__setitem__(slice(None), turnos))
+
+    user = {"sub": "cashier-1", "nome": "Caixa QA", "role": "cashier", "restaurant_id": "rest-a"}
+    main.registrar_inventory_movement("rest-a", {
+        "inventory_item_id": "00000000-0000-0000-0000-0000000000b1",
+        "movement_type": "entrada",
+        "quantity": 10,
+        "unit_cost": 4,
+        "reason": "Entrada para venda rápida",
+    }, user)
+
+    result = main.criar_venda_balcao_rapido(
+        main.BalcaoRapidoInput(
+            cash_shift_id=shift_id,
+            items=[main.BalcaoRapidoItemInput(produto_id="00000000-0000-0000-0000-0000000000c1", quantidade=2)],
+            pagamentos=[{"forma_pagamento": "dinheiro", "valor": 80}],
+        ),
+        None,
+        user,
+    )
+
+    assert result["pedido"]["status"] == "entregue"
+    assert result["pedido"]["status_pagamento"] == "aprovado"
+    assert result["cash_shift"]["sales_total"] == 80
+    assert result["cash_shift"]["transactions_count"] == 1
+    assert result["inventory"]["movements"][0]["movement_type"] == "venda"
+    assert fake.tables["inventory_items"][0]["current_quantity"] == 9
+
+
 def test_inventory_smoke_multi_tenant_isolation(monkeypatch):
     fake = make_inventory_db()
     monkeypatch.setattr(main, "sb", fake)

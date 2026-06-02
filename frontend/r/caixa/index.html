@@ -38,7 +38,13 @@
   <div class="caixa-grid">
     <!-- MESAS -->
     <div class="mesas-panel">
-      <div class="panel-title">Mesas</div>
+      <div class="panel-title-row">
+        <div class="panel-title">Operação</div>
+        <div class="cash-mode-tabs">
+          <button class="cash-mode-tab active" id="mode-mesas" onclick="setModoCaixa('mesas')">Mesas</button>
+          <button class="cash-mode-tab" id="mode-balcao" onclick="setModoCaixa('balcao')">Balcão rápido</button>
+        </div>
+      </div>
       <div class="cash-shift-panel" id="cash-shift-panel">
         <div class="loading"><div class="spinner"></div></div>
       </div>

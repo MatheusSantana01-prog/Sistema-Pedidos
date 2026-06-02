@@ -1132,6 +1132,11 @@ def enforce_platform_control(restaurant_id: str, area: str):
     if area in modules and modules.get(area) is False:
         raise HTTPException(403, f"Módulo {area} não está liberado no plano")
 
+def enforce_module_enabled(restaurant_id: str, module: str, label: str | None = None):
+    modules = get_platform_control(restaurant_id).get("modules") or {}
+    if modules.get(module) is not True:
+        raise HTTPException(403, f"Módulo {label or module} não está ativo neste restaurante")
+
 def table_access_area_for_role(role: str | None) -> str:
     if role == "waiter":
         return "garcom"
@@ -1889,6 +1894,34 @@ class FecharTurnoCaixaInput(BaseModel):
     closing_amount: Optional[float] = None
     left_for_next_shift: float = 0
     notes: Optional[str] = None
+
+
+class BalcaoRapidoItemInput(BaseModel):
+    produto_id: str
+    quantidade: int = 1
+
+    @field_validator("quantidade")
+    @classmethod
+    def val_quantidade(cls, v):
+        if v < 1 or v > 100:
+            raise ValueError("Quantidade precisa ficar entre 1 e 100")
+        return v
+
+
+class BalcaoRapidoInput(BaseModel):
+    items: list[BalcaoRapidoItemInput]
+    pagamentos: list[dict]
+    cash_shift_id: str
+    observacao: Optional[str] = None
+
+    @field_validator("items")
+    @classmethod
+    def val_items(cls, v):
+        if not v:
+            raise ValueError("Venda precisa ter ao menos um produto")
+        if len(v) > 80:
+            raise ValueError("Venda rápida com itens demais")
+        return v
 
 
 class InventoryItemInput(BaseModel):
@@ -3692,6 +3725,121 @@ def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Requ
     salvar_turnos_caixa(rid, turnos)
     log_acao(u, "fechar_turno_caixa", "configuracoes", turno_id, None, turno, request)
     return {"shift": turno}
+
+
+@app.get("/api/admin/quick-sale/products", tags=["caixa"])
+def listar_produtos_balcao_rapido(u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    enforce_module_enabled(rid, "balcao_rapido", "balcão rápido")
+    rows = _rows(
+        sb.table("produtos")
+        .select("id,nome,preco,disponivel,categorias(nome,icone)")
+        .eq("restaurant_id", rid)
+        .eq("disponivel", True)
+        .order("nome")
+        .execute()
+    )
+    return {"produtos": rows}
+
+
+@app.post("/api/admin/quick-sale", tags=["caixa"])
+def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
+                              u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_platform_control(rid, "financeiro")
+    enforce_module_enabled(rid, "balcao_rapido", "balcão rápido")
+
+    turno = turno_aberto_por_id(rid, body.cash_shift_id)
+    if not turno:
+        raise HTTPException(409, "Abra um turno de caixa antes de vender no balcão")
+    if u.get("role") == "cashier" and turno.get("opened_by") != u["sub"]:
+        raise HTTPException(403, "Este turno pertence a outro caixa")
+
+    produto_ids = [str(item.produto_id) for item in body.items]
+    produtos_resp = sb.table("produtos").select("id,nome,preco").eq("restaurant_id", rid).eq("disponivel", True).in_("id", produto_ids).execute()
+    produtos = {str(p["id"]): p for p in _rows(produtos_resp)}
+    if set(produto_ids) - set(produtos.keys()):
+        raise HTTPException(400, "Venda contém produto indisponível ou inexistente")
+
+    itens = []
+    subtotal = 0.0
+    for item in body.items:
+        produto = produtos[str(item.produto_id)]
+        preco = _money(produto.get("preco"))
+        item_subtotal = _money(preco * item.quantidade)
+        subtotal = _money(subtotal + item_subtotal)
+        itens.append({
+            "id": str(uuid4()),
+            "produto_id": str(item.produto_id),
+            "nome_produto": produto.get("nome") or "Produto",
+            "preco_unitario": preco,
+            "quantidade": item.quantidade,
+            "subtotal": item_subtotal,
+        })
+
+    _, resumo_pagamento = _normalizar_pagamentos(
+        FecharContaInput(pagamentos=body.pagamentos),
+        subtotal,
+    )
+    ultimo = _first(_rows(
+        sb.table("pedidos")
+        .select("numero")
+        .eq("restaurant_id", rid)
+        .order("numero", desc=True)
+        .limit(1)
+        .execute()
+    )) or {}
+    try:
+        numero = int(ultimo.get("numero") or 0) + 1
+    except (TypeError, ValueError):
+        numero = 1
+
+    pedido_id = str(uuid4())
+    now = utcnow()
+    pedido_payload = {
+        "id": pedido_id,
+        "restaurant_id": rid,
+        "numero": numero,
+        "status": "entregue",
+        "subtotal": subtotal,
+        "total": resumo_pagamento["total"],
+        "desconto": 0,
+        "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, resumo_pagamento["total"]),
+        "status_pagamento": "aprovado",
+        "observacao_geral": f"Venda balcão rápido{': ' + body.observacao.strip()[:180] if body.observacao else ''}",
+        "created_at": now,
+        "updated_at": now,
+        "tempo_entrega": now,
+    }
+    pedido = _first(_rows(sb.table("pedidos").insert(pedido_payload).select("*").execute()))
+    for item in itens:
+        item["pedido_id"] = pedido_id
+    if itens:
+        sb.table("pedido_itens").insert(itens).execute()
+
+    inventory_result = baixar_estoque_pedido_entregue(rid, pedido_id, u)
+    turno_atualizado = atualizar_turno_com_fechamento(rid, body.cash_shift_id, {
+        "id": str(uuid4()),
+        "origem": "balcao_rapido",
+        "pedido_id": pedido_id,
+        "pedido_numero": numero,
+        "total": resumo_pagamento["total"],
+        "pagamentos": resumo_pagamento["pagamentos"],
+        "payments_by_method": resumo_pagamento["por_forma"],
+        "closed_by": u["sub"],
+        "closed_by_name": u.get("nome") or "",
+        "closed_at": now,
+    })
+    log_acao(u, "venda_balcao_rapido", "pedidos", pedido_id, None,
+             {"total": resumo_pagamento["total"], "itens": len(itens), "inventory": inventory_result}, request)
+    return {
+        "pedido": pedido or pedido_payload,
+        "itens": itens,
+        "pagamentos": resumo_pagamento["pagamentos"],
+        "cash_shift": turno_atualizado,
+        "inventory": inventory_result,
+    }
 
 
 @app.get("/api/admin/dashboard", tags=["financeiro"])

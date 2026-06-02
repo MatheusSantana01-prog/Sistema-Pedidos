@@ -23,7 +23,12 @@ body{background:var(--color-bg);color:var(--text);font-family:var(--sans);min-he
 .caixa-grid{display:grid;grid-template-columns:1fr 340px;gap:0;flex:1;overflow:hidden;}
 /* MESAS */
 .mesas-panel{padding:20px;overflow-y:auto;border-right:1px solid var(--border);}
-.panel-title{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;}
+.panel-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.panel-title{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.cash-mode-tabs{display:flex;gap:6px;flex-wrap:wrap;}
+.cash-mode-tab{border:1px solid var(--border2);background:rgba(255,255,255,.025);color:var(--muted);border-radius:6px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;}
+.cash-mode-tab.active{border-color:var(--color-primary);color:var(--color-primary);background:rgba(255,77,28,.08);}
+.cash-mode-tab[hidden]{display:none;}
 .cash-shift-panel{border:1px solid var(--border);border-radius:8px;background:var(--panel);padding:14px;margin-bottom:14px;}
 .cash-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px;}
 .cash-title{font-size:14px;font-weight:700;}
@@ -60,6 +65,13 @@ body{background:var(--color-bg);color:var(--text);font-family:var(--sans);min-he
 .mesa-status.ocupada{color:var(--color-primary);}
 .mesa-status.livre{color:var(--green);}
 .mesa-total{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:6px;color:var(--amber);}
+.quick-sale-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
+.quick-sale-toolbar .form-input{margin-bottom:0;max-width:360px;}
+.quick-product-btn{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:all .15s;text-align:left;min-height:92px;}
+.quick-product-btn:hover{border-color:var(--color-primary);background:rgba(255,77,28,.05);}
+.quick-product-name{font-size:14px;font-weight:700;margin-bottom:8px;}
+.quick-product-meta{font-size:11px;color:var(--muted);margin-bottom:8px;}
+.quick-product-price{font-family:var(--mono);font-size:16px;color:var(--green);font-weight:700;}
 /* CONTA PANEL */
 .conta-panel{display:flex;flex-direction:column;background:var(--panel);}
 .conta-header{padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -92,6 +104,11 @@ body{background:var(--color-bg);color:var(--text);font-family:var(--sans);min-he
 .split-pay-item strong{font-family:var(--mono);color:var(--green);}
 .split-pay-item button{border:0;background:transparent;color:var(--muted);font-size:16px;cursor:pointer;}
 .split-empty{color:var(--muted);font-size:12px;padding:6px 0;}
+.quick-cart-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px;}
+.quick-cart-item{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;border:1px solid var(--border2);border-radius:7px;background:rgba(0,0,0,.14);padding:9px;}
+.quick-cart-item strong{font-family:var(--mono);color:var(--green);}
+.quick-cart-actions{display:flex;gap:4px;align-items:center;}
+.quick-cart-actions button{width:26px;height:26px;border:1px solid var(--border2);border-radius:5px;background:transparent;color:var(--text);cursor:pointer;}
 .btn-fechar{width:100%;padding:13px;background:var(--green);border:none;border-radius:8px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;}
 .btn-fechar:disabled{opacity:.4;cursor:not-allowed;}
 /* TOAST */
@@ -106,6 +123,7 @@ body{background:var(--color-bg);color:var(--text);font-family:var(--sans);min-he
 @media (max-width:900px){
   .caixa-grid{grid-template-columns:1fr;}
   .conta-panel{min-height:60vh;}
+  .panel-title-row{align-items:flex-start;flex-direction:column;}
   .cash-summary{grid-template-columns:repeat(2,1fr);}
   .denom-grid{grid-template-columns:repeat(3,1fr);}
   .cash-history-table{min-width:760px;}
