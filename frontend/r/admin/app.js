@@ -1357,6 +1357,7 @@ async function carregarConfiguracoes() {
           <label class="toggle-row"><input type="checkbox" id="cfg-pix" ${s.accept_pix!==false?'checked':''}> Aceitar Pix</label>
           <label class="toggle-row"><input type="checkbox" id="cfg-card" ${s.accept_card!==false?'checked':''}> Aceitar cartão</label>
           <label class="toggle-row"><input type="checkbox" id="cfg-cash" ${s.accept_cash!==false?'checked':''}> Aceitar dinheiro</label>
+          <label class="toggle-row"><input type="checkbox" id="cfg-balcao-rapido" ${ACTIVE_MODULES.balcao_rapido===true?'checked':''}> Ativar venda rápida de balcão no caixa</label>
           <div class="form-row"><label class="form-label">Chave Pix</label>
             <input class="form-input" id="cfg-pix-key" value="${escapeAttr(s.pix_key||'')}" placeholder="CPF, CNPJ, e-mail ou chave aleatória">
           </div>
@@ -1446,7 +1447,7 @@ async function salvarConfiguracoes() {
 
 async function salvarSettings() {
   try {
-    await apiCall('PUT', '/api/admin/restaurant/settings', {
+    const resp = await apiCall('PUT', '/api/admin/restaurant/settings', {
       service_fee_enabled: document.getElementById('cfg-taxa').checked,
       service_fee_percent: Number(document.getElementById('cfg-taxa-percent').value || 0),
       allow_customer_notes: document.getElementById('cfg-notes').checked,
@@ -1457,12 +1458,17 @@ async function salvarSettings() {
       accept_pix:          document.getElementById('cfg-pix').checked,
       accept_card:         document.getElementById('cfg-card').checked,
       accept_cash:         document.getElementById('cfg-cash').checked,
+      balcao_rapido:       document.getElementById('cfg-balcao-rapido').checked,
       pix_key:             document.getElementById('cfg-pix-key').value || null,
       whatsapp:            document.getElementById('cfg-whatsapp').value || null,
       address:             document.getElementById('cfg-address').value || null,
       opening_time:        document.getElementById('cfg-open').value || null,
       closing_time:        document.getElementById('cfg-close').value || null,
     });
+    if (resp.modules) {
+      ACTIVE_MODULES = resp.modules;
+      RESTAURANT.modules = resp.modules;
+    }
     showToast('Configurações salvas', 'success');
   } catch (e) { showToast(e.message, 'error'); }
 }

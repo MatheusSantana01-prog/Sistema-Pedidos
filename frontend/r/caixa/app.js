@@ -557,17 +557,50 @@ function valorPagamentoDigitado() {
   return Number.isFinite(valor) ? Number(valor.toFixed(2)) : 0;
 }
 
+function formaPagamentoDigitada() {
+  return document.getElementById('split-forma')?.value || 'dinheiro';
+}
+
 function restantePagamento() {
   return Math.max(0, Number((totalAtualOperacao() - totalPagamentos()).toFixed(2)));
 }
 
 function restanteComPagamentoDigitado() {
-  return Math.max(0, Number((restantePagamento() - valorPagamentoDigitado()).toFixed(2)));
+  const restante = restantePagamento();
+  const valor = valorPagamentoDigitado();
+  if (formaPagamentoDigitada() === 'dinheiro' && valor >= restante) return 0;
+  return Math.max(0, Number((restante - valor).toFixed(2)));
 }
 
 function pagamentoDigitadoValido() {
   const valor = valorPagamentoDigitado();
-  return valor > 0 && valor - restantePagamento() <= 0.02;
+  const restante = restantePagamento();
+  if (formaPagamentoDigitada() === 'dinheiro') return valor > 0;
+  return valor > 0 && valor - restante <= 0.02;
+}
+
+function trocoPagamentoDigitado() {
+  if (formaPagamentoDigitada() !== 'dinheiro') return 0;
+  return Math.max(0, Number((valorPagamentoDigitado() - restantePagamento()).toFixed(2)));
+}
+
+function criarPagamentoDigitado() {
+  const forma = formaPagamentoDigitada();
+  const valorDigitado = valorPagamentoDigitado();
+  const restante = restantePagamento();
+  if (!valorDigitado || valorDigitado <= 0) return null;
+  if (restante <= 0.02) return null;
+  if (forma !== 'dinheiro' && valorDigitado - restante > 0.02) {
+    showToast('Valor maior que o restante', 'error');
+    return null;
+  }
+  const valorAplicado = forma === 'dinheiro' ? Math.min(valorDigitado, restante) : valorDigitado;
+  const pagamento = { forma_pagamento: forma, valor: Number(valorAplicado.toFixed(2)) };
+  if (forma === 'dinheiro' && valorDigitado > valorAplicado) {
+    pagamento.valor_recebido = Number(valorDigitado.toFixed(2));
+    pagamento.troco = Number((valorDigitado - valorAplicado).toFixed(2));
+  }
+  return pagamento;
 }
 
 function configurarEventosPagamento() {
@@ -591,12 +624,10 @@ function configurarEventosPagamento() {
 }
 
 function adicionarPagamento() {
-  const forma = document.getElementById('split-forma').value;
-  const valor = valorPagamentoDigitado();
-  if (!valor || valor <= 0) return showToast('Informe um valor válido', 'error');
-  if (valor - restantePagamento() > 0.02) return showToast('Valor maior que o restante', 'error');
+  const pagamento = criarPagamentoDigitado();
+  if (!pagamento) return;
   const destino = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
-  destino.push({ forma_pagamento: forma, valor: Number(valor.toFixed(2)) });
+  destino.push(pagamento);
   document.getElementById('split-valor').value = '';
   renderPagamentos();
 }
@@ -623,11 +654,12 @@ function renderPagamentos() {
   const digitado = valorPagamentoDigitado();
   const restanteFinal = pagamentoDigitadoValido() ? restanteComPagamentoDigitado() : restante;
   const listaPagamentos = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
-  resumo.textContent = `Pago: R$ ${fmt(totalPagamentos())} · Digitado: R$ ${fmt(digitado)} · Restante: R$ ${fmt(restanteFinal)}`;
+  const trocoDigitado = trocoPagamentoDigitado();
+  resumo.textContent = `Pago: R$ ${fmt(totalPagamentos())} · Digitado: R$ ${fmt(digitado)} · Restante: R$ ${fmt(restanteFinal)}${trocoDigitado > 0 ? ` · Troco: R$ ${fmt(trocoDigitado)}` : ''}`;
   lista.innerHTML = listaPagamentos.length ? listaPagamentos.map((p, idx) => `
     <div class="split-pay-item">
       <span>${labelPagamento(p.forma_pagamento)}</span>
-      <strong>R$ ${fmt(p.valor)}</strong>
+      <strong>R$ ${fmt(p.valor)}${p.troco ? ` · Troco R$ ${fmt(p.troco)}` : ''}</strong>
       <button onclick="removerPagamento(${idx})">✕</button>
     </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
   const semItensBalcao = modoCaixa === 'balcao' && !balcaoCarrinho.length;
@@ -636,11 +668,10 @@ function renderPagamentos() {
 
 function consolidarPagamentoDigitado() {
   if (!pagamentoDigitadoValido()) return;
+  const pagamento = criarPagamentoDigitado();
+  if (!pagamento) return;
   const destino = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
-  destino.push({
-    forma_pagamento: document.getElementById('split-forma').value,
-    valor: valorPagamentoDigitado(),
-  });
+  destino.push(pagamento);
   document.getElementById('split-valor').value = '';
   renderPagamentos();
 }

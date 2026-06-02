@@ -130,6 +130,22 @@ def test_payment_normalization_accepts_required_cashier_methods(forma):
     assert resumo["por_forma"] == {forma: 123.45}
 
 
+def test_cash_payment_keeps_sale_value_and_registers_change():
+    body = main.FecharContaInput(pagamentos=[{"forma_pagamento": "dinheiro", "valor": 7.90, "valor_recebido": 200}])
+
+    forma_db, resumo = main._normalizar_pagamentos(body, 7.90)
+
+    assert forma_db == "dinheiro"
+    assert resumo["por_forma"] == {"dinheiro": 7.90}
+    assert resumo["pagamentos"][0]["valor"] == 7.90
+    assert resumo["pagamentos"][0]["valor_recebido"] == 200
+    assert resumo["pagamentos"][0]["troco"] == 192.10
+
+
+def test_restaurant_business_type_allows_quick_counter_sale():
+    assert main.business_type_modules("restaurante")["balcao_rapido"] is True
+
+
 def test_cash_shift_updates_when_account_is_closed(monkeypatch):
     saved = {}
     shift_id = "shift-1"

@@ -201,7 +201,7 @@ BUSINESS_TYPE_PROFILES = {
             "pizza_tamanhos": False,
             "producao_padaria": False,
             "lotes_validade": False,
-            "balcao_rapido": False,
+            "balcao_rapido": True,
             "fiscal": True,
             "relatorios_avancados": True,
         },
@@ -228,7 +228,7 @@ BUSINESS_TYPE_PROFILES = {
             "pizza_tamanhos": True,
             "producao_padaria": False,
             "lotes_validade": False,
-            "balcao_rapido": False,
+            "balcao_rapido": True,
             "fiscal": True,
             "relatorios_avancados": True,
         },
@@ -309,7 +309,7 @@ BUSINESS_TYPE_PROFILES = {
             "pizza_tamanhos": False,
             "producao_padaria": False,
             "lotes_validade": False,
-            "balcao_rapido": False,
+            "balcao_rapido": True,
             "fiscal": True,
             "relatorios_avancados": True,
         },
@@ -336,7 +336,7 @@ BUSINESS_TYPE_PROFILES = {
             "pizza_tamanhos": False,
             "producao_padaria": False,
             "lotes_validade": False,
-            "balcao_rapido": False,
+            "balcao_rapido": True,
             "fiscal": True,
             "relatorios_avancados": True,
         },
@@ -1277,7 +1277,14 @@ def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, d
                 raise HTTPException(400, f"Forma de pagamento inválida: {forma}")
             if valor <= 0:
                 raise HTTPException(400, "Valor de pagamento precisa ser maior que zero")
-            pagamentos.append({"forma_pagamento": forma, "valor": valor})
+            pagamento = {"forma_pagamento": forma, "valor": valor}
+            if forma == "dinheiro" and item.get("valor_recebido") is not None:
+                recebido = _money(item.get("valor_recebido"))
+                if recebido + 0.02 < valor:
+                    raise HTTPException(400, "Valor recebido em dinheiro menor que o valor pago")
+                pagamento["valor_recebido"] = recebido
+                pagamento["troco"] = _money(max(0, recebido - valor))
+            pagamentos.append(pagamento)
     elif body.forma_pagamento:
         if body.forma_pagamento not in FORMAS_PAGAMENTO:
             raise HTTPException(400, "Forma de pagamento inválida")
@@ -1706,6 +1713,7 @@ class AtualizarSettingsInput(BaseModel):
     accept_pix: Optional[bool] = None
     accept_card: Optional[bool] = None
     accept_cash: Optional[bool] = None
+    balcao_rapido: Optional[bool] = None
     pix_key: Optional[str] = None
     whatsapp: Optional[str] = None
     address: Optional[str] = None
@@ -3450,9 +3458,15 @@ def atualizar_settings(body: AtualizarSettingsInput, request: Request,
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
     control = get_platform_control(rid)
     flags_payload = {}
+    modules_payload = {}
     for flag_key in ("allow_waiter_payment", "allow_waiter_delivery"):
         if flag_key in payload:
             flags_payload[flag_key] = bool(payload.pop(flag_key))
+    if "balcao_rapido" in payload:
+        requested_balcao = bool(payload.pop("balcao_rapido"))
+        if requested_balcao and not business_type_modules(control.get("business_type")).get("balcao_rapido"):
+            raise HTTPException(403, "Balcão rápido não está disponível para este tipo de negócio")
+        modules_payload["balcao_rapido"] = requested_balcao
     garcom_flags = flags_payload.get("allow_waiter_payment") is True or flags_payload.get("allow_waiter_delivery") is True
     if (payload.get("allow_waiter_call") is True or payload.get("allow_table_close_request") is True or garcom_flags) and (control.get("modules") or {}).get("garcom") is False:
         raise HTTPException(403, "Recursos de garçom estão disponíveis no plano Pro ou Premium")
@@ -3463,11 +3477,16 @@ def atualizar_settings(body: AtualizarSettingsInput, request: Request,
         flags = get_restaurant_feature_flags(rid)
         flags.update(flags_payload)
         save_restaurant_feature_flags(rid, flags)
+    if modules_payload:
+        modules = control.setdefault("modules", {})
+        modules.update(modules_payload)
+        control["modules"] = combine_plan_and_business_modules(control.get("plan"), control.get("business_type"), modules)
+        save_platform_control(rid, control)
     resp = sb.table("restaurant_settings").select("*").eq("restaurant_id", rid).execute()
     settings = _row(resp) or {}
     settings.update(get_restaurant_feature_flags(rid))
-    log_acao(u, "atualizar_settings", "restaurant_settings", rid, None, {**payload, **flags_payload}, request)
-    return {"settings": settings}
+    log_acao(u, "atualizar_settings", "restaurant_settings", rid, None, {**payload, **flags_payload, **modules_payload}, request)
+    return {"settings": settings, "modules": control.get("modules") or {}}
 
 
 @app.post("/api/admin/support-request", tags=["restaurante"])
