@@ -398,6 +398,16 @@ FUTURE_MODULES = {
 
 ROLE_MODULE_REQUIREMENTS = {
     "waiter": "garcom",
+    "kitchen": "cozinha",
+    "tv": "cozinha",
+    "cashier": "caixa",
+}
+
+MODULE_AREA_ALIASES = {
+    "financeiro": ("financeiro", "caixa"),
+    "caixa": ("caixa", "financeiro"),
+    "relatorios": ("relatorios", "relatorios_avancados", "advanced_reports"),
+    "relatorios_avancados": ("relatorios_avancados", "advanced_reports", "relatorios"),
 }
 
 TEMPLATE_CATEGORIES = {
@@ -704,6 +714,12 @@ def calcular_status_financeiro(control: dict) -> dict:
 
 def get_platform_control(restaurant_id: str) -> dict:
     data = _platform_control_defaults()
+    try:
+        rest = _first(_rows(sb.table("restaurants").select("plan").eq("id", restaurant_id).limit(1).execute()))
+        if rest and rest.get("plan"):
+            data["plan"] = normalize_plan(rest.get("plan"))
+    except Exception:
+        pass
     row = _first(sb.table("configuracoes").select("valor").eq("restaurant_id", restaurant_id).eq("chave", "platform_control").execute().data)
     saved = row.get("valor") if row else None
     if isinstance(saved, str):
@@ -719,6 +735,8 @@ def get_platform_control(restaurant_id: str) -> dict:
         data["plan_marketing"].update(saved.get("plan_marketing") or {})
     data["business_type"] = normalize_business_type(data.get("business_type") or data.get("segment"))
     data["segment"] = data["business_type"]
+    data["plan"] = normalize_plan(data.get("plan"))
+    data["modules"] = combine_plan_and_business_modules(data["plan"], data["business_type"], data.get("modules"))
     data["modules_config"] = business_type_modules(data["business_type"])
     data["visible_tabs"] = business_type_visible_tabs(data["business_type"])
     return calcular_status_financeiro(data)
@@ -743,8 +761,10 @@ def next_customer_code() -> str:
 
 def save_platform_control(restaurant_id: str, control: dict):
     control = dict(control or {})
+    control["plan"] = normalize_plan(control.get("plan"))
     control["business_type"] = normalize_business_type(control.get("business_type") or control.get("segment"))
     control["segment"] = control["business_type"]
+    control["modules"] = combine_plan_and_business_modules(control["plan"], control["business_type"], control.get("modules"))
     control["modules_config"] = business_type_modules(control["business_type"])
     control["visible_tabs"] = business_type_visible_tabs(control["business_type"])
     if not isinstance(control.get("modules"), dict):
@@ -1082,6 +1102,7 @@ def aplicar_limites_plano(control: dict, plan: str, force: bool = False) -> dict
     limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"]).copy()
     business_type = normalize_business_type(control.get("business_type") or control.get("segment"))
     modules = combine_plan_and_business_modules(plan, business_type, None if force else control.get("modules"))
+    control["plan"] = plan
     control["business_type"] = business_type
     control["segment"] = business_type
     control["limits"] = limits if force else {**limits, **(control.get("limits") or {})}
@@ -1130,8 +1151,13 @@ def enforce_platform_control(restaurant_id: str, area: str):
 
 def enforce_module_enabled(restaurant_id: str, module: str, label: str | None = None):
     modules = get_platform_control(restaurant_id).get("modules") or {}
-    if modules.get(module) is not True:
+    aliases = MODULE_AREA_ALIASES.get(module, (module,))
+    if not any(modules.get(alias) is True for alias in aliases):
         raise HTTPException(403, f"Módulo {label or module} não está ativo neste restaurante")
+
+def enforce_modules_enabled(restaurant_id: str, modules: list[str] | tuple[str, ...], label: str | None = None):
+    for module in modules:
+        enforce_module_enabled(restaurant_id, module, label or module)
 
 def table_access_area_for_role(role: str | None) -> str:
     if role == "waiter":
@@ -2165,6 +2191,7 @@ def get_menu_public(slug: str):
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     rid = rest.data["id"]
+    enforce_module_enabled(rid, "qr_code", "QR Code")
 
     cardapio = sb.rpc("get_cardapio", {"p_restaurant_id": rid}).execute()
     return {"cardapio": cardapio.data or []}
@@ -2177,6 +2204,7 @@ def get_table_public(slug: str, table_token: str):
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     rid = rest.data["id"]
+    enforce_modules_enabled(rid, ("mesas", "qr_code"), "mesas/QR Code")
 
     mesa = sb.rpc("get_mesa_by_token", {"p_token": table_token, "p_restaurant_id": rid}).execute()
     mesa_data = _first(mesa.data)
@@ -2191,6 +2219,7 @@ def criar_chamado_mesa(slug: str, table_token: str, body: ChamadoMesaInput, requ
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     rid = rest.data["id"]
+    enforce_modules_enabled(rid, ("mesas", "qr_code"), "mesas/QR Code")
 
     mesa = sb.table("mesas").select("id,numero").eq("qr_code_token", table_token).eq("restaurant_id", rid).eq("ativa", True).single().execute()
     if not mesa.data:
@@ -2233,6 +2262,7 @@ def criar_sessao_public(slug: str, table_token: str):
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     rid = rest.data["id"]
+    enforce_modules_enabled(rid, ("mesas", "qr_code"), "mesas/QR Code")
 
     mesa = sb.table("mesas").select("id").eq("qr_code_token", table_token).eq("restaurant_id", rid).eq("ativa", True).single().execute()
     if not mesa.data:
@@ -2255,6 +2285,7 @@ def registrar_feedback(slug: str, table_token: str, body: FeedbackMesaInput, req
     if not rest.data:
         raise HTTPException(404, "Restaurante não encontrado")
     rid = rest.data["id"]
+    enforce_modules_enabled(rid, ("mesas", "qr_code"), "mesas/QR Code")
     mesa = sb.table("mesas").select("id,numero").eq("qr_code_token", table_token).eq("restaurant_id", rid).eq("ativa", True).single().execute()
     if not mesa.data:
         raise HTTPException(404, "Mesa não encontrada")
@@ -2278,6 +2309,7 @@ def criar_pedido_public(slug: str, body: dict):
         raise HTTPException(404, "Restaurante não encontrado")
     rid = rest.data["id"]
     enforce_platform_control(rid, "orders")
+    enforce_modules_enabled(rid, ("mesas", "qr_code"), "mesas/QR Code")
 
     mesa_id = body.get("mesa_id")
     sessao_id = body.get("sessao_mesa_id")
@@ -2544,12 +2576,14 @@ def switch_restaurant(body: dict, u: dict = Depends(verificar_token)):
 @app.get("/api/kitchen/queue", tags=["cozinha"])
 def fila_cozinha(limite: int = 80, u: dict = Depends(authorize(["kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "cozinha", "cozinha")
     return {"pedidos": carregar_pedidos_fila_cozinha(rid, limite)}
 
 
 @app.get("/api/kitchen/history", tags=["cozinha"])
 def historico_cozinha(limite: int = 50, u: dict = Depends(authorize(["kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "cozinha", "cozinha")
     resp = sb.table("pedidos").select(
         "id,numero,status,total,created_at,updated_at,tempo_pronto,tempo_entrega,observacao_geral,mesa_id,"
         "mesas(numero),pedido_itens(nome_produto,quantidade,observacao)"
@@ -2562,6 +2596,7 @@ def historico_cozinha(limite: int = 50, u: dict = Depends(authorize(["kitchen", 
 @app.get("/api/tv/queue", tags=["tv"])
 def fila_tv(limite: int = 50, u: dict = Depends(authorize(["tv", "kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "cozinha", "cozinha")
     if u.get("role") == "tv":
         enforce_platform_control(rid, "tv")
 
@@ -2587,6 +2622,7 @@ def fila_tv(limite: int = 50, u: dict = Depends(authorize(["tv", "kitchen", "man
 def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
                    request: Request, u: dict = Depends(authorize(["waiter", "kitchen", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "cozinha", "cozinha")
     if u.get("role") == "waiter":
         enforce_platform_control(rid, "garcom")
 
@@ -2632,6 +2668,7 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
 @app.get("/api/admin/tables", tags=["admin"])
 def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "mesas", "mesas")
     enforce_platform_control(rid, table_access_area_for_role(u.get("role")))
     resp = sb.table("mesas").select(
         "id,numero,status,capacidade,qr_code_token,"
@@ -2668,6 +2705,7 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
 @app.post("/api/admin/tables", tags=["admin"])
 def criar_mesa(body: CriarMesaInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "mesas", "mesas")
     enforce_platform_control(rid, "admin")
     enforce_plan_limit(rid, "tables", active_tables_count(rid))
     token = secrets.token_urlsafe(24)
@@ -2685,6 +2723,7 @@ def criar_mesa(body: CriarMesaInput, request: Request, u: dict = Depends(authori
 def atualizar_mesa(mesa_id: str, body: AtualizarMesaInput, request: Request,
                    u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "mesas", "mesas")
     enforce_platform_control(rid, "admin")
     # Validar pertencimento
     check = sb.table("mesas").select("id").eq("id", mesa_id).eq("restaurant_id", rid).execute()
@@ -2702,6 +2741,7 @@ def atualizar_mesa(mesa_id: str, body: AtualizarMesaInput, request: Request,
 def ocupar_mesa(mesa_id: str, body: OcuparMesaInput, request: Request,
                 u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "mesas", "mesas")
     if u.get("role") == "waiter":
         enforce_platform_control(rid, "garcom")
     mesa = sb.table("mesas").select("id,numero,status").eq("id", mesa_id).eq("restaurant_id", rid).eq("ativa", True).single().execute()
@@ -2742,6 +2782,7 @@ def ocupar_mesa(mesa_id: str, body: OcuparMesaInput, request: Request,
 def liberar_mesa_sem_consumo(mesa_id: str, body: LiberarMesaInput, request: Request,
                              u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "mesas", "mesas")
     if u.get("role") == "waiter":
         enforce_platform_control(rid, "garcom")
     mesa = sb.table("mesas").select("id,numero").eq("id", mesa_id).eq("restaurant_id", rid).eq("ativa", True).single().execute()
@@ -2784,6 +2825,7 @@ def liberar_mesa_sem_consumo(mesa_id: str, body: LiberarMesaInput, request: Requ
 def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
                       u: dict = Depends(authorize(["waiter", "cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_modules_enabled(rid, ("mesas", "caixa"), "mesas/caixa")
     if u.get("role") == "waiter":
         enforce_platform_control(rid, "garcom")
         if not get_restaurant_feature_flags(rid).get("allow_waiter_payment"):
@@ -2862,6 +2904,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
 def listar_pedidos(status_filtro: Optional[str] = None, limite: int = 50,
                    u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "cozinha", "pedidos/cozinha")
     q = sb.table("pedidos").select(
         "id,numero,status,total,subtotal,desconto,created_at,updated_at,tempo_entrega,forma_pagamento,status_pagamento,"
         "mesas(numero),pedido_itens(nome_produto,quantidade,subtotal)"
@@ -2874,6 +2917,7 @@ def listar_pedidos(status_filtro: Optional[str] = None, limite: int = 50,
 @app.get("/api/admin/service-requests", tags=["atendimento"])
 def listar_chamados(limite: int = 50, u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "garcom", "garçom")
     rows = _rows(
         sb.table("audit_log")
         .select("id,acao,valor_novo,created_at")
@@ -2902,6 +2946,7 @@ def listar_chamados(limite: int = 50, u: dict = Depends(authorize(["waiter", "ma
 def atualizar_chamado(chamado_id: str, body: dict, request: Request,
                       u: dict = Depends(authorize(["waiter", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "garcom", "garçom")
     status_chamado = body.get("status", "atendido")
     if status_chamado not in {"aberto", "atendido"}:
         raise HTTPException(400, "Status inválido")
@@ -3059,6 +3104,7 @@ def atualizar_produto(produto_id: str, body: dict, request: Request,
 @app.get("/api/admin/inventory/items", tags=["estoque"])
 def listar_inventory_items(status: Optional[str] = None, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     q = sb.table("inventory_items").select("*,suppliers(name)").eq("restaurant_id", rid).order("name")
     if status == "active":
@@ -3075,6 +3121,7 @@ def listar_inventory_items(status: Optional[str] = None, u: dict = Depends(autho
 def criar_inventory_item(body: InventoryItemInput, request: Request,
                          u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     payload = body.model_dump()
     payload["restaurant_id"] = rid
@@ -3100,6 +3147,7 @@ def criar_inventory_item(body: InventoryItemInput, request: Request,
 def atualizar_inventory_item(item_id: str, body: dict, request: Request,
                              u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     ant = buscar_inventory_item(rid, item_id, "*")
     allowed = {"name", "unit", "minimum_quantity", "unit_cost", "supplier_id", "expiration_date", "category", "notes"}
@@ -3122,6 +3170,7 @@ def atualizar_inventory_item(item_id: str, body: dict, request: Request,
 def desativar_inventory_item(item_id: str, request: Request,
                              u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     ant = buscar_inventory_item(rid, item_id, "*")
     resp = sb.table("inventory_items").update({"is_active": False, "updated_at": utcnow()}).eq("id", item_id).eq("restaurant_id", rid).select("*").execute()
@@ -3133,6 +3182,7 @@ def desativar_inventory_item(item_id: str, request: Request,
 def listar_inventory_movements(item_id: Optional[str] = None, limite: int = 100,
                                u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     q = sb.table("inventory_movements").select("*,inventory_items(name,unit),suppliers(name)").eq("restaurant_id", rid).order("created_at", desc=True).limit(min(max(limite, 1), 300))
     if item_id:
@@ -3144,6 +3194,7 @@ def listar_inventory_movements(item_id: Optional[str] = None, limite: int = 100,
 def criar_inventory_movement(body: InventoryMovementInput, request: Request,
                              u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     movement = registrar_inventory_movement(rid, body, u)
     log_acao(u, "movimentar_estoque", "inventory_movements", movement.get("id"), None,
@@ -3154,6 +3205,7 @@ def criar_inventory_movement(body: InventoryMovementInput, request: Request,
 @app.get("/api/admin/inventory/alerts", tags=["estoque"])
 def inventory_alerts(u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     items = _rows(sb.table("inventory_items").select("*,suppliers(name)").eq("restaurant_id", rid).eq("is_active", True).order("name").execute())
     alerts = []
@@ -3168,6 +3220,7 @@ def inventory_alerts(u: dict = Depends(authorize(["manager", "owner"]))):
 @app.get("/api/admin/inventory/reports/summary", tags=["estoque"])
 def inventory_summary(u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     items = _rows(sb.table("inventory_items").select("*").eq("restaurant_id", rid).execute())
     active = [i for i in items if i.get("is_active") is not False]
@@ -3191,6 +3244,7 @@ def inventory_summary(u: dict = Depends(authorize(["manager", "owner"]))):
 @app.get("/api/admin/suppliers", tags=["estoque"])
 def listar_suppliers(u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     return {"suppliers": _rows(sb.table("suppliers").select("*").eq("restaurant_id", rid).eq("is_active", True).order("name").execute())}
 
@@ -3198,6 +3252,7 @@ def listar_suppliers(u: dict = Depends(authorize(["manager", "owner"]))):
 @app.post("/api/admin/suppliers", tags=["estoque"])
 def criar_supplier(body: SupplierInput, request: Request, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "estoque", "estoque")
     enforce_platform_control(rid, "admin")
     payload = body.model_dump()
     payload["restaurant_id"] = rid
@@ -3211,6 +3266,7 @@ def criar_supplier(body: SupplierInput, request: Request, u: dict = Depends(auth
 @app.get("/api/admin/products/{produto_id}/recipe", tags=["estoque"])
 def get_product_recipe(produto_id: str, u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_modules_enabled(rid, ("estoque", "ficha_tecnica"), "ficha técnica")
     enforce_platform_control(rid, "admin")
     product = _first(_rows(sb.table("produtos").select("id,nome,preco").eq("id", produto_id).eq("restaurant_id", rid).limit(1).execute()))
     if not product:
@@ -3237,6 +3293,7 @@ def get_product_recipe(produto_id: str, u: dict = Depends(authorize(["manager", 
 def put_product_recipe(produto_id: str, body: ProductRecipeInput, request: Request,
                        u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_modules_enabled(rid, ("estoque", "ficha_tecnica"), "ficha técnica")
     enforce_platform_control(rid, "admin")
     product = _first(_rows(sb.table("produtos").select("id,nome,preco").eq("id", produto_id).eq("restaurant_id", rid).limit(1).execute()))
     if not product:
@@ -3529,6 +3586,7 @@ def suporte_restaurante(u: dict = Depends(authorize(["manager", "owner"]))):
 @app.get("/api/admin/fiscal", tags=["restaurante"])
 def get_fiscal_restaurante(u: dict = Depends(authorize(["owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "fiscal", "fiscal")
     return {
         "config": get_fiscal_config(rid),
         "documents": listar_fiscal_docs(rid)[-80:],
@@ -3539,6 +3597,7 @@ def get_fiscal_restaurante(u: dict = Depends(authorize(["owner"]))):
 def atualizar_fiscal_restaurante(body: FiscalConfigInput, request: Request,
                                  u: dict = Depends(authorize(["owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "fiscal", "fiscal")
     enforce_platform_control(rid, "admin")
     config = get_fiscal_config(rid)
     payload = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -3554,6 +3613,7 @@ def atualizar_fiscal_restaurante(body: FiscalConfigInput, request: Request,
 def registrar_documento_fiscal(body: FiscalDocumentInput, request: Request,
                                u: dict = Depends(authorize(["owner", "manager", "cashier"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "fiscal", "fiscal")
     enforce_platform_control(rid, "financeiro")
     extra = {
         "chave_acesso": body.chave_acesso,
@@ -3583,6 +3643,7 @@ def registrar_documento_fiscal(body: FiscalDocumentInput, request: Request,
 def fechar_caixa(data: Optional[str] = None, request: Request = None,
                  u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     data_ref = data or datetime.utcnow().date().isoformat()
     resp = sb.rpc("gerar_fechamento_caixa", {
@@ -3597,6 +3658,7 @@ def fechar_caixa(data: Optional[str] = None, request: Request = None,
 @app.get("/api/admin/cash-register/history", tags=["caixa"])
 def historico_caixa(u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     resp = sb.table("fechamento_caixa").select("*,usuarios(nome)").eq("restaurant_id", rid).order("data_referencia", desc=True).limit(30).execute()
     return {"fechamentos": _rows(resp)}
@@ -3606,6 +3668,7 @@ def historico_caixa(u: dict = Depends(authorize(["cashier", "manager", "owner"])
 def listar_caixas_admin(date: Optional[str] = None,
                         u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     caixas = listar_caixas(rid)
     turnos = listar_turnos_caixa(rid)
@@ -3625,6 +3688,7 @@ def listar_caixas_admin(date: Optional[str] = None,
 def criar_caixa_admin(body: CriarCaixaInput, request: Request,
                       u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     caixas = listar_caixas(rid)
     ativos = [c for c in caixas if c.get("is_active") is not False]
@@ -3651,6 +3715,7 @@ def criar_caixa_admin(body: CriarCaixaInput, request: Request,
 def atualizar_caixa_admin(caixa_id: str, body: dict, request: Request,
                           u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     caixas = listar_caixas(rid)
     caixa = next((c for c in caixas if c.get("id") == caixa_id), None)
@@ -3676,6 +3741,7 @@ def atualizar_caixa_admin(caixa_id: str, body: dict, request: Request,
 def abrir_turno_caixa(caixa_id: str, body: AbrirTurnoCaixaInput, request: Request,
                       u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     caixa = caixa_por_id(rid, caixa_id)
     if turno_aberto_por_caixa(rid, caixa_id):
@@ -3712,6 +3778,7 @@ def abrir_turno_caixa(caixa_id: str, body: AbrirTurnoCaixaInput, request: Reques
 def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Request,
                        u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     turnos = listar_turnos_caixa(rid)
     turno = next((t for t in turnos if t.get("id") == turno_id), None)
@@ -3745,6 +3812,7 @@ def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Requ
 @app.get("/api/admin/quick-sale/products", tags=["caixa"])
 def listar_produtos_balcao_rapido(u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     enforce_module_enabled(rid, "balcao_rapido", "balcão rápido")
     rows = _rows(
@@ -3762,6 +3830,7 @@ def listar_produtos_balcao_rapido(u: dict = Depends(authorize(["cashier", "manag
 def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
                               u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     enforce_module_enabled(rid, "balcao_rapido", "balcão rápido")
 
@@ -3848,6 +3917,7 @@ def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
 def dashboard(data_inicio: str, data_fim: str,
               u: dict = Depends(authorize(["manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "relatorios", "relatórios")
     enforce_platform_control(rid, "financeiro")
     try:
         inicio = datetime.fromisoformat(data_inicio).date()

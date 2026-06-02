@@ -156,6 +156,30 @@ def test_restaurant_business_type_allows_quick_counter_sale():
     assert main.business_type_modules("restaurante")["balcao_rapido"] is True
 
 
+def test_module_enforcement_blocks_disabled_module(monkeypatch):
+    monkeypatch.setattr(main, "get_platform_control", lambda restaurant_id: {"modules": {"estoque": False}})
+
+    with pytest.raises(HTTPException) as exc:
+        main.enforce_module_enabled("rest-a", "estoque", "estoque")
+
+    assert exc.value.status_code == 403
+    assert "estoque" in exc.value.detail
+
+
+def test_module_enforcement_accepts_cashier_finance_alias(monkeypatch):
+    monkeypatch.setattr(main, "get_platform_control", lambda restaurant_id: {"modules": {"financeiro": True, "caixa": False}})
+
+    main.enforce_module_enabled("rest-a", "caixa", "caixa")
+
+
+def test_plan_and_business_modules_keep_business_type_limits():
+    modules = main.combine_plan_and_business_modules("enterprise", "padaria", {"mesas": True, "garcom": True})
+
+    assert modules["mesas"] is False
+    assert modules["garcom"] is False
+    assert modules["balcao_rapido"] is True
+
+
 def test_cash_shift_updates_when_account_is_closed(monkeypatch):
     saved = {}
     shift_id = "shift-1"

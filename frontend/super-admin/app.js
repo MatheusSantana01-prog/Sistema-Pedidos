@@ -83,7 +83,16 @@ const MODULE_LABELS = {
   relatorios_avancados: 'Relatórios avançados',
 };
 
-const FUTURE_MODULES = new Set(['api_integrations', 'ifood', 'whatsapp', 'multiunit']);
+const IMPLEMENTED_MODULES = new Set([
+  'mesas', 'comandas', 'qr_code', 'garcom', 'cozinha', 'caixa', 'estoque', 'ficha_tecnica',
+  'balcao_rapido', 'fiscal', 'relatorios_avancados', 'financeiro', 'relatorios',
+  'backups', 'advanced_reports', 'priority_support',
+]);
+const FUTURE_MODULES = new Set([
+  'delivery', 'encomendas', 'venda_peso', 'codigo_barras', 'pizza_meio_a_meio', 'pizza_bordas',
+  'pizza_tamanhos', 'producao_padaria', 'lotes_validade', 'cupons', 'custom_branding',
+  'api_integrations', 'ifood', 'whatsapp', 'multiunit',
+]);
 
 /* ── LOGIN ──────────────────────────────────────────── */
 async function fazerLogin() {
@@ -495,12 +504,12 @@ function renderModules(modules) {
   ];
   return `<div class="module-grid">
     ${keys.map(key => {
-      const checkedValue = modules?.[key] === true;
-      const future = FUTURE_MODULES.has(key);
+      const future = FUTURE_MODULES.has(key) || !IMPLEMENTED_MODULES.has(key);
+      const checkedValue = !future && modules?.[key] === true;
       return `<label class="module-toggle ${future ? 'future' : ''}">
         <input type="checkbox" id="mod-${key}" ${checkedValue ? 'checked' : ''} ${future ? 'disabled' : ''}>
         <span>${escapeHtml(MODULE_LABELS[key] || key)}</span>
-        ${future ? '<small>Em breve</small>' : ''}
+        <small>${future ? 'Em implantação' : 'Funcional'}</small>
       </label>`;
     }).join('')}
   </div>`;
@@ -546,9 +555,9 @@ async function salvarControleRestaurante(restId) {
       fiscal: checked('mod-fiscal'),
       relatorios_avancados: checked('mod-relatorios_avancados'),
       financeiro: checked('mod-financeiro'),
-      cupons: checked('mod-cupons'),
+      cupons: false,
       relatorios: checked('mod-relatorios'),
-      custom_branding: checked('mod-custom_branding'),
+      custom_branding: false,
       backups: checked('mod-backups'),
       advanced_reports: checked('mod-advanced_reports'),
       priority_support: checked('mod-priority_support'),
@@ -675,7 +684,7 @@ function aplicarPlanoControle() {
   setValue('limit-products', limits.products);
   Object.keys(MODULE_LABELS).forEach(key => {
     const el = document.getElementById('mod-' + key);
-    if (el && !FUTURE_MODULES.has(key)) el.checked = modules[key] === true;
+    if (el && IMPLEMENTED_MODULES.has(key) && !FUTURE_MODULES.has(key)) el.checked = modules[key] === true;
   });
   aplicarTipoNegocioControle();
 }
@@ -685,7 +694,7 @@ function aplicarTipoNegocioControle() {
   const preset = BUSINESS_TYPE_PRESETS[businessType] || BUSINESS_TYPE_PRESETS.restaurante;
   Object.keys(MODULE_LABELS).forEach(key => {
     const el = document.getElementById('mod-' + key);
-    if (el && key in preset && !FUTURE_MODULES.has(key)) {
+    if (el && key in preset && IMPLEMENTED_MODULES.has(key) && !FUTURE_MODULES.has(key)) {
       el.checked = preset[key] === true;
     }
   });
