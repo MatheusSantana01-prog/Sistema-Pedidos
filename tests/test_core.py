@@ -130,6 +130,16 @@ def test_payment_normalization_accepts_required_cashier_methods(forma):
     assert resumo["por_forma"] == {forma: 123.45}
 
 
+def test_payment_normalization_rejects_methods_not_supported_by_schema():
+    body = main.FecharContaInput(pagamentos=[{"forma_pagamento": "vale_refeicao", "valor": 50}])
+
+    with pytest.raises(HTTPException) as exc:
+        main._normalizar_pagamentos(body, 50)
+
+    assert exc.value.status_code == 400
+    assert "Forma de pagamento inválida" in exc.value.detail
+
+
 def test_cash_payment_keeps_sale_value_and_registers_change():
     body = main.FecharContaInput(pagamentos=[{"forma_pagamento": "dinheiro", "valor": 7.90, "valor_recebido": 200}])
 

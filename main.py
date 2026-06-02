@@ -87,10 +87,6 @@ FORMAS_PAGAMENTO = {
     "pix",
     "cartao_credito",
     "cartao_debito",
-    "vale_refeicao",
-    "vale_alimentacao",
-    "transferencia",
-    "outro",
 }
 
 PLAN_LIMITS = {

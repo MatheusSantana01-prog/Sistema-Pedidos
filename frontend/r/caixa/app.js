@@ -529,17 +529,12 @@ function formasPagamentoOptions() {
     ['pix', 'Pix'],
     ['cartao_credito', 'Cartão crédito'],
     ['cartao_debito', 'Cartão débito'],
-    ['vale_refeicao', 'Vale refeição'],
-    ['vale_alimentacao', 'Vale alimentação'],
-    ['transferencia', 'Transferência'],
-    ['outro', 'Outro'],
   ].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
 }
 
 function labelPagamento(forma) {
   return {
     dinheiro:'Dinheiro', pix:'Pix', cartao_credito:'Cartão crédito', cartao_debito:'Cartão débito',
-    vale_refeicao:'Vale refeição', vale_alimentacao:'Vale alimentação', transferencia:'Transferência', outro:'Outro',
   }[forma] || forma;
 }
 
