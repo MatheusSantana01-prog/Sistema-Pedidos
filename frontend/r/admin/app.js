@@ -21,6 +21,7 @@ let supportPollingHandle = null;
 let BUSINESS_TYPE = 'restaurante';
 let VISIBLE_TABS = new Set();
 let ACTIVE_MODULES = {};
+let caixaHistoryDate = todayInputValue();
 const TAB_MODULE_REQUIREMENTS = {
   mesas: 'mesas',
   estoque: 'estoque',
@@ -35,6 +36,12 @@ const ADMIN_FOOD_IMAGES = {
   dessert: 'https://images.unsplash.com/photo-1564355808539-22fda35bed7e?auto=format&fit=crop&w=700&q=80',
   default: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80',
 };
+
+function todayInputValue() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
 
 function normalizeBusinessType(value) {
   const key = String(value || 'restaurante').trim().toLowerCase();
@@ -977,7 +984,7 @@ async function carregarCaixasFinanceiro() {
   const el = document.getElementById('financeiro-caixas');
   if (!el) return;
   try {
-    const data = await apiCall('GET', '/api/admin/cash-registers');
+    const data = await apiCall('GET', `/api/admin/cash-registers?date=${encodeURIComponent(caixaHistoryDate || todayInputValue())}`);
     const regs = data.registers || [];
     const open = data.open_shifts || [];
     const hist = data.history || [];
@@ -985,7 +992,7 @@ async function carregarCaixasFinanceiro() {
     el.innerHTML = `
       <div class="config-card">
         <div class="config-title">Caixas e turnos</div>
-        <div class="muted-line">${regs.filter(r => r.is_active !== false).length}/${escapeHtml(limit)} caixa(s) ativos. Básico libera 1 caixa; Pro libera múltiplos caixas.</div>
+        <div class="muted-line">${regs.filter(r => r.is_active !== false).length}/${escapeHtml(limit)} caixa(s) ativos. Cadastre aqui os pontos de caixa; os operadores ficam em Usuários.</div>
         <div class="form-row-2" style="margin-top:12px">
           <input class="form-input" id="novo-caixa-nome" placeholder="Ex: Caixa 2">
           <button class="btn btn-primary btn-sm" onclick="criarCaixaFinanceiro()">Adicionar caixa</button>
@@ -1004,27 +1011,44 @@ async function carregarCaixasFinanceiro() {
             }).join('') || '<tr><td colspan="4" class="tabela-empty">Nenhum caixa</td></tr>'}</tbody>
           </table>
         </div>
+        <div class="form-row-2" style="margin-top:16px">
+          <div>
+            <label class="form-label">Histórico de aberturas e fechamentos</label>
+            <input class="form-input" id="caixa-history-date" type="date" value="${escapeAttr(data.history_date || caixaHistoryDate)}" onchange="alterarDataHistoricoCaixa(this.value)">
+          </div>
+          <div class="muted-line" style="align-self:end;margin-bottom:14px">Mostrando o dia selecionado para conferência do admin.</div>
+        </div>
         <div class="tabela-wrap" style="margin-top:12px">
           <table class="tabela">
-            <thead><tr><th>Abertura</th><th>Caixa</th><th>Operador</th><th>Vendas</th><th>Dinheiro esperado</th><th>Diferença</th><th>Status</th></tr></thead>
+            <thead><tr><th>Abertura</th><th>Fechamento</th><th>Caixa</th><th>Abriu</th><th>Fechou</th><th>Inicial</th><th>Vendas</th><th>Esperado</th><th>Contado</th><th>Diferença</th><th>Próx.</th><th>Status</th></tr></thead>
             <tbody>${hist.slice(0, 20).map(t => {
               const esperado = t.expected_cash_amount ?? (Number(t.opening_amount || 0) + Number(t.payments_by_method?.dinheiro || 0));
               return `<tr>
                 <td class="mono" style="font-size:11px">${escapeHtml(fmtDate(t.opened_at))}</td>
+                <td class="mono" style="font-size:11px">${escapeHtml(fmtDate(t.closed_at))}</td>
                 <td>${escapeHtml(t.register_name || '-')}</td>
                 <td>${escapeHtml(t.opened_by_name || '-')}</td>
+                <td>${escapeHtml(t.closed_by_name || (t.status === 'open' ? '-' : 'Não informado'))}</td>
+                <td>R$ ${fmt(t.opening_amount || 0)}</td>
                 <td>R$ ${fmt(t.sales_total || 0)}</td>
                 <td>R$ ${fmt(esperado)}</td>
+                <td>${t.status === 'closed' ? `R$ ${fmt(t.closing_amount || 0)}` : '-'}</td>
                 <td>R$ ${fmt(t.cash_difference || 0)}</td>
+                <td>${t.status === 'closed' ? `R$ ${fmt(t.left_for_next_shift || 0)}` : '-'}</td>
                 <td>${t.status === 'open' ? 'Aberto' : 'Fechado'}</td>
               </tr>`;
-            }).join('') || '<tr><td colspan="7" class="tabela-empty">Nenhum turno registrado.</td></tr>'}</tbody>
+            }).join('') || '<tr><td colspan="12" class="tabela-empty">Nenhum turno registrado neste dia.</td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
   } catch (e) {
     el.innerHTML = `<div class="tabela-empty">Erro nos caixas: ${escapeHtml(e.message)}</div>`;
   }
+}
+
+function alterarDataHistoricoCaixa(value) {
+  caixaHistoryDate = value || todayInputValue();
+  carregarCaixasFinanceiro();
 }
 
 async function criarCaixaFinanceiro() {

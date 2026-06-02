@@ -157,6 +157,14 @@ def test_cash_shift_updates_when_account_is_closed(monkeypatch):
     assert saved["turnos"][0]["account_closures"][0]["total"] == 100
 
 
+def test_cash_shift_history_matches_open_or_close_date():
+    target = main.parse_cash_history_date("2026-06-02")
+
+    assert main.shift_matches_date({"opened_at": "2026-06-02T08:00:00"}, target)
+    assert main.shift_matches_date({"opened_at": "2026-06-01T23:00:00", "closed_at": "2026-06-02T01:00:00"}, target)
+    assert not main.shift_matches_date({"opened_at": "2026-06-01T08:00:00", "closed_at": "2026-06-01T18:00:00"}, target)
+
+
 def test_kitchen_status_transition_rules():
     assert "em_preparo" in main.ORDER_TRANSITIONS["pendente"]
     assert "pronto" in main.ORDER_TRANSITIONS["em_preparo"]

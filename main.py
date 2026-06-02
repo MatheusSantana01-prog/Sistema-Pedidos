@@ -13,7 +13,7 @@ import secrets
 import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -980,6 +980,26 @@ def turno_aberto_por_caixa(restaurant_id: str, caixa_id: str) -> dict | None:
 
 def turno_aberto_por_id(restaurant_id: str, turno_id: str) -> dict | None:
     return next((t for t in listar_turnos_caixa(restaurant_id) if t.get("id") == turno_id and t.get("status") == "open"), None)
+
+def parse_cash_history_date(value: str | None) -> date:
+    if not value:
+        return datetime.utcnow().date()
+    try:
+        return datetime.fromisoformat(value[:10]).date()
+    except Exception as exc:
+        raise HTTPException(400, "Data do histórico de caixa inválida") from exc
+
+def shift_matches_date(turno: dict, target: date) -> bool:
+    for field in ("opened_at", "closed_at"):
+        value = turno.get(field)
+        if not value:
+            continue
+        try:
+            if datetime.fromisoformat(str(value).replace("Z", "+00:00")).date() == target:
+                return True
+        except Exception:
+            continue
+    return False
 
 def caixa_resumo_dinheiro(cedulas: dict | None) -> dict:
     valores = {"200": 200, "100": 100, "50": 50, "20": 20, "10": 10, "5": 5, "2": 2, "1": 1, "0.50": 0.5, "0.25": 0.25, "0.10": 0.1, "0.05": 0.05}
@@ -3535,17 +3555,21 @@ def historico_caixa(u: dict = Depends(authorize(["cashier", "manager", "owner"])
 
 
 @app.get("/api/admin/cash-registers", tags=["caixa"])
-def listar_caixas_admin(u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+def listar_caixas_admin(date: Optional[str] = None,
+                        u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "financeiro")
     caixas = listar_caixas(rid)
     turnos = listar_turnos_caixa(rid)
     abertos = [t for t in turnos if t.get("status") == "open"]
+    target_date = parse_cash_history_date(date)
+    history = [t for t in turnos if shift_matches_date(t, target_date)]
     return {
         "registers": caixas,
         "open_shifts": abertos,
-        "history": sorted(turnos, key=lambda t: t.get("opened_at") or "", reverse=True)[:80],
+        "history": sorted(history, key=lambda t: t.get("opened_at") or "", reverse=True)[:80],
         "limits": {"registers": limite_caixas_restaurante(rid)},
+        "history_date": target_date.isoformat(),
     }
 
 

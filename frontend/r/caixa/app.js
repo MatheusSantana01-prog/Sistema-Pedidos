@@ -65,12 +65,12 @@ function iniciarApp() {
 async function carregarCaixas(showErrors = true) {
   const panel = document.getElementById('cash-shift-panel');
   try {
-    const data = await apiCall('GET', '/api/admin/cash-registers');
+    const data = await apiCall('GET', `/api/admin/cash-registers?date=${encodeURIComponent(todayInputValue())}`);
     caixas = data.registers || [];
     turnosAbertos = data.open_shifts || [];
     historicoTurnos = data.history || [];
     if (!caixaSelecionadoId && caixas.length) caixaSelecionadoId = caixas[0].id;
-    turnoAtivo = turnosAbertos.find(t => t.opened_by === getUsuario()?.id) || turnosAbertos.find(t => t.register_id === caixaSelecionadoId) || null;
+    turnoAtivo = turnosAbertos.find(t => t.opened_by === getUsuario()?.id) || null;
     if (turnoAtivo) caixaSelecionadoId = turnoAtivo.register_id;
     renderCaixaOperacao(data.limits || {});
   } catch (e) {
@@ -111,13 +111,7 @@ function renderCaixaOperacao(limits = {}) {
     ${abertoNesteCaixa && !turnoAtivo ? `<div class="cash-alert error">Este caixa já foi aberto por ${escapeHtml(abertoNesteCaixa.opened_by_name || 'outro usuário')}.</div>` : ''}
     ${resumo}
     <div id="cash-form-area"></div>
-    <div class="cash-history-mini">
-      ${(historicoTurnos || []).slice(0, 3).map(t => `
-        <div class="cash-history-item">
-          <span>${escapeHtml(t.register_name)} · ${escapeHtml(statusTurno(t.status))}</span>
-          <strong>R$ ${fmt(t.sales_total || 0)}</strong>
-        </div>`).join('') || '<div class="split-empty">Nenhum turno registrado.</div>'}
-    </div>`;
+    ${renderTurnosHoje()}`;
   restoreCashForm(formSnapshot);
 }
 
@@ -153,6 +147,45 @@ function restoreCashForm(snapshot) {
     const el = document.getElementById(id);
     if (el) el.value = value;
   });
+}
+
+function todayInputValue() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function renderTurnosHoje() {
+  const rows = (historicoTurnos || []).slice(0, 12).map(t => {
+    const esperado = t.expected_cash_amount ?? (Number(t.opening_amount || 0) + Number(t.payments_by_method?.dinheiro || 0));
+    return `<tr>
+      <td>${escapeHtml(t.register_name || '-')}</td>
+      <td>${escapeHtml(t.opened_by_name || '-')}</td>
+      <td>${escapeHtml(fmtDate(t.opened_at))}</td>
+      <td>${escapeHtml(t.closed_by_name || (t.status === 'open' ? '-' : 'Não informado'))}</td>
+      <td>${escapeHtml(fmtDate(t.closed_at))}</td>
+      <td>R$ ${fmt(t.sales_total || 0)}</td>
+      <td>R$ ${fmt(esperado)}</td>
+      <td>${t.status === 'closed' ? `R$ ${fmt(t.closing_amount || 0)}` : '-'}</td>
+      <td>${escapeHtml(statusTurno(t.status))}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="cash-history-box">
+      <div class="cash-history-head">
+        <div>
+          <div class="cash-form-title">Aberturas e fechamentos de hoje</div>
+          <div class="cash-sub">${escapeHtml(todayInputValue())}</div>
+        </div>
+        <button class="btn btn-sm" onclick="carregarCaixas(false)">Atualizar</button>
+      </div>
+      <div class="cash-history-table-wrap">
+        <table class="cash-history-table">
+          <thead><tr><th>Caixa</th><th>Abriu</th><th>Abertura</th><th>Fechou</th><th>Fechamento</th><th>Vendas</th><th>Esperado</th><th>Contado</th><th>Status</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="9">Nenhum turno registrado hoje.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 function denomInputs(prefix) {
