@@ -3801,25 +3801,11 @@ def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
         FecharContaInput(pagamentos=body.pagamentos),
         subtotal,
     )
-    ultimo = _first(_rows(
-        sb.table("pedidos")
-        .select("numero")
-        .eq("restaurant_id", rid)
-        .order("numero", desc=True)
-        .limit(1)
-        .execute()
-    )) or {}
-    try:
-        numero = int(ultimo.get("numero") or 0) + 1
-    except (TypeError, ValueError):
-        numero = 1
-
     pedido_id = str(uuid4())
     now = utcnow()
     pedido_payload = {
         "id": pedido_id,
         "restaurant_id": rid,
-        "numero": numero,
         "status": "entregue",
         "subtotal": subtotal,
         "total": resumo_pagamento["total"],
@@ -3832,6 +3818,7 @@ def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
         "tempo_entrega": now,
     }
     pedido = _first(_rows(sb.table("pedidos").insert(pedido_payload).select("*").execute()))
+    pedido_numero = (pedido or {}).get("numero")
     for item in itens:
         item["pedido_id"] = pedido_id
     if itens:
@@ -3842,7 +3829,7 @@ def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
         "id": str(uuid4()),
         "origem": "balcao_rapido",
         "pedido_id": pedido_id,
-        "pedido_numero": numero,
+        "pedido_numero": pedido_numero,
         "total": resumo_pagamento["total"],
         "pagamentos": resumo_pagamento["pagamentos"],
         "payments_by_method": resumo_pagamento["por_forma"],
