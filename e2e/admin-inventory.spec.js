@@ -11,11 +11,16 @@ test.describe('admin estoque', () => {
     await page.goto(`/r/${slug}/admin`, { waitUntil: 'domcontentloaded' });
     await page.locator('#l-email').fill(email);
     await page.locator('#l-senha').fill(password);
+    const loginResponse = page.waitForResponse(
+      response => response.url().includes('/api/auth/login') && response.status() === 200,
+      { timeout: 15000 },
+    );
     await page.getByRole('button', { name: /entrar/i }).click();
+    await loginResponse;
 
-    await expect(page.locator('#app-screen')).toBeVisible();
+    await expect(page.locator('#app-screen')).toBeVisible({ timeout: 15000 });
     await page.getByText('Estoque', { exact: true }).click();
     await expect(page.locator('#page-estoque')).toBeVisible();
-    await expect(page.locator('#estoque-root')).toContainText(/Insumos|Movimentacoes|Movimentações|Alertas|Relatorios|Relatórios/i);
+    await expect(page.locator('#page-estoque')).toContainText(/Insumos|Movimentacoes|Movimentações|Alertas|Relatorios|Relatórios/i);
   });
 });

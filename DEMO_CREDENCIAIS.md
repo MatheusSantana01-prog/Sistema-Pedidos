@@ -1,7 +1,8 @@
 # Credenciais Demo Comercial
 
-Data: 2026-06-01
+Data: 2026-06-02
 Branch: `produto-comercial-restaurantes`
+Commit publicado validado: `99ebd0483c0b19b9543aeb4e390420a6bddba24c`
 
 ## Senha padrao
 
@@ -55,26 +56,27 @@ python backend/scripts/seed_demo_comercial.py
 - Super-admin: `https://frontend-teal-nine-80.vercel.app/super-admin`
 - Super-admin preview: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/super-admin`
 
-## Links diretos no preview
+## Links diretos publicados
 
-- Landing comercial: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/comercial`
-- Admin restaurante: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/admin`
-- Mesa restaurante: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
-- Cozinha restaurante: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/cozinha`
-- Garcom restaurante: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/garcom`
-- Caixa restaurante: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/caixa`
-- TV restaurante: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/tv`
-- Admin pizzaria: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-pizzaria/admin`
-- Mesa pizzaria: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-pizzaria/mesa/demo-pizzaria-mesa-1`
-- Admin padaria: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-padaria/admin`
-- Mesa padaria: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-padaria/mesa/demo-padaria-mesa-1`
+- Landing comercial: `https://frontend-teal-nine-80.vercel.app/comercial`
+- Admin restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/admin`
+- Mesa restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
+- Cozinha restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/cozinha`
+- Garcom restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/garcom`
+- Caixa restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/caixa`
+- TV restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/tv`
+- Admin pizzaria: `https://frontend-teal-nine-80.vercel.app/r/demo-pizzaria/admin`
+- Mesa pizzaria: `https://frontend-teal-nine-80.vercel.app/r/demo-pizzaria/mesa/demo-pizzaria-mesa-1`
+- Admin padaria: `https://frontend-teal-nine-80.vercel.app/r/demo-padaria/admin`
+- Mesa padaria: `https://frontend-teal-nine-80.vercel.app/r/demo-padaria/mesa/demo-padaria-mesa-1`
 
 ## Status do ambiente publicado
 
-- Vercel preview da branch `produto-comercial-restaurantes`: publicado e validado via `vercel curl`.
-- Render: URL de producao respondeu `/health`, mas ainda esta na versao `018a5b3eff19`; nao foi alterado para nao quebrar producao sem confirmacao.
-- Supabase: projeto `Restaurante` foi consultado em modo somente leitura. O schema comercial de estoque/tipo de negocio ainda nao esta aplicado.
-- Seed demo comercial: pendente ate aplicar schema e configurar `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` em ambiente autorizado.
+- Vercel production da branch `produto-comercial-restaurantes`: publicado e validado.
+- Render: URL de producao respondeu `/health` com versao `99ebd0483c0b`.
+- Supabase: projeto `Restaurante` validado com schema comercial de estoque/tipo de negocio aplicado e RLS ativo nas tabelas de estoque.
+- Seed demo comercial: dados demo presentes para restaurante, pizzaria e padaria.
+- Smoke publicado: pedido, cozinha, caixa, baixa de estoque e bloqueio/desbloqueio foram validados.
 
 ## Aviso
 

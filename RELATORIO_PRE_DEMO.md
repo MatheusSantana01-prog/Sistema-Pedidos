@@ -1,7 +1,8 @@
 # Relatorio Pre-Demo
 
-Data: 2026-06-01
+Data: 2026-06-02
 Branch: `produto-comercial-restaurantes`
+Commit publicado validado: `99ebd0483c0b19b9543aeb4e390420a6bddba24c`
 
 ## Pronto para apresentar
 
@@ -50,15 +51,16 @@ Branch: `produto-comercial-restaurantes`
 
 ## Publicacao em ambiente testavel
 
-- Vercel preview: publicado com sucesso a partir da branch `produto-comercial-restaurantes`.
-- Deploy Vercel: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app`
-- Validacao Vercel: `/comercial`, `/super-admin` e `/r/demo-restaurante/admin` responderam via `vercel curl`.
-- Render: `https://sistema-pedidos-zk2w.onrender.com/health` respondeu `200`, mas a versao retornada foi `018a5b3eff19`; portanto o backend comercial da branch ainda nao foi publicado no Render.
-- Render staging: nao foi encontrado conector/API token de Render neste ambiente para criar ou trocar staging automaticamente.
-- Supabase usado: projeto `Restaurante` (`lhrfemeunswviwzdpppp`), tratado como producao por falta de branch/staging confirmada.
-- Schemas aplicados: nao. Consulta somente leitura mostrou que `suppliers`, `inventory_items`, `inventory_movements`, `product_recipes`, `product_recipe_items`, `inventory_counts`, `inventory_count_items`, `business_type` e `modules_config` ainda nao existem.
-- Seed demo comercial: nao executado no Supabase publicado porque depende do schema e de `SUPABASE_SERVICE_ROLE_KEY` em ambiente autorizado.
-- Smoke real de estoque: nao executado porque o schema de estoque ainda nao existe no Supabase conectado.
+- Vercel production: `READY` na branch `produto-comercial-restaurantes`.
+- Deploy Vercel: `https://frontend-teal-nine-80.vercel.app`.
+- Commit Vercel: `99ebd0483c0b19b9543aeb4e390420a6bddba24c`.
+- Render: `https://sistema-pedidos-zk2w.onrender.com/health` respondeu `200`.
+- Versao Render: `99ebd0483c0b`.
+- Supabase usado: projeto `Restaurante` (`lhrfemeunswviwzdpppp`), sem secrets documentados.
+- Schemas aplicados: sim. Existem `suppliers`, `inventory_items`, `inventory_movements`, `product_recipes`, `product_recipe_items`, `inventory_counts`, `inventory_count_items`, `business_type` e `modules_config`.
+- RLS: ligado nas tabelas de estoque verificadas.
+- Seed demo comercial: dados demo presentes para `demo-restaurante`, `demo-pizzaria` e `demo-padaria`.
+- Smoke real publicado: executado via API publicada com dados demo/QA.
 
 ## Usuarios demo
 
@@ -69,13 +71,24 @@ Ver `DEMO_CREDENCIAIS.md`.
 - `python -m py_compile main.py backend/main.py backend/app/core/config.py backend/app/core/database.py backend/app/core/security.py backend/scripts/seed_demo_comercial.py`: passou.
 - `python -m pytest -q`: 42 testes passaram.
 - `node --check` em todos os JS do frontend: passou.
-- `npx playwright test`: 12 testes passaram e 4 foram pulados por falta de variaveis `E2E_*`.
+- `npx playwright test` com ambiente publicado e variaveis `E2E_*`: 16 testes passaram.
 - `python backend/scripts/seed_demo_comercial.py`: nao executou localmente porque `SUPABASE_URL` nao esta configurado neste PC.
+- Seed equivalente no Supabase publicado: validado.
 - Deploy preview Vercel: passou.
-- Render health: passou em producao atual, mas sem a branch comercial.
-- Supabase schema check somente leitura: falhou para schema comercial porque as tabelas/colunas ainda nao existem.
+- Render health: passou com versao `99ebd0483c0b`.
+- Supabase schema check por consulta: passou.
 - `python backend/scripts/check_inventory_schema.py`: bloqueado localmente por falta de `SUPABASE_URL`.
-- `python backend/scripts/smoke_inventory_real.py`: bloqueado localmente por falta de `SUPABASE_URL`; o script agora falha com mensagem clara antes de carregar o backend.
+- `python backend/scripts/smoke_inventory_real.py`: bloqueado localmente por falta de `SUPABASE_URL`; smoke equivalente foi executado no ambiente publicado via API.
+
+## Smoke publicado
+
+- Login admin demo: passou.
+- Cardapio/produto demo: `Parmegiana executivo` encontrado.
+- Pedido criado: numero `188`.
+- Cozinha avancou status ate `entregue`.
+- Estoque baixou de `7.82` para `7.64` kg no insumo demo.
+- Caixa fechou conta em turno publicado.
+- Super-admin bloqueou `demo-restaurante`, pedido publico foi recusado com `403`, e depois desbloqueou o restaurante.
 
 Para criar os dados demo no ambiente autorizado:
 
@@ -86,7 +99,7 @@ python backend/scripts/seed_demo_comercial.py
 
 ## Recomendacao final
 
-Apresentar amanha somente se for usado um ambiente com backend atualizado e schema aplicado, ou se a apresentacao ficar limitada ao frontend/roteiro e ao ambiente de producao ja validado anteriormente. A branch comercial esta publicada na Vercel em preview, mas Render e Supabase ainda precisam de confirmacao operacional antes do teste real completo.
+Apresentar amanha: sim.
 
-Pronto para piloto controlado: sim, apos publicar backend comercial no Render e aplicar schema em ambiente autorizado.
+Pronto para piloto controlado: sim, usando restaurantes demo/QA e validando o fluxo no cliente antes da instalacao.
 Pronto para venda ampla: nao.

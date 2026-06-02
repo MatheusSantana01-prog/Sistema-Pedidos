@@ -4,16 +4,11 @@
 
 - Confirmar internet.
 - Abrir Vercel: `https://frontend-teal-nine-80.vercel.app`
-- Abrir preview comercial: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/comercial`
+- Abrir landing comercial: `https://frontend-teal-nine-80.vercel.app/comercial`
 - Abrir Render health: `https://sistema-pedidos-zk2w.onrender.com/health`
-- Confirmar se o Render ja esta na branch comercial. Em 2026-06-01, o health ainda retornou a versao `018a5b3eff19`.
-- Confirmar se o schema de estoque/tipo de negocio foi aplicado no Supabase antes de prometer baixa automatica em ambiente publicado.
-- Rodar seed demo em QA/producao autorizada, se ainda nao rodou:
-
-```bash
-python backend/scripts/check_inventory_schema.py
-python backend/scripts/seed_demo_comercial.py
-```
+- Confirmar se o Render retorna versao `99ebd0483c0b` ou mais nova.
+- Confirmar que `demo-restaurante`, `demo-pizzaria` e `demo-padaria` abrem.
+- Confirmar que o admin demo entra com senha `Demo@2026`.
 
 - Testar login admin de `demo-restaurante`.
 - Testar mesa 1 no celular.
@@ -24,15 +19,13 @@ python backend/scripts/seed_demo_comercial.py
 ## Links essenciais
 
 - Super-admin: `https://frontend-teal-nine-80.vercel.app/super-admin`
-- Super-admin preview: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/super-admin`
 - Admin restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/admin`
-- Admin restaurante preview: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/admin`
 - Mesa restaurante: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
-- Mesa restaurante preview: `https://frontend-esbw4jz36-kcchb26-4366s-projects.vercel.app/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
 - Cozinha: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/cozinha`
 - Garcom: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/garcom`
 - Caixa: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/caixa`
-- Landing comercial: `/comercial`
+- TV: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/tv`
+- Landing comercial: `https://frontend-teal-nine-80.vercel.app/comercial`
 
 ## O que testar antes de apresentar
 
@@ -45,12 +38,14 @@ python backend/scripts/seed_demo_comercial.py
 - Admin carregar estoque.
 - Super-admin abrir detalhes do restaurante.
 
-## Pendencias antes da demo real publicada
+## Status validado em 2026-06-02
 
-- Aplicar `backend/supabase_inventory_schema.sql` e `backend/supabase_business_type_schema.sql` em ambiente autorizado.
-- Publicar backend da branch `produto-comercial-restaurantes` no Render staging ou confirmar uso temporario em producao.
-- Rodar `python backend/scripts/seed_demo_comercial.py`.
-- Rodar `python backend/scripts/smoke_inventory_real.py`.
+- Vercel production: branch `produto-comercial-restaurantes`, commit `99ebd0483c0b19b9543aeb4e390420a6bddba24c`, READY.
+- Render: `/health` retornou versao `99ebd0483c0b`.
+- Supabase: schema de estoque e tipo de negocio aplicado; RLS ativo nas tabelas de estoque.
+- Demo comercial: dados presentes para restaurante, pizzaria e padaria.
+- Playwright no ambiente publicado: 16 testes passaram.
+- Smoke publicado: pedido, cozinha, caixa, baixa de estoque e bloqueio/desbloqueio passaram.
 
 ## O que nao prometer
 
