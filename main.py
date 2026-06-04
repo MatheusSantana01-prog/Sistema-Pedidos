@@ -1372,6 +1372,8 @@ def registrar_inventory_movement(restaurant_id: str, body: InventoryMovementInpu
     else:
         delta = _inventory_delta(movement_type, quantity)
         balance_after = _money(previous + delta)
+    if balance_after < 0:
+        raise HTTPException(400, "Movimentação deixaria o estoque negativo. Confira a quantidade ou use inventário/ajuste.")
 
     unit_cost = data.get("unit_cost")
     if unit_cost is None:

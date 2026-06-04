@@ -223,6 +223,32 @@ def test_inventory_smoke_sale_and_cancel_reversal(monkeypatch):
     assert fake.tables["inventory_items"][0]["current_quantity"] == 10
 
 
+def test_inventory_manual_loss_cannot_make_stock_negative(monkeypatch):
+    fake = make_inventory_db()
+    monkeypatch.setattr(main, "sb", fake)
+    user = {"sub": "user-owner", "nome": "Owner QA", "role": "owner", "restaurant_id": "rest-a"}
+
+    main.registrar_inventory_movement("rest-a", {
+        "inventory_item_id": "00000000-0000-0000-0000-0000000000b1",
+        "movement_type": "entrada",
+        "quantity": 2,
+        "unit_cost": 4,
+        "reason": "Compra QA",
+    }, user)
+
+    with pytest.raises(HTTPException) as exc:
+        main.registrar_inventory_movement("rest-a", {
+            "inventory_item_id": "00000000-0000-0000-0000-0000000000b1",
+            "movement_type": "perda",
+            "quantity": 3,
+            "reason": "Perda maior que saldo",
+        }, user)
+
+    assert exc.value.status_code == 400
+    assert "estoque negativo" in exc.value.detail
+    assert fake.tables["inventory_items"][0]["current_quantity"] == 2
+
+
 def test_quick_sale_creates_paid_order_updates_shift_and_stock(monkeypatch):
     fake = make_inventory_db()
     fake.tables["produtos"][0]["disponivel"] = True

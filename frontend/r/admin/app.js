@@ -812,6 +812,7 @@ function renderEstoque() {
         </div>
       </section>
     </div>`;
+  atualizarMovimentoRapidoHint();
 }
 
 function renderEstoqueItem(item) {
@@ -836,11 +837,11 @@ function renderMovimentoForm() {
   return `
     <div class="inventory-move-form">
       <select class="form-input" id="inv-move-item" onchange="atualizarMovimentoRapidoHint()">${estoqueItems.map(i => `<option value="${escapeAttr(i.id)}">${escapeHtml(i.name)} (${escapeHtml(i.unit)})</option>`).join('')}</select>
-      <select class="form-input" id="inv-move-type" onchange="atualizarMovimentoRapidoHint()"><option value="entrada">Entrada</option><option value="saida">Saída manual</option><option value="perda">Perda</option><option value="ajuste">Ajuste +/-</option><option value="inventario">Inventário</option></select>
+      <select class="form-input" id="inv-move-type" onchange="atualizarMovimentoRapidoHint()"><option value="entrada">Entrada / compra</option><option value="saida">Saída manual</option><option value="perda">Perda / descarte</option><option value="ajuste">Ajuste +/-</option><option value="inventario">Inventário</option></select>
       <input class="form-input" id="inv-move-qty" type="number" step="0.001" placeholder="Quantidade" oninput="atualizarMovimentoRapidoHint()">
-      <input class="form-input" id="inv-move-cost" type="number" step="0.01" placeholder="Custo unit." oninput="atualizarMovimentoRapidoHint()">
-      <select class="form-input" id="inv-move-supplier"><option value="">Fornecedor</option>${estoqueSuppliers.map(s => `<option value="${escapeAttr(s.id)}">${escapeHtml(s.name)}</option>`).join('')}</select>
-      <input class="form-input" id="inv-move-exp" type="date">
+      <input class="form-input" id="inv-move-cost" type="number" step="0.01" placeholder="Custo unit. da compra" oninput="atualizarMovimentoRapidoHint()">
+      <select class="form-input" id="inv-move-supplier"><option value="">Fornecedor da compra</option>${estoqueSuppliers.map(s => `<option value="${escapeAttr(s.id)}">${escapeHtml(s.name)}</option>`).join('')}</select>
+      <input class="form-input" id="inv-move-exp" type="date" title="Validade do lote comprado">
       <input class="form-input" id="inv-move-reason" placeholder="Motivo">
       <div class="inventory-move-hint" id="inv-move-hint">Informe a quantidade para ver o saldo previsto.</div>
       <button class="btn btn-primary" id="inv-move-btn" onclick="salvarEstoqueMovimento()">Registrar movimentação</button>
@@ -902,19 +903,29 @@ async function salvarEstoqueMovimento() {
   const item = estoqueItems.find(i => String(i.id) === String(val('inv-move-item')));
   const quantity = Number(val('inv-move-qty') || 0);
   const unitCostRaw = val('inv-move-cost');
+  const tipo = val('inv-move-type') || 'entrada';
+  const reason = val('inv-move-reason') || null;
   if (!item) return showToast('Selecione um insumo', 'error');
   if (!Number.isFinite(quantity) || quantity === 0) return showToast('Informe uma quantidade diferente de zero', 'error');
-  if (val('inv-move-type') === 'entrada' && Number(unitCostRaw || item.unit_cost || 0) <= 0) {
+  if (tipo === 'entrada' && Number(unitCostRaw || item.unit_cost || 0) <= 0) {
     return showToast('Informe o custo unitário da entrada para o estoque calcular corretamente', 'error');
+  }
+  if (['saida', 'perda'].includes(tipo) && !reason) {
+    return showToast('Informe o motivo da saída ou perda', 'error');
+  }
+  const saldoAtual = Number(item.current_quantity || 0);
+  const saldoPrevisto = saldoAtual + calcularDeltaMovimentoRapido(tipo, quantity, saldoAtual);
+  if (saldoPrevisto < 0) {
+    return showToast('Movimentação deixaria o estoque negativo. Use ajuste/inventário se precisar corrigir contagem.', 'error');
   }
   const payload = {
     inventory_item_id: val('inv-move-item'),
-    movement_type: val('inv-move-type'),
+    movement_type: tipo,
     quantity,
-    unit_cost: unitCostRaw ? Number(unitCostRaw) : null,
-    supplier_id: val('inv-move-supplier') || null,
-    expiration_date: val('inv-move-exp') || null,
-    reason: val('inv-move-reason') || null,
+    unit_cost: tipo === 'entrada' && unitCostRaw ? Number(unitCostRaw) : null,
+    supplier_id: tipo === 'entrada' ? (val('inv-move-supplier') || null) : null,
+    expiration_date: tipo === 'entrada' ? (val('inv-move-exp') || null) : null,
+    reason,
   };
   if (btn) btn.disabled = true;
   try {
@@ -938,21 +949,43 @@ function calcularDeltaMovimentoRapido(tipo, quantidade, saldoAtual) {
 function atualizarMovimentoRapidoHint() {
   const hint = document.getElementById('inv-move-hint');
   if (!hint) return;
+  const tipo = val('inv-move-type') || 'entrada';
+  const compra = tipo === 'entrada';
+  ['inv-move-cost', 'inv-move-supplier', 'inv-move-exp'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('is-hidden', !compra);
+  });
+  const qty = document.getElementById('inv-move-qty');
+  const reason = document.getElementById('inv-move-reason');
+  if (qty) qty.placeholder = tipo === 'inventario' ? 'Saldo contado' : tipo === 'ajuste' ? 'Ajuste (+ ou -)' : 'Quantidade';
+  if (reason) reason.placeholder = ({
+    entrada: 'Nota, compra ou observação',
+    saida: 'Motivo da saída manual',
+    perda: 'Motivo da perda/descarte',
+    ajuste: 'Motivo do ajuste',
+    inventario: 'Motivo da contagem',
+  })[tipo] || 'Motivo';
   const item = estoqueItems.find(i => String(i.id) === String(val('inv-move-item')));
   if (!item) {
     hint.textContent = 'Selecione um insumo para registrar movimentação.';
     hint.classList.add('warn');
     return;
   }
-  const tipo = val('inv-move-type') || 'entrada';
   const quantidade = Number(val('inv-move-qty') || 0);
   const saldoAtual = Number(item.current_quantity || 0);
   const delta = calcularDeltaMovimentoRapido(tipo, quantidade, saldoAtual);
   const saldoPrevisto = saldoAtual + delta;
   const custo = Number(val('inv-move-cost') || item.unit_cost || 0);
   const valorMovimento = Math.abs(delta) * custo;
+  const label = ({
+    entrada: 'Compra/entrada aumenta o estoque. Fornecedor é opcional, mas recomendado.',
+    saida: 'Saída manual reduz o estoque. Use para retirada interna ou correção operacional.',
+    perda: 'Perda reduz o estoque. Use para vencido, quebrado, descartado ou erro de produção.',
+    ajuste: 'Ajuste soma ou subtrai exatamente o número informado.',
+    inventario: 'Inventário define o saldo final contado.',
+  })[tipo] || 'Movimentação de estoque.';
   hint.classList.toggle('warn', saldoPrevisto < 0 || (tipo === 'entrada' && custo <= 0));
-  hint.innerHTML = `Saldo atual: <strong>${fmt(saldoAtual)} ${escapeHtml(item.unit || '')}</strong> · Movimento: <strong>${fmt(delta)} ${escapeHtml(item.unit || '')}</strong> · Saldo previsto: <strong>${fmt(saldoPrevisto)} ${escapeHtml(item.unit || '')}</strong> · Valor: <strong>R$ ${fmt(valorMovimento)}</strong>`;
+  hint.innerHTML = `${escapeHtml(label)}<br>Saldo atual: <strong>${fmt(saldoAtual)} ${escapeHtml(item.unit || '')}</strong> · Movimento: <strong>${fmt(delta)} ${escapeHtml(item.unit || '')}</strong> · Saldo previsto: <strong>${fmt(saldoPrevisto)} ${escapeHtml(item.unit || '')}</strong> · Valor estimado: <strong>R$ ${fmt(valorMovimento)}</strong>`;
 }
 
 async function abrirFichaTecnica(produtoId) {
