@@ -107,6 +107,32 @@ def test_recipe_cost_and_margin_summary():
     assert summary["margin_percent"] == pytest.approx(46.67)
 
 
+def test_product_image_accepts_https_and_data_url():
+    product = main.CriarProdutoInput(
+        categoria_id="00000000-0000-0000-0000-000000000001",
+        nome="Produto com foto",
+        preco=10,
+        foto_url="https://example.com/foto.webp",
+    )
+    assert product.foto_url == "https://example.com/foto.webp"
+
+    product_file = main.CriarProdutoInput(
+        categoria_id="00000000-0000-0000-0000-000000000001",
+        nome="Produto com arquivo",
+        preco=10,
+        foto_url="data:image/png;base64,aGVsbG8=",
+    )
+    assert product_file.foto_url.startswith("data:image/png;base64,")
+
+    with pytest.raises(ValueError):
+        main.CriarProdutoInput(
+            categoria_id="00000000-0000-0000-0000-000000000001",
+            nome="Produto com foto invalida",
+            preco=10,
+            foto_url="javascript:alert(1)",
+        )
+
+
 def test_inventory_inputs_validate_permissions_surface():
     with pytest.raises(ValueError):
         main.InventoryItemInput(name="x", unit="kg")

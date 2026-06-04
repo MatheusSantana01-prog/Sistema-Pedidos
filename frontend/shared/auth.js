@@ -24,6 +24,9 @@ function escapeAttr(value) {
 function safeUrl(value, fallback = '') {
   const raw = String(value || '').trim();
   if (!raw) return fallback;
+  if (/^data:image\/(png|jpeg|jpg|webp);base64,[a-z0-9+/=]+$/i.test(raw)) {
+    return raw;
+  }
   try {
     const url = new URL(raw, window.location.origin);
     if (['http:', 'https:'].includes(url.protocol)) return url.href;

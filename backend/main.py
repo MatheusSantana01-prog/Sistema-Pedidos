@@ -13,6 +13,7 @@ import secrets
 import json
 import logging
 import time
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -1918,6 +1919,20 @@ class CriarProdutoInput(BaseModel):
             raise ValueError("Custo não pode ser negativo")
         return v
 
+    @field_validator("foto_url")
+    @classmethod
+    def val_foto_url(cls, v):
+        if not v:
+            return None
+        v = str(v).strip()
+        if len(v) > 950_000:
+            raise ValueError("Imagem muito grande. Use URL ou arquivo menor.")
+        if v.startswith(("http://", "https://")):
+            return v
+        if re.match(r"^data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$", v):
+            return v
+        raise ValueError("Foto precisa ser uma URL http/https ou imagem PNG/JPG/WebP enviada pelo formulário")
+
     @field_validator("tempo_preparo_minutos")
     @classmethod
     def val_tempo_preparo(cls, v):
@@ -3131,8 +3146,15 @@ def atualizar_produto(produto_id: str, body: dict, request: Request,
         raise HTTPException(403, "Produto não pertence ao seu restaurante")
 
     body.pop("restaurant_id", None)  # nunca deixa o frontend mudar o restaurant_id
+    if "foto_url" in body and body["foto_url"]:
+        foto_url = str(body["foto_url"]).strip()
+        if len(foto_url) > 950_000:
+            raise HTTPException(400, "Imagem muito grande. Use URL ou arquivo menor.")
+        if not (foto_url.startswith(("http://", "https://")) or re.match(r"^data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$", foto_url)):
+            raise HTTPException(400, "Foto precisa ser uma URL http/https ou imagem PNG/JPG/WebP enviada pelo formulário")
+        body["foto_url"] = foto_url
     body["updated_at"] = utcnow()
-    resp = sb.table("produtos").update(body).eq("id", produto_id).select("id,nome,preco,disponivel").execute()
+    resp = sb.table("produtos").update(body).eq("id", produto_id).select("*").execute()
     log_acao(u, "atualizar_produto", "produtos", produto_id, ant.data, body, request)
     return {"produto": _row(resp)}
 
