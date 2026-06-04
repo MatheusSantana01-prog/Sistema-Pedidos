@@ -69,6 +69,29 @@ def test_inventory_alert_status():
     assert main.calcular_estoque_alerta({"current_quantity": 8, "minimum_quantity": 5}) == "ok"
 
 
+def test_inventory_summary_separates_gross_out_and_net_values():
+    items = [
+        {"current_quantity": 7, "minimum_quantity": 2, "unit_cost": 5, "is_active": True},
+        {"current_quantity": 0, "minimum_quantity": 1, "unit_cost": 10, "is_active": True},
+    ]
+    movements = [
+        {"movement_type": "entrada", "quantity_delta": 10, "unit_cost": 5},
+        {"movement_type": "venda", "quantity_delta": -2, "unit_cost": 5},
+        {"movement_type": "perda", "quantity_delta": -1, "unit_cost": 5},
+    ]
+
+    summary = main.calcular_inventory_summary(items, movements)
+
+    assert summary["total_stock_value"] == 35
+    assert summary["gross_entry_value"] == 50
+    assert summary["gross_out_value"] == 15
+    assert summary["sale_cost_value"] == 10
+    assert summary["loss_value"] == 5
+    assert summary["net_movement_value"] == 35
+    assert summary["low_stock"] == 0
+    assert summary["zero_stock"] == 1
+
+
 def test_recipe_cost_and_margin_summary():
     recipe = {"yield_quantity": 2}
     items = [

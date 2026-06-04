@@ -1518,6 +1518,46 @@ def estornar_estoque_pedido(restaurant_id: str, pedido_id: str, user: dict | Non
         }, user))
     return {"movements": estornos}
 
+def calcular_inventory_summary(items: list[dict], movements: list[dict]) -> dict:
+    active = [i for i in items if i.get("is_active") is not False]
+    total_value = round(sum(float(i.get("current_quantity") or 0) * float(i.get("unit_cost") or 0) for i in active), 2)
+    minimum_value = round(sum(float(i.get("minimum_quantity") or 0) * float(i.get("unit_cost") or 0) for i in active), 2)
+    low = [i for i in active if calcular_estoque_alerta(i) == "baixo"]
+    zero = [i for i in active if calcular_estoque_alerta(i) == "zerado"]
+
+    gross_entry_value = 0.0
+    gross_out_value = 0.0
+    loss_value = 0.0
+    sale_cost_value = 0.0
+    net_movement_value = 0.0
+    for movement in movements:
+        delta = float(movement.get("quantity_delta") or 0)
+        unit_cost = float(movement.get("unit_cost") or 0)
+        value = round(delta * unit_cost, 2)
+        net_movement_value = round(net_movement_value + value, 2)
+        if delta > 0:
+            gross_entry_value = round(gross_entry_value + value, 2)
+        elif delta < 0:
+            abs_value = abs(value)
+            gross_out_value = round(gross_out_value + abs_value, 2)
+            if movement.get("movement_type") == "perda":
+                loss_value = round(loss_value + abs_value, 2)
+            if movement.get("movement_type") == "venda":
+                sale_cost_value = round(sale_cost_value + abs_value, 2)
+
+    return {
+        "active_items": len(active),
+        "total_stock_value": total_value,
+        "minimum_stock_value": minimum_value,
+        "gross_entry_value": round(gross_entry_value, 2),
+        "gross_out_value": round(gross_out_value, 2),
+        "loss_value": round(loss_value, 2),
+        "sale_cost_value": round(sale_cost_value, 2),
+        "net_movement_value": round(net_movement_value, 2),
+        "low_stock": len(low),
+        "zero_stock": len(zero),
+    }
+
 def _somar_pagamento_dashboard(por_pagamento: dict, forma_pagamento: str, total: float):
     total = _money(total)
     if not forma_pagamento:
@@ -3224,20 +3264,14 @@ def inventory_summary(u: dict = Depends(authorize(["manager", "owner"]))):
     enforce_platform_control(rid, "admin")
     items = _rows(sb.table("inventory_items").select("*").eq("restaurant_id", rid).execute())
     active = [i for i in items if i.get("is_active") is not False]
-    total_value = round(sum(float(i.get("current_quantity") or 0) * float(i.get("unit_cost") or 0) for i in active), 2)
     low = [i for i in active if calcular_estoque_alerta(i) == "baixo"]
     zero = [i for i in active if calcular_estoque_alerta(i) == "zerado"]
-    recent = _rows(sb.table("inventory_movements").select("movement_type,quantity_delta,unit_cost,created_at,inventory_items(name,unit)").eq("restaurant_id", rid).order("created_at", desc=True).limit(20).execute())
+    movements = _rows(sb.table("inventory_movements").select("movement_type,quantity_delta,unit_cost,created_at,inventory_items(name,unit)").eq("restaurant_id", rid).order("created_at", desc=True).limit(500).execute())
     return {
-        "summary": {
-            "active_items": len(active),
-            "total_stock_value": total_value,
-            "low_stock": len(low),
-            "zero_stock": len(zero),
-        },
+        "summary": calcular_inventory_summary(active, movements),
         "low_stock": low[:20],
         "zero_stock": zero[:20],
-        "recent_movements": recent,
+        "recent_movements": movements[:20],
     }
 
 

@@ -482,6 +482,25 @@ tbody tr:hover {
   transform: rotate(-35deg);
 }
 
+.i-box::before {
+  left: 3px;
+  right: 3px;
+  top: 5px;
+  bottom: 3px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+}
+
+.i-box::after {
+  left: 5px;
+  right: 5px;
+  top: 3px;
+  height: 6px;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  transform: skewY(-18deg);
+}
+
 .i-users::before {
   width: 7px;
   height: 7px;
