@@ -898,13 +898,17 @@ async function abrirEstoqueFornecedor() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+function fieldValue(id) {
+  return document.getElementById(id)?.value || '';
+}
+
 async function salvarEstoqueMovimento() {
   const btn = document.getElementById('inv-move-btn');
-  const item = estoqueItems.find(i => String(i.id) === String(val('inv-move-item')));
-  const quantity = Number(val('inv-move-qty') || 0);
-  const unitCostRaw = val('inv-move-cost');
-  const tipo = val('inv-move-type') || 'entrada';
-  const reason = val('inv-move-reason') || null;
+  const item = estoqueItems.find(i => String(i.id) === String(fieldValue('inv-move-item')));
+  const quantity = Number(fieldValue('inv-move-qty') || 0);
+  const unitCostRaw = fieldValue('inv-move-cost');
+  const tipo = fieldValue('inv-move-type') || 'entrada';
+  const reason = fieldValue('inv-move-reason') || null;
   if (!item) return showToast('Selecione um insumo', 'error');
   if (!Number.isFinite(quantity) || quantity === 0) return showToast('Informe uma quantidade diferente de zero', 'error');
   if (tipo === 'entrada' && Number(unitCostRaw || item.unit_cost || 0) <= 0) {
@@ -919,12 +923,12 @@ async function salvarEstoqueMovimento() {
     return showToast('Movimentação deixaria o estoque negativo. Use ajuste/inventário se precisar corrigir contagem.', 'error');
   }
   const payload = {
-    inventory_item_id: val('inv-move-item'),
+    inventory_item_id: fieldValue('inv-move-item'),
     movement_type: tipo,
     quantity,
     unit_cost: tipo === 'entrada' && unitCostRaw ? Number(unitCostRaw) : null,
-    supplier_id: tipo === 'entrada' ? (val('inv-move-supplier') || null) : null,
-    expiration_date: tipo === 'entrada' ? (val('inv-move-exp') || null) : null,
+    supplier_id: tipo === 'entrada' ? (fieldValue('inv-move-supplier') || null) : null,
+    expiration_date: tipo === 'entrada' ? (fieldValue('inv-move-exp') || null) : null,
     reason,
   };
   if (btn) btn.disabled = true;
@@ -949,7 +953,7 @@ function calcularDeltaMovimentoRapido(tipo, quantidade, saldoAtual) {
 function atualizarMovimentoRapidoHint() {
   const hint = document.getElementById('inv-move-hint');
   if (!hint) return;
-  const tipo = val('inv-move-type') || 'entrada';
+  const tipo = fieldValue('inv-move-type') || 'entrada';
   const compra = tipo === 'entrada';
   ['inv-move-cost', 'inv-move-supplier', 'inv-move-exp'].forEach(id => {
     const el = document.getElementById(id);
@@ -965,17 +969,17 @@ function atualizarMovimentoRapidoHint() {
     ajuste: 'Motivo do ajuste',
     inventario: 'Motivo da contagem',
   })[tipo] || 'Motivo';
-  const item = estoqueItems.find(i => String(i.id) === String(val('inv-move-item')));
+  const item = estoqueItems.find(i => String(i.id) === String(fieldValue('inv-move-item')));
   if (!item) {
     hint.textContent = 'Selecione um insumo para registrar movimentação.';
     hint.classList.add('warn');
     return;
   }
-  const quantidade = Number(val('inv-move-qty') || 0);
+  const quantidade = Number(fieldValue('inv-move-qty') || 0);
   const saldoAtual = Number(item.current_quantity || 0);
   const delta = calcularDeltaMovimentoRapido(tipo, quantidade, saldoAtual);
   const saldoPrevisto = saldoAtual + delta;
-  const custo = Number(val('inv-move-cost') || item.unit_cost || 0);
+  const custo = Number(fieldValue('inv-move-cost') || item.unit_cost || 0);
   const valorMovimento = Math.abs(delta) * custo;
   const label = ({
     entrada: 'Compra/entrada aumenta o estoque. Fornecedor é opcional, mas recomendado.',
