@@ -3,114 +3,236 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BRICKODE - Sistema-Pedidos</title>
-  <meta name="description" content="Sistema comercial para restaurantes, pizzarias e padarias com QR Code, cozinha, garcom, caixa, estoque e super-admin.">
+  <title>BricKode | Sistema SaaS para restaurantes</title>
+  <meta name="description" content="BricKode comercializa um sistema SaaS para restaurantes, pizzarias, padarias, bares e hamburguerias com QR Code, cozinha, garcom, caixa, estoque e gestao.">
+  <meta property="og:title" content="BricKode - Sistema para restaurantes">
+  <meta property="og:description" content="Pedidos por QR Code, cozinha, garcom, caixa, estoque e painel administrativo em uma plataforma SaaS.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&w=1200&q=80">
   <link rel="stylesheet" href="/comercial/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/comercial">BRICKODE</a>
-    <nav class="nav">
-      <a href="#modulos">Modulos</a>
-      <a href="#demo">Demo</a>
-      <a href="#planos">Venda</a>
+    <a class="brand" href="/comercial" aria-label="BricKode inicio">
+      <span class="brand-mark">BK</span>
+      <span>BricKode</span>
+    </a>
+    <nav class="nav" aria-label="Navegacao comercial">
+      <a href="#funcionalidades">Funcionalidades</a>
+      <a href="#fluxo">Como funciona</a>
+      <a href="#segmentos">Segmentos</a>
+      <a href="#planos">Planos</a>
     </nav>
-    <a class="top-action" href="https://wa.me/55119876293903" target="_blank" rel="noopener">Agendar demo</a>
+    <a class="top-action" href="https://wa.me/55119876293903?text=Quero%20conhecer%20o%20Sistema-Pedidos%20da%20BricKode" target="_blank" rel="noopener">Agendar demo</a>
   </header>
 
   <main>
     <section class="hero">
       <div class="hero-media" role="img" aria-label="Restaurante moderno com atendimento digital"></div>
       <div class="hero-content">
-        <p class="eyebrow">Sistema-Pedidos</p>
-        <h1>BRICKODE</h1>
-        <p class="hero-copy">Sistema para restaurantes, pizzarias e padarias operarem QR Code, cozinha, garcom, caixa, estoque e gestao SaaS em uma plataforma unica.</p>
+        <p class="eyebrow">Sistema-Pedidos by BricKode</p>
+        <h1>Sistema SaaS para operar restaurante com menos erro e mais controle.</h1>
+        <p class="hero-copy">QR Code na mesa, pedidos direto na cozinha, acompanhamento do garcom, fechamento no caixa, estoque com ficha tecnica e painel para o dono acompanhar a operacao.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/r/demo-restaurante/mesa/demo-restaurante-mesa-1">Ver QR Code demo</a>
-          <a class="btn" href="/super-admin">Abrir super-admin</a>
+          <a class="btn primary" href="https://wa.me/55119876293903?text=Quero%20uma%20demo%20do%20Sistema-Pedidos" target="_blank" rel="noopener">Falar no WhatsApp</a>
+          <a class="btn" href="/r/demo-restaurante/mesa/demo-restaurante-mesa-1">Ver cardapio demo</a>
+        </div>
+        <div class="proof-row" aria-label="Resumo do sistema">
+          <span>Restaurantes</span>
+          <span>Pizzarias</span>
+          <span>Padarias</span>
+          <span>Bares</span>
         </div>
       </div>
     </section>
 
-    <section class="band" id="modulos">
+    <section class="metrics" aria-label="Indicadores da plataforma">
+      <article>
+        <strong>7 telas</strong>
+        <span>mesa, garcom, cozinha, caixa, TV, admin e super-admin</span>
+      </article>
+      <article>
+        <strong>Multi-tenant</strong>
+        <span>cada restaurante com slug, usuarios e dados isolados</span>
+      </article>
+      <article>
+        <strong>Demo pronta</strong>
+        <span>ambiente publicado para testar no navegador e celular</span>
+      </article>
+    </section>
+
+    <section class="band" id="funcionalidades">
       <div class="section-head">
-        <span>Operacao completa</span>
-        <h2>Do pedido ao fechamento de caixa</h2>
+        <span>Funcionalidades principais</span>
+        <h2>Uma operacao conectada do pedido ao fechamento</h2>
+        <p>O sistema foi pensado para o dia a dia do restaurante: funcionario precisa de tela simples, dono precisa de controle e cliente precisa pedir sem atrito.</p>
       </div>
       <div class="module-grid">
         <article>
           <span class="icon">QR</span>
-          <h3>QR Code</h3>
-          <p>Cliente acessa a mesa, escolhe produtos e envia o pedido sem esperar atendimento inicial.</p>
+          <h3>Cardapio por QR Code</h3>
+          <p>Cliente abre a mesa no celular, filtra categorias, escolhe produtos, adiciona observacoes e envia o pedido.</p>
         </article>
         <article>
-          <span class="icon">KDS</span>
-          <h3>Cozinha</h3>
-          <p>Fila de pedidos com status para confirmar, preparar, finalizar e entregar.</p>
+          <span class="icon">COZ</span>
+          <h3>Cozinha organizada</h3>
+          <p>Pedidos entram em fila com status: confirmar, em preparo, pronto, entregue e historico recente.</p>
         </article>
         <article>
           <span class="icon">GAR</span>
-          <h3>Garcom</h3>
-          <p>Acompanhamento de mesas, chamados e operacao de salao conforme permissao do restaurante.</p>
+          <h3>Garcom e salao</h3>
+          <p>Mesas, chamados, ocupacao, liberacao e acompanhamento do que esta acontecendo no atendimento.</p>
         </article>
         <article>
           <span class="icon">CX</span>
-          <h3>Caixa</h3>
-          <p>Abertura de turno, fechamento de conta, pagamentos e resumo operacional.</p>
+          <h3>Caixa e pagamentos</h3>
+          <p>Abertura de turno, venda rapida de balcao, fechamento de conta, dinheiro, Pix, cartao, misto e troco.</p>
         </article>
         <article>
           <span class="icon">EST</span>
-          <h3>Estoque</h3>
-          <p>Insumos, ficha tecnica, baixa automatica por venda e alerta de estoque baixo.</p>
+          <h3>Estoque basico</h3>
+          <p>Insumos, fornecedores, entrada, perda, ajuste, estoque minimo, ficha tecnica e baixa automatica por venda.</p>
         </article>
         <article>
-          <span class="icon">SAA</span>
-          <h3>Super-admin</h3>
-          <p>Controle de restaurantes, planos, mensalidades, suporte, auditoria e bloqueios.</p>
+          <span class="icon">ADM</span>
+          <h3>Admin e super-admin</h3>
+          <p>Produtos, categorias, mesas, usuarios, suporte, financeiro SaaS, planos, bloqueios e auditoria.</p>
         </article>
       </div>
     </section>
 
-    <section class="demo" id="demo">
-      <div>
-        <span class="eyebrow">Demo segura</span>
-        <h2>Mostre em minutos o fluxo que o restaurante entende</h2>
-        <p>Abra a mesa pelo celular, envie um pedido, acompanhe na cozinha, finalize no caixa e mostre ao dono o painel administrativo.</p>
+    <section class="flow" id="fluxo">
+      <div class="section-head">
+        <span>Como usar na pratica</span>
+        <h2>Fluxo simples para demonstrar ao cliente</h2>
       </div>
-      <div class="demo-links">
-        <a href="/r/demo-restaurante/admin">Admin restaurante</a>
-        <a href="/r/demo-restaurante/cozinha">Cozinha</a>
-        <a href="/r/demo-restaurante/caixa">Caixa</a>
-        <a href="/r/demo-pizzaria/admin">Demo pizzaria</a>
-        <a href="/r/demo-padaria/admin">Demo padaria</a>
+      <div class="timeline">
+        <article>
+          <span>1</span>
+          <h3>Cliente pede</h3>
+          <p>Abra o QR da mesa, escolha um produto e envie o pedido.</p>
+        </article>
+        <article>
+          <span>2</span>
+          <h3>Cozinha recebe</h3>
+          <p>A equipe confirma, prepara, marca pronto e depois entregue.</p>
+        </article>
+        <article>
+          <span>3</span>
+          <h3>Equipe acompanha</h3>
+          <p>Garcom visualiza mesas e chamados. Caixa acompanha contas abertas.</p>
+        </article>
+        <article>
+          <span>4</span>
+          <h3>Dono gerencia</h3>
+          <p>Admin atualiza cardapio, usuarios, estoque e acompanha relatorios.</p>
+        </article>
+      </div>
+      <div class="demo-panel">
+        <div>
+          <p class="eyebrow">Ambiente demo</p>
+          <h2>Teste direto no navegador</h2>
+          <p>Use os links abaixo para mostrar o sistema em uma reuniao. As credenciais demo ficam no material interno do projeto.</p>
+        </div>
+        <div class="demo-links">
+          <a href="/r/demo-restaurante/mesa/demo-restaurante-mesa-1">Cardapio da mesa</a>
+          <a href="/r/demo-restaurante/cozinha">Tela da cozinha</a>
+          <a href="/r/demo-restaurante/garcom">Tela do garcom</a>
+          <a href="/r/demo-restaurante/caixa">Tela do caixa</a>
+          <a href="/r/demo-restaurante/admin">Admin do restaurante</a>
+          <a href="/super-admin">Super-admin SaaS</a>
+        </div>
       </div>
     </section>
 
-    <section class="band compact" id="planos">
+    <section class="segments" id="segmentos">
       <div class="section-head">
-        <span>Venda assistida</span>
-        <h2>Comece pelo que ja esta validado</h2>
+        <span>Tipos de negocio</span>
+        <h2>Adaptado para vender em operacoes diferentes</h2>
       </div>
-      <div class="sales-grid">
-        <div>
-          <strong>Pronto para piloto</strong>
-          <p>Restaurante comum, bar, hamburgueria e cafeteria com fluxo de mesa, cozinha, garcom, caixa e estoque.</p>
-        </div>
-        <div>
-          <strong>Demo comercial</strong>
-          <p>Pizzaria e padaria operam com produtos normais. Recursos avancados ficam posicionados como implantacao.</p>
-        </div>
-        <div>
-          <strong>Proximo passo</strong>
-          <p>Configurar restaurante, treinar equipe e acompanhar o primeiro turno.</p>
-        </div>
+      <div class="segment-grid">
+        <article>
+          <h3>Restaurante</h3>
+          <p>Mesas, QR Code, garcom, cozinha, caixa, estoque e taxa de servico.</p>
+        </article>
+        <article>
+          <h3>Pizzaria</h3>
+          <p>Demo segura com pizzas como produtos, bordas como adicionais/produtos e cozinha detalhada.</p>
+        </article>
+        <article>
+          <h3>Padaria</h3>
+          <p>Balcao, produtos de giro, caixa rapido e estoque. Balanca e producao avancada ficam em implantacao.</p>
+        </article>
+        <article>
+          <h3>Bar e hamburgueria</h3>
+          <p>Alto giro, mesas, pedidos rapidos, cozinha e fechamento de caixa por turno.</p>
+        </article>
       </div>
+    </section>
+
+    <section class="plans" id="planos">
+      <div class="section-head">
+        <span>Planos comerciais</span>
+        <h2>Comece pequeno e aumente conforme o restaurante cresce</h2>
+      </div>
+      <div class="plan-grid">
+        <article>
+          <p class="plan-name">Basico</p>
+          <strong>R$ 149/mês</strong>
+          <ul>
+            <li>Ate 10 mesas</li>
+            <li>Ate 5 usuarios</li>
+            <li>Ate 100 produtos</li>
+            <li>Ate 2 caixas</li>
+          </ul>
+        </article>
+        <article class="featured">
+          <p class="plan-name">Pro</p>
+          <strong>R$ 249/mês</strong>
+          <ul>
+            <li>Ate 40 mesas</li>
+            <li>Ate 15 usuarios</li>
+            <li>Ate 400 produtos</li>
+            <li>Estoque e relatorios</li>
+          </ul>
+        </article>
+        <article>
+          <p class="plan-name">Premium</p>
+          <strong>A partir de R$ 399/mês</strong>
+          <ul>
+            <li>Multiunidade</li>
+            <li>Limites maiores</li>
+            <li>Suporte ampliado</li>
+            <li>Configuracoes avancadas</li>
+          </ul>
+        </article>
+      </div>
+      <div class="offer">
+        <strong>Oferta para primeiro cliente:</strong>
+        <span>Plano Pro por R$ 199/mês nos 3 primeiros meses + implantacao acompanhada por R$ 397.</span>
+      </div>
+    </section>
+
+    <section class="implementation">
+      <div>
+        <p class="eyebrow">Implantacao assistida</p>
+        <h2>O primeiro piloto precisa ser acompanhado de perto</h2>
+      </div>
+      <ul class="checklist">
+        <li>Criar restaurante, usuarios, mesas e cardapio inicial.</li>
+        <li>Treinar dono, caixa, cozinha e garcons em sessoes curtas.</li>
+        <li>Fazer um pedido real de teste antes de abrir para clientes.</li>
+        <li>Acompanhar o primeiro turno e corrigir ajustes operacionais.</li>
+      </ul>
     </section>
   </main>
 
   <footer>
-    <span>BRICKODE Sistema-Pedidos</span>
-    <a href="https://wa.me/55119876293903" target="_blank" rel="noopener">Falar no WhatsApp</a>
+    <div>
+      <strong>BricKode</strong>
+      <span>Sistema-Pedidos SaaS para restaurantes</span>
+    </div>
+    <a href="https://wa.me/55119876293903?text=Quero%20conhecer%20a%20BricKode" target="_blank" rel="noopener">Falar no WhatsApp</a>
   </footer>
 </body>
 </html>
