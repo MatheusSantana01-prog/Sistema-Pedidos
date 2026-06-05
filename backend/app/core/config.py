@@ -53,7 +53,8 @@ def get_settings() -> Settings:
     if not supabase_key or "COLE" in supabase_key:
         raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY não configurado")
 
-    cors_raw = os.getenv("CORS_ORIGINS", "*")
+    frontend_url = os.getenv("PUBLIC_FRONTEND_URL", "https://frontend-teal-nine-80.vercel.app")
+    cors_raw = os.getenv("CORS_ORIGINS", frontend_url)
     app_version = os.getenv("APP_VERSION", os.getenv("RENDER_GIT_COMMIT", "local"))[:12]
 
     return Settings(
@@ -65,7 +66,7 @@ def get_settings() -> Settings:
         app_env=os.getenv("APP_ENV", "development"),
         cors_origins_raw=cors_raw,
         cors_origins=parse_cors_origins(cors_raw),
-        frontend_url=os.getenv("PUBLIC_FRONTEND_URL", "*"),
+        frontend_url=frontend_url,
         app_version=app_version,
         kitchen_ready_visible_minutes=_int_env("KITCHEN_READY_VISIBLE_MINUTES", "15"),
     )

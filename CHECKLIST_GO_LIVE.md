@@ -33,6 +33,20 @@
 - Testar permissoes de cashier/waiter/kitchen/tv sem acesso de escrita ao estoque.
 - Validar logs/auditoria.
 
+## Seguranca
+
+- Confirmar `APP_ENV=production` no Render.
+- Confirmar `CORS_ORIGINS` sem `*`.
+- Confirmar `PUBLIC_FRONTEND_URL` com o dominio publicado.
+- Confirmar `JWT_SECRET` forte e exclusivo do ambiente.
+- Confirmar `SUPABASE_SERVICE_ROLE_KEY` apenas no backend/Render.
+- Confirmar rate limit ativo:
+  - login;
+  - rotas publicas de pedido/chamado;
+  - API geral.
+- Confirmar headers de seguranca no `/health` e `/api/health`.
+- Revisar [SEGURANCA_OPERACIONAL.md](SEGURANCA_OPERACIONAL.md).
+
 ## Deploy
 
 - Validar deploy Render.
@@ -51,4 +65,3 @@
 
 - Go-live aprovado somente se todos os itens acima passarem.
 - Se falhar schema ou smoke, nao liberar para cliente.
-

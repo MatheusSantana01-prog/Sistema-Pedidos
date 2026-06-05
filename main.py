@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 
 try:
@@ -61,6 +62,13 @@ APP_VERSION = settings.app_version
 KITCHEN_READY_VISIBLE_MINUTES = settings.kitchen_ready_visible_minutes
 logger = logging.getLogger("restaurante-saas")
 logging.basicConfig(level=logging.INFO)
+
+RATE_LIMITS = {
+    "auth_login": (10, 60),
+    "public_write": (60, 60),
+    "api_default": (600, 60),
+}
+RATE_LIMIT_STORE: dict[str, list[float]] = {}
 
 # ── ROLES HIERARQUIA ─────────────────────────────────────────────
 ROLE_LEVEL = {
@@ -505,10 +513,71 @@ app.add_middleware(
     allow_credentials=True,
 )
 
+
+def client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+def rate_limit_bucket(request: Request) -> tuple[str, int, int] | None:
+    path = request.url.path
+    method = request.method.upper()
+    if method == "OPTIONS":
+        return None
+    if path == "/api/auth/login":
+        limit, window = RATE_LIMITS["auth_login"]
+        return "auth_login", limit, window
+    if path.startswith("/api/public/") and method in {"POST", "PATCH", "PUT", "DELETE"}:
+        limit, window = RATE_LIMITS["public_write"]
+        return "public_write", limit, window
+    if path.startswith("/api/"):
+        limit, window = RATE_LIMITS["api_default"]
+        return "api_default", limit, window
+    return None
+
+
+def check_rate_limit(bucket: str, ip: str, now: float | None = None) -> tuple[bool, int]:
+    now = now if now is not None else time.time()
+    limit, window = RATE_LIMITS[bucket]
+    key = f"{bucket}:{ip}"
+    cutoff = now - window
+    hits = [ts for ts in RATE_LIMIT_STORE.get(key, []) if ts > cutoff]
+    if len(hits) >= limit:
+        retry_after = max(1, int(window - (now - hits[0])))
+        RATE_LIMIT_STORE[key] = hits
+        return False, retry_after
+    hits.append(now)
+    RATE_LIMIT_STORE[key] = hits
+    if len(RATE_LIMIT_STORE) > 5000:
+        for store_key in list(RATE_LIMIT_STORE.keys())[:1000]:
+            RATE_LIMIT_STORE.pop(store_key, None)
+    return True, 0
+
+
 @app.middleware("http")
 async def monitorar_requisicoes(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or secrets.token_hex(8)
     inicio = time.perf_counter()
+    rate = rate_limit_bucket(request)
+    if rate:
+        bucket, _limit, _window = rate
+        allowed, retry_after = check_rate_limit(bucket, client_ip(request))
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Muitas tentativas. Aguarde e tente novamente."},
+                headers={
+                    "Retry-After": str(retry_after),
+                    "x-request-id": request_id,
+                    "x-app-version": APP_VERSION,
+                    "x-content-type-options": "nosniff",
+                    "referrer-policy": "strict-origin-when-cross-origin",
+                    "x-frame-options": "DENY",
+                    "cache-control": "no-store",
+                },
+            )
     try:
         response = await call_next(request)
     except Exception as exc:
@@ -538,6 +607,11 @@ async def monitorar_requisicoes(request: Request, call_next):
         raise
     response.headers["x-request-id"] = request_id
     response.headers["x-app-version"] = APP_VERSION
+    response.headers.setdefault("x-content-type-options", "nosniff")
+    response.headers.setdefault("referrer-policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("x-frame-options", "DENY")
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("cache-control", "no-store")
     return response
 
 

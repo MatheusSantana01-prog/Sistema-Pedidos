@@ -1,4 +1,4 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 import pytest
@@ -13,6 +13,41 @@ def test_health_check():
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_rate_limit_blocks_after_bucket_limit():
+    main.RATE_LIMIT_STORE.clear()
+    original = main.RATE_LIMITS["auth_login"]
+    main.RATE_LIMITS["auth_login"] = (2, 60)
+    try:
+        assert main.check_rate_limit("auth_login", "1.2.3.4", now=1000)[0] is True
+        assert main.check_rate_limit("auth_login", "1.2.3.4", now=1001)[0] is True
+        allowed, retry_after = main.check_rate_limit("auth_login", "1.2.3.4", now=1002)
+        assert allowed is False
+        assert retry_after > 0
+    finally:
+        main.RATE_LIMITS["auth_login"] = original
+        main.RATE_LIMIT_STORE.clear()
+
+
+def test_rate_limit_bucket_classifies_sensitive_routes():
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/auth/login",
+        "headers": [],
+        "query_string": b"",
+        "server": ("testserver", 80),
+        "scheme": "http",
+        "client": ("127.0.0.1", 123),
+    }
+    assert main.rate_limit_bucket(Request(scope))[0] == "auth_login"
+    scope["path"] = "/api/public/restaurants/demo/orders"
+    assert main.rate_limit_bucket(Request(scope))[0] == "public_write"
+    scope["path"] = "/api/admin/tables"
+    scope["method"] = "GET"
+    assert main.rate_limit_bucket(Request(scope))[0] == "api_default"
 
 
 def test_token_keeps_restaurant_context():

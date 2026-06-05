@@ -53,6 +53,10 @@ Configure no Render ou `.env` local:
 
 Nunca coloque `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET` ou senhas reais no frontend ou no GitHub.
 
+Em produção, configure `CORS_ORIGINS` sem `*`, usando os domínios reais do frontend. O default seguro atual usa `https://frontend-teal-nine-80.vercel.app` e mantém localhost apenas para desenvolvimento.
+
+O backend possui rate limit básico em memória para login, rotas públicas de escrita e API geral. Para múltiplas instâncias/enterprise, migrar esse controle para Redis/Upstash.
+
 ## Estoque e schema extra
 
 O modulo de estoque comercial fica no painel admin do restaurante, aba `Estoque`, e cobre insumos, fornecedores, movimentacoes, alertas, relatorios e ficha tecnica por produto.
@@ -150,3 +154,4 @@ Por padrão a senha demo é `demo123`. Para piloto real, defina `DEMO_PASSWORD` 
 - [MANUAL_DELIVERY.md](MANUAL_DELIVERY.md)
 - [CHECKLIST_VENDA.md](CHECKLIST_VENDA.md)
 - [CHECKLIST_IMPLANTACAO_CLIENTE.md](CHECKLIST_IMPLANTACAO_CLIENTE.md)
+- [SEGURANCA_OPERACIONAL.md](SEGURANCA_OPERACIONAL.md)
