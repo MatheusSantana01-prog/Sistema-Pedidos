@@ -103,11 +103,11 @@ footer a:hover {
 }
 
 .hero {
-  min-height: 96vh;
+  min-height: 88vh;
   position: relative;
   display: grid;
-  align-items: end;
-  padding: 130px clamp(18px, 5vw, 64px) 64px;
+  align-items: center;
+  padding: 112px clamp(18px, 5vw, 64px) 58px;
   overflow: hidden;
 }
 
@@ -115,8 +115,8 @@ footer a:hover {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(11,13,14,.96), rgba(11,13,14,.74) 47%, rgba(11,13,14,.26)),
-    linear-gradient(0deg, rgba(11,13,14,.86), rgba(11,13,14,0) 35%),
+    linear-gradient(90deg, rgba(11,13,14,.90), rgba(11,13,14,.66) 48%, rgba(11,13,14,.18)),
+    linear-gradient(0deg, rgba(11,13,14,.78), rgba(11,13,14,0) 38%),
     url("https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&w=1900&q=82") center/cover;
   transform: scale(1.02);
 }
@@ -231,7 +231,7 @@ h3 {
 .timeline p,
 .segment-grid p,
 .plan-grid li,
-.offer span,
+.business-value span,
 .implementation li,
 .section-head p,
 footer span {
@@ -377,16 +377,28 @@ footer span {
     var(--panel-2);
 }
 
-.offer {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
+.business-value {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   margin-top: 16px;
+}
+
+.business-value article {
+  min-height: 112px;
   padding: 18px 20px;
-  border: 1px solid rgba(243,178,63,.36);
+  border: 1px solid rgba(36,180,126,.28);
   border-radius: 8px;
-  background: rgba(243,178,63,.1);
+  background: rgba(36,180,126,.09);
+}
+
+.business-value strong,
+.business-value span {
+  display: block;
+}
+
+.business-value strong {
+  margin-bottom: 8px;
 }
 
 .implementation {
@@ -438,13 +450,14 @@ footer a {
   .timeline,
   .segment-grid,
   .plan-grid,
+  .business-value,
   .demo-panel,
   .implementation {
     grid-template-columns: 1fr;
   }
 
   .hero {
-    min-height: 90vh;
+    min-height: 82vh;
     padding-top: 112px;
   }
 
@@ -474,8 +487,8 @@ footer a {
   }
 
   .hero {
-    min-height: 88vh;
-    padding-top: 150px;
+    min-height: 82vh;
+    padding-top: 116px;
   }
 
   .hero-actions .btn {
