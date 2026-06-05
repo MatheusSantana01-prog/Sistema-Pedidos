@@ -6,7 +6,7 @@
 - Abrir Vercel: `https://frontend-teal-nine-80.vercel.app`
 - Abrir landing comercial: `https://frontend-teal-nine-80.vercel.app/comercial`
 - Abrir Render health: `https://sistema-pedidos-zk2w.onrender.com/health`
-- Confirmar se o Render retorna versao `99ebd0483c0b` ou mais nova.
+- Confirmar se o Render retorna versao `968b1c02bc96` ou mais nova.
 - Confirmar que `demo-restaurante`, `demo-pizzaria` e `demo-padaria` abrem.
 - Confirmar que o admin demo entra com senha `Demo@2026`.
 
@@ -26,6 +26,10 @@
 - Caixa: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/caixa`
 - TV: `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/tv`
 - Landing comercial: `https://frontend-teal-nine-80.vercel.app/comercial`
+- Admin pizzaria: `https://frontend-teal-nine-80.vercel.app/r/demo-pizzaria/admin`
+- Mesa pizzaria: `https://frontend-teal-nine-80.vercel.app/r/demo-pizzaria/mesa/demo-pizzaria-mesa-1`
+- Admin padaria: `https://frontend-teal-nine-80.vercel.app/r/demo-padaria/admin`
+- Mesa padaria: `https://frontend-teal-nine-80.vercel.app/r/demo-padaria/mesa/demo-padaria-mesa-1`
 
 ## O que testar antes de apresentar
 
@@ -64,6 +68,7 @@
 - "Cada restaurante ve so os proprios dados?" Sim, as rotas autenticadas usam `restaurant_id` do JWT.
 - "Da para usar em pizzaria/padaria?" Sim para operacao basica; recursos avancados estao em implantacao controlada.
 - "Tem estoque?" Sim, com insumos, ficha tecnica, baixa por venda e alertas.
+- "Quanto custa?" Basico R$ 149/mês, Pro R$ 249/mês, Premium a partir de R$ 399/mês. Para primeiro cliente, Pro por R$ 199/mês nos 3 primeiros meses + implantacao R$ 397.
 
 ## Plano B se internet falhar
 
@@ -83,8 +88,10 @@
 ## Verificacao final publicada - 2026-06-05
 
 - Branch local confirmada: `produto-comercial-restaurantes`.
-- Vercel production: `READY`, commit `e3b5a189f2417e4875ebbde6061a5ad7083c8047`.
-- Render `/health`: `ok`, version `9b0bb5d9a199`.
+- Vercel production: `READY`, commit `968b1c0`.
+- Render `/health`: `ok`, version `968b1c02bc96`.
+- Demo comercial recriada/validada em Supabase publicado.
+- Padaria demo nao tem usuario garcom por regra de negocio: opera como balcao/cozinha/caixa.
 - Rotas principais publicadas retornaram HTTP 200:
   - `/comercial`
   - `/super-admin`

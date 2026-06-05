@@ -1,8 +1,8 @@
 # Credenciais Demo Comercial
 
-Data: 2026-06-02
+Data: 2026-06-05
 Branch: `produto-comercial-restaurantes`
-Commit publicado validado: `99ebd0483c0b19b9543aeb4e390420a6bddba24c`
+Commit publicado validado: `968b1c02bc96`
 
 ## Senha padrao
 
@@ -43,10 +43,11 @@ python backend/scripts/seed_demo_comercial.py
 
 - Slug: `demo-padaria`
 - Admin: `owner@demo-padaria.com`
-- Garcom: `waiter@demo-padaria.com`
 - Cozinha: `kitchen@demo-padaria.com`
 - Caixa: `cashier@demo-padaria.com`
 - Mesa 1: `/r/demo-padaria/mesa/demo-padaria-mesa-1`
+
+Observacao: padaria usa fluxo de balcao/cozinha/caixa. O modulo garcom fica desativado por regra de tipo de negocio.
 
 ## Links base
 
@@ -73,7 +74,7 @@ python backend/scripts/seed_demo_comercial.py
 ## Status do ambiente publicado
 
 - Vercel production da branch `produto-comercial-restaurantes`: publicado e validado.
-- Render: URL de producao respondeu `/health` com versao `99ebd0483c0b`.
+- Render: URL de producao respondeu `/health` com versao `968b1c02bc96`.
 - Supabase: projeto `Restaurante` validado com schema comercial de estoque/tipo de negocio aplicado e RLS ativo nas tabelas de estoque.
 - Seed demo comercial: dados demo presentes para restaurante, pizzaria e padaria.
 - Smoke publicado: pedido, cozinha, caixa, baixa de estoque e bloqueio/desbloqueio foram validados.
@@ -85,10 +86,13 @@ Essas credenciais sao exclusivamente para demo. Nao use em cliente real.
 ## Verificacao publicada - 2026-06-05
 
 - Vercel production: `READY`.
-- Vercel commit: `e3b5a189f2417e4875ebbde6061a5ad7083c8047`.
+- Vercel commit: `968b1c0`.
 - Vercel branch: `produto-comercial-restaurantes`.
 - Render `/health`: `ok`.
-- Render version: `9b0bb5d9a199`.
+- Render version: `968b1c02bc96`.
+- Seed demo operacional: recriado/validado via API publicada e Supabase para `demo-restaurante`, `demo-pizzaria` e `demo-padaria`.
+- Logins owner dos tres demos: validados.
+- Tokens mesa 1: validados.
 
 Rotas demo verificadas com HTTP 200:
 

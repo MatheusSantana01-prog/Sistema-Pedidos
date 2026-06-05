@@ -167,3 +167,37 @@ Recomendacao atualizada:
 - Apresentacao/demo: sim.
 - Piloto controlado: sim, com validacao manual das credenciais demo no navegador antes da reuniao.
 - Venda ampla: ainda nao, enquanto o smoke real Supabase nao for rodado com credenciais QA/staging.
+
+## Correcao operacional da demo - 2026-06-05
+
+Bug real encontrado:
+
+- Os slugs `demo-restaurante`, `demo-pizzaria` e `demo-padaria` estavam documentados, mas nao existiam no Supabase publicado.
+- Resultado: Playwright carregava tela de "Restaurante nao encontrado" e login `owner@demo-restaurante.com` falhava com `401`.
+
+Correcao executada:
+
+- Criados `demo-restaurante`, `demo-pizzaria` e `demo-padaria` pelo super-admin publicado.
+- Rodado repair-seed via API publicada para categorias, produtos e mesas.
+- Criados usuarios demo:
+  - restaurante: owner, garcom, cozinha e caixa;
+  - pizzaria: owner, garcom, cozinha e caixa;
+  - padaria: owner, cozinha e caixa.
+- Padaria nao recebeu garcom porque o tipo `padaria` desativa esse modulo por regra comercial.
+- Tokens de mesa 1 ajustados no Supabase publicado:
+  - `demo-restaurante-mesa-1`;
+  - `demo-pizzaria-mesa-1`;
+  - `demo-padaria-mesa-1`.
+
+Validacao:
+
+- Login owner dos tres demos: passou.
+- Mesa 1 dos tres demos: HTTP 200.
+- Playwright publicado apos correcao: 16/16 passou.
+- Ajustado E2E para tratar HTTP 429 de login com retry e mensagem clara.
+- Ajustado frontend para exibir "Muitas tentativas de login" quando o backend retornar 429.
+
+Recomendacao:
+
+- Antes de apresentar, abrir admin `demo-restaurante` e aguardar 60 segundos se houver muitas tentativas recentes de login.
+- Para venda, usar `demo-restaurante` como fluxo principal.

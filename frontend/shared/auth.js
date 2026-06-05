@@ -127,6 +127,11 @@ async function login(email, senha, restaurantSlug = null, options = {}) {
 
   if (resp.status === 401) throw new Error('Login ou senha incorretos');
   if (resp.status === 403) throw new Error('Sem acesso a este restaurante');
+  if (resp.status === 429) {
+    const retryAfter = Number(resp.headers.get('Retry-After') || 0);
+    const waitText = retryAfter > 0 ? ` Aguarde ${retryAfter}s e tente novamente.` : '';
+    throw new Error(`Muitas tentativas de login.${waitText}`);
+  }
   if (!resp.ok) {
     throw new Error(await readApiError(resp, 'Erro ao fazer login'));
   }

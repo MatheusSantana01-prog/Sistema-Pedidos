@@ -143,3 +143,28 @@ Feche com proposta:
 - mensalidade conforme plano;
 - ajustes conforme operacao real do cliente.
 
+## 12. Proposta objetiva para o primeiro cliente
+
+Use uma oferta simples:
+
+- Plano recomendado: Pro.
+- Mensalidade de entrada: R$ 199/mês por 3 meses.
+- Mensalidade normal: R$ 249/mês.
+- Implantacao acompanhada: R$ 397 no primeiro cliente.
+- Teste acompanhado: 7 dias.
+
+Frase de fechamento:
+
+> A ideia nao e vender promessa. A gente instala, acompanha uma semana e valida pedido, cozinha e caixa no seu movimento real. Se fizer sentido, fica no plano Pro.
+
+## 13. O que evitar na apresentacao
+
+- Nao prometer emissao fiscal real.
+- Nao prometer iFood integrado.
+- Nao prometer balanca homologada.
+- Nao vender meio a meio avancado como pronto.
+- Nao criar regra personalizada durante a reuniao.
+
+Se o cliente pedir algo fora do sistema atual, responder:
+
+> Isso entra como melhoria de segunda etapa. Para o piloto, eu quero validar primeiro o fluxo principal: QR, cozinha, caixa, usuarios, estoque e controle do dono.
