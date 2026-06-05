@@ -81,3 +81,27 @@ python backend/scripts/seed_demo_comercial.py
 ## Aviso
 
 Essas credenciais sao exclusivamente para demo. Nao use em cliente real.
+
+## Verificacao publicada - 2026-06-05
+
+- Vercel production: `READY`.
+- Vercel commit: `e3b5a189f2417e4875ebbde6061a5ad7083c8047`.
+- Vercel branch: `produto-comercial-restaurantes`.
+- Render `/health`: `ok`.
+- Render version: `9b0bb5d9a199`.
+
+Rotas demo verificadas com HTTP 200:
+
+- `https://frontend-teal-nine-80.vercel.app/comercial`
+- `https://frontend-teal-nine-80.vercel.app/super-admin`
+- `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/admin`
+- `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
+- `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/cozinha`
+- `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/garcom`
+- `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/caixa`
+- `https://frontend-teal-nine-80.vercel.app/r/demo-restaurante/tv`
+
+Observacao operacional:
+
+- O seed demo e o smoke real nao foram executados nesta maquina em 2026-06-05 porque `SUPABASE_URL` nao esta configurado no ambiente local.
+- Antes de uma apresentacao importante, entrar no admin com as credenciais demo e confirmar manualmente que os dados demo ainda existem no Supabase publicado.

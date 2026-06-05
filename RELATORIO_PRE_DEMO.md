@@ -103,3 +103,67 @@ Apresentar amanha: sim.
 
 Pronto para piloto controlado: sim, usando restaurantes demo/QA e validando o fluxo no cliente antes da instalacao.
 Pronto para venda ampla: nao.
+
+## Verificacao final publicada - 2026-06-05
+
+Branch local: `produto-comercial-restaurantes`.
+
+Commits recentes:
+
+- `e3b5a18` - Corrige helper da movimentacao de estoque.
+- `9b0bb5d` - Melhora logica de movimentacao de estoque.
+- `d703b6a` - Corrige salvamento de foto do produto.
+- `a2661a6` - Corrige estoque e movimentacao rapida.
+- `969d37a` - Consolida limites e modulos comerciais.
+
+Ambiente publicado:
+
+- Vercel production: `READY`.
+- Vercel branch: `produto-comercial-restaurantes`.
+- Vercel commit: `e3b5a189f2417e4875ebbde6061a5ad7083c8047`.
+- Vercel URL: `https://frontend-teal-nine-80.vercel.app`.
+- Render URL: `https://sistema-pedidos-zk2w.onrender.com`.
+- Render `/health`: `ok`.
+- Render version: `9b0bb5d9a199`.
+- Observacao: Render esta em `9b0bb5d`, que e mais novo que `99ebd048` e contem as mudancas de backend comerciais. O commit `e3b5a18` foi apenas frontend.
+
+Rotas publicadas verificadas com HTTP 200:
+
+- `/comercial`
+- `/super-admin`
+- `/r/demo-restaurante/admin`
+- `/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
+- `/r/demo-restaurante/cozinha`
+- `/r/demo-restaurante/garcom`
+- `/r/demo-restaurante/caixa`
+- `/r/demo-restaurante/tv`
+
+Validadacoes executadas:
+
+- `python -m py_compile main.py backend/main.py backend/app/core/config.py backend/app/core/database.py backend/app/core/security.py backend/scripts/seed_demo_comercial.py`: passou.
+- `python -m pytest -q`: 53 testes passaram.
+- `node --check` em todos os JS do frontend/e2e: passou.
+- `npx playwright test`: 12 testes passaram, 4 foram pulados por falta de variaveis QA autenticadas.
+
+Supabase, seed e smoke real:
+
+- `python backend/scripts/check_inventory_schema.py`: bloqueado localmente por falta de `SUPABASE_URL`.
+- `python backend/scripts/seed_demo_comercial.py`: bloqueado localmente por falta de `SUPABASE_URL`.
+- `python backend/scripts/smoke_inventory_real.py`: bloqueado localmente por falta de `SUPABASE_URL`.
+- Nenhum dado real foi apagado ou alterado nesta verificacao.
+
+Pendencia para fechar 100% do ambiente com banco real:
+
+```powershell
+$env:SUPABASE_URL="https://SEU-PROJETO.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="SUA_SERVICE_ROLE_KEY"
+python backend/scripts/check_inventory_schema.py
+python backend/scripts/seed_demo_comercial.py
+python backend/scripts/smoke_inventory_real.py
+```
+
+Recomendacao atualizada:
+
+- Apresentacao/demo: sim.
+- Piloto controlado: sim, com validacao manual das credenciais demo no navegador antes da reuniao.
+- Venda ampla: ainda nao, enquanto o smoke real Supabase nao for rodado com credenciais QA/staging.

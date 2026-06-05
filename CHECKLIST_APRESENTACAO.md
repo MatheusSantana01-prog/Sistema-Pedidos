@@ -79,3 +79,45 @@
 - Caixa.
 - Admin estoque.
 - Super-admin financeiro/bloqueio.
+
+## Verificacao final publicada - 2026-06-05
+
+- Branch local confirmada: `produto-comercial-restaurantes`.
+- Vercel production: `READY`, commit `e3b5a189f2417e4875ebbde6061a5ad7083c8047`.
+- Render `/health`: `ok`, version `9b0bb5d9a199`.
+- Rotas principais publicadas retornaram HTTP 200:
+  - `/comercial`
+  - `/super-admin`
+  - `/r/demo-restaurante/admin`
+  - `/r/demo-restaurante/mesa/demo-restaurante-mesa-1`
+  - `/r/demo-restaurante/cozinha`
+  - `/r/demo-restaurante/garcom`
+  - `/r/demo-restaurante/caixa`
+  - `/r/demo-restaurante/tv`
+- Testes locais:
+  - `py_compile`: passou.
+  - `pytest`: 53 passed.
+  - `node --check`: passou.
+  - `npx playwright test`: 12 passed, 4 skipped por falta de variaveis QA.
+
+Pendencia antes de afirmar demo 100% com banco real:
+
+- Configurar `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` em ambiente QA/staging.
+- Rodar:
+
+```powershell
+python backend/scripts/check_inventory_schema.py
+python backend/scripts/seed_demo_comercial.py
+python backend/scripts/smoke_inventory_real.py
+```
+
+Checklist rapido no dia da apresentacao:
+
+- Entrar no admin `demo-restaurante`.
+- Confirmar que a aba Estoque carrega sem erro.
+- Criar ou visualizar um produto no cardapio.
+- Abrir mesa 1 pelo celular.
+- Enviar um pedido simples.
+- Avancar na cozinha ate entregue.
+- Fechar no caixa.
+- Mostrar super-admin e explicar bloqueio financeiro sem bloquear cliente real.
