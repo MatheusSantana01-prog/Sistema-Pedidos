@@ -26,8 +26,8 @@ O super-admin escolhe o tipo de negócio e o admin herda as abas relevantes do p
 
 ## Estrutura
 
-- `main.py`: entrada legada/local do backend.
-- `backend/main.py`: entrada usada pelo Render.
+- `backend/main.py`: fonte real do backend FastAPI.
+- `main.py`: entrypoint fino de compatibilidade que aponta para `backend.main`, mantendo `uvicorn main:app` funcionando sem duplicar a API.
 - `backend/app/core/`: configuração, Supabase e segurança extraídos do backend.
 - `backend/scripts/seed_demo.py`: seed seguro para dados de demonstração.
 - `frontend/`: telas publicadas na Vercel.

@@ -2,12 +2,12 @@
 
 ## Arquitetura atual
 
-O projeto é um SaaS multi-tenant para restaurantes. O backend é FastAPI com Supabase e JWT; o frontend é estático, em HTML, CSS e JavaScript puro, publicado na Vercel. O backend de produção está no Render e usa `backend/main.py`.
+O projeto é um SaaS multi-tenant para restaurantes. O backend é FastAPI com Supabase e JWT; o frontend é estático, em HTML, CSS e JavaScript puro, publicado na Vercel. O backend de produção está no Render e usa `backend/main.py` como fonte real da API.
 
 Arquivos principais:
 
-- `backend/main.py`: API usada no Render.
-- `main.py`: cópia legada/local da API. Deve continuar sincronizada enquanto existir.
+- `backend/main.py`: fonte real da API usada pelo Render.
+- `main.py`: entrypoint fino de compatibilidade para comandos legados como `uvicorn main:app`; não contém cópia da API.
 - `backend/app/core/config.py`: leitura e validação de variáveis de ambiente.
 - `backend/app/core/database.py`: cliente Supabase com service role somente no backend.
 - `backend/app/core/security.py`: hash de senha, JWT, RBAC e extração de `restaurant_id`.
@@ -27,7 +27,6 @@ Arquivos principais:
 
 ## Riscos principais
 
-- `main.py` e `backend/main.py` duplicados podem divergir. O ideal é manter apenas um entrypoint quando o deploy estiver estabilizado.
 - Backend ainda concentra muitas rotas e regras em um arquivo grande. A extração completa por domínio deve ser feita em etapas e com testes.
 - Testes atuais são mínimos e não substituem E2E com Supabase real.
 - CSP permissiva por necessidade de legado.

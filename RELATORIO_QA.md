@@ -106,7 +106,7 @@ Rotas verificadas com status `200`:
 ## Riscos antes do piloto
 
 - O sistema está funcional para piloto controlado, mas ainda precisa de acompanhamento no primeiro restaurante real.
-- A duplicação `main.py` e `backend/main.py` exige cuidado em mudanças futuras.
+- A duplicação operacional `main.py` e `backend/main.py` foi removida: `backend/main.py` é a fonte real e `main.py` é apenas entrypoint de compatibilidade.
 - Nesta máquina, `python -m pytest -q` não concluiu porque FastAPI/Pydantic não estão instalados e a instalação no Python 3.14 local falhou. Reexecutar em venv/Python suportado antes de declarar pronto para venda.
 - Impressão e rotina fiscal dependem de validação no ambiente físico do restaurante.
 
