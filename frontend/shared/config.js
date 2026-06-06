@@ -14,6 +14,7 @@ window.SAAS_CONFIG = {
   // Polling
   POLL_COZINHA: 5000,
   POLL_CLIENTE: 8000,
+  POLL_CARDAPIO: 30000,
 
   // Link do WhatsApp oficial de suporte. Preencher no formato:
   // https://wa.me/5511999999999

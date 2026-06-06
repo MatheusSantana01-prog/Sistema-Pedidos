@@ -12,6 +12,7 @@ let cardapioHash = '';
 let notaFeedback = 5;
 let categoriaAtual = null;
 let enviandoPedido = false;
+const MENU_CACHE_TTL_MS = 30000;
 
 const FOOD_IMAGES = {
   pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=80',
@@ -77,7 +78,22 @@ async function carregarCardapio() {
 async function atualizarCardapio(silent = true) {
   try {
     const slug = getCurrentRestaurantSlug();
-    const { cardapio } = await apiPublic('GET', `/api/public/restaurants/${slug}/menu`);
+    const cacheKey = `menu-cache:${slug}`;
+    let data = null;
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+      if (cached?.expiresAt > Date.now() && cached.data) data = cached.data;
+    } catch (_) {}
+    if (!data) {
+      data = await apiPublic('GET', `/api/public/restaurants/${slug}/menu`);
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          expiresAt: Date.now() + MENU_CACHE_TTL_MS,
+          data,
+        }));
+      } catch (_) {}
+    }
+    const { cardapio } = data;
     const novasCategorias = (cardapio || [])
       .map(c => ({ ...c, nome: c.nome || 'Categoria', icone: c.icone || '', produtos: c.produtos || [] }))
       .filter(c => c.produtos.length);
@@ -653,9 +669,9 @@ function iniciarPollingCardapio() {
   async function verificar() {
     await atualizarAcoesMesa();
     await atualizarCardapio(true);
-    pollingCardapio = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
+    pollingCardapio = setTimeout(verificar, window.SAAS_CONFIG.POLL_CARDAPIO || 30000);
   }
-  pollingCardapio = setTimeout(verificar, window.SAAS_CONFIG.POLL_CLIENTE);
+  pollingCardapio = setTimeout(verificar, window.SAAS_CONFIG.POLL_CARDAPIO || 30000);
 }
 
 function mostrarContaFechada() {

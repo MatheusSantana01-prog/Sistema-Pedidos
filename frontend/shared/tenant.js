@@ -7,6 +7,7 @@
  */
 
 const TENANT_API_URL = window.SAAS_CONFIG.API_URL || "";
+const TENANT_CACHE_TTL_MS = 60000;
 
 /**
  * Extrai o slug do restaurante a partir da URL atual.
@@ -38,10 +39,22 @@ function getCurrentRestaurantSlug() {
  */
 async function fetchRestaurantConfig(slug) {
   if (!slug) throw new Error('Slug não informado');
+  const cacheKey = `tenant-config:${slug}`;
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+    if (cached?.expiresAt > Date.now() && cached.data) return cached.data;
+  } catch (_) {}
   const resp = await fetch(`${TENANT_API_URL}/api/public/restaurants/${slug}`);
   if (!resp.ok) throw new Error(`Restaurante '${slug}' não encontrado`);
   const data = await resp.json();
-  return Array.isArray(data) ? data[0] : data;
+  const config = Array.isArray(data) ? data[0] : data;
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify({
+      expiresAt: Date.now() + TENANT_CACHE_TTL_MS,
+      data: config,
+    }));
+  } catch (_) {}
+  return config;
 }
 
 /**
