@@ -85,12 +85,15 @@ ORDER_TRANSITIONS = {
     "pendente":    {"confirmado", "em_preparo", "cancelado"},
     "confirmado":  {"em_preparo", "cancelado"},
     "em_preparo":  {"pronto", "cancelado"},
-    "pronto":      {"entregue"},
+    "pronto":      {"entregue", "cancelado"},
     "entregue":    set(),
     "cancelado":   set(),
 }
 
 OPEN_ORDER_STATUSES = {"pendente", "confirmado", "em_preparo", "pronto"}
+PUBLIC_CANCEL_DIRECT_STATUSES = {"pendente"}
+PUBLIC_CANCEL_REQUEST_STATUSES = {"confirmado"}
+PUBLIC_CANCEL_ATTENDANCE_STATUSES = {"em_preparo", "pronto"}
 FORMAS_PAGAMENTO = {
     "dinheiro",
     "pix",
@@ -1757,6 +1760,128 @@ def log_publico_restaurante(restaurant_id: str, acao: str, tabela: str = None,
     }).execute()
 
 
+def regra_cancelamento_cliente(status: str) -> dict:
+    if status in PUBLIC_CANCEL_DIRECT_STATUSES:
+        return {
+            "acao": "cancelar",
+            "permitido": True,
+            "mensagem": "Pedido cancelado.",
+        }
+    if status in PUBLIC_CANCEL_REQUEST_STATUSES:
+        return {
+            "acao": "solicitar",
+            "permitido": True,
+            "mensagem": "Solicitação de cancelamento enviada ao atendimento.",
+        }
+    if status in PUBLIC_CANCEL_ATTENDANCE_STATUSES:
+        return {
+            "acao": "bloqueado",
+            "permitido": False,
+            "mensagem": "Pedido já está em preparo ou pronto. Solicite o cancelamento ao atendimento.",
+        }
+    if status == "entregue":
+        return {
+            "acao": "bloqueado",
+            "permitido": False,
+            "mensagem": "Pedido entregue não pode ser cancelado.",
+        }
+    if status == "cancelado":
+        return {
+            "acao": "bloqueado",
+            "permitido": False,
+            "mensagem": "Pedido já está cancelado.",
+        }
+    return {
+        "acao": "bloqueado",
+        "permitido": False,
+        "mensagem": "Status do pedido não permite cancelamento.",
+    }
+
+
+def motivo_cancelamento_cliente(motivo: str | None) -> str:
+    texto = (motivo or "").strip()
+    if not texto:
+        texto = "Cliente solicitou pelo QR Code"
+    return texto[:240]
+
+
+def cancelar_pedido_cliente_publico(restaurant_id: str, sessao_id: str, pedido_id: str,
+                                    mesa_id: str | None = None, motivo: str | None = None,
+                                    request: Request = None) -> dict:
+    sessao_resp = sb.table("sessao_mesa").select("id,mesa_id,status").eq(
+        "id", sessao_id
+    ).eq("restaurant_id", restaurant_id).limit(1).execute()
+    sessao = _first(_rows(sessao_resp))
+    if not sessao:
+        raise HTTPException(404, "Sessão não encontrada")
+    if sessao.get("status") != "aberta":
+        raise HTTPException(409, "Sessão da mesa já está fechada")
+    if mesa_id and str(sessao.get("mesa_id")) != str(mesa_id):
+        raise HTTPException(403, "Pedido não pertence a esta mesa")
+
+    pedido_resp = sb.table("pedidos").select(
+        "id,numero,status,restaurant_id,sessao_mesa_id,mesa_id,observacao_geral"
+    ).eq("id", pedido_id).eq("restaurant_id", restaurant_id).eq(
+        "sessao_mesa_id", sessao_id
+    ).limit(1).execute()
+    pedido = _first(_rows(pedido_resp))
+    if not pedido:
+        raise HTTPException(404, "Pedido não encontrado")
+    if pedido.get("mesa_id") and str(pedido.get("mesa_id")) != str(sessao.get("mesa_id")):
+        raise HTTPException(403, "Pedido não pertence a esta mesa")
+
+    status_atual = pedido.get("status")
+    regra = regra_cancelamento_cliente(status_atual)
+    if not regra["permitido"]:
+        raise HTTPException(409, regra["mensagem"])
+
+    motivo_limpo = motivo_cancelamento_cliente(motivo)
+    agora = utcnow()
+    if regra["acao"] == "cancelar":
+        sb.table("pedidos").update({
+            "status": "cancelado",
+            "motivo_cancelamento": motivo_limpo,
+            "updated_at": agora,
+        }).eq("id", pedido_id).eq("restaurant_id", restaurant_id).execute()
+        inventory_result = estornar_estoque_pedido(restaurant_id, pedido_id, None)
+        log_publico_restaurante(
+            restaurant_id,
+            "cliente_cancelou_pedido",
+            "pedidos",
+            pedido_id,
+            {"status_anterior": status_atual, "motivo": motivo_limpo, "inventory": inventory_result},
+            request,
+        )
+        return {
+            "acao": "cancelado",
+            "mensagem": regra["mensagem"],
+            "pedido": {"id": pedido_id, "status": "cancelado"},
+            "inventory": inventory_result,
+        }
+
+    aviso = f"Cancelamento solicitado pelo cliente: {motivo_limpo}"
+    observacao_atual = (pedido.get("observacao_geral") or "").strip()
+    nova_observacao = aviso if not observacao_atual else f"{observacao_atual}\n{aviso}"
+    sb.table("pedidos").update({
+        "motivo_cancelamento": aviso[:500],
+        "observacao_geral": nova_observacao[:1000],
+        "updated_at": agora,
+    }).eq("id", pedido_id).eq("restaurant_id", restaurant_id).execute()
+    log_publico_restaurante(
+        restaurant_id,
+        "cliente_solicitou_cancelamento",
+        "pedidos",
+        pedido_id,
+        {"status": status_atual, "motivo": motivo_limpo},
+        request,
+    )
+    return {
+        "acao": "solicitacao_registrada",
+        "mensagem": regra["mensagem"],
+        "pedido": {"id": pedido_id, "status": status_atual},
+    }
+
+
 # ── SCHEMAS ───────────────────────────────────────────────────────
 class LoginInput(BaseModel):
     email: Optional[str] = None
@@ -1932,6 +2057,11 @@ class AtualizarStatusPedidoInput(BaseModel):
         if v not in validos:
             raise ValueError(f"Status inválido: {validos}")
         return v
+
+
+class CancelarPedidoClienteInput(BaseModel):
+    mesa_id: Optional[str] = None
+    motivo: Optional[str] = None
 
 
 class CriarMesaInput(BaseModel):
@@ -2557,6 +2687,25 @@ def get_conta_public(slug: str, sessao_id: str):
     }
 
 
+@app.post("/api/public/restaurants/{slug}/sessions/{sessao_id}/orders/{pedido_id}/cancel", tags=["público"])
+def cancelar_pedido_cliente(slug: str, sessao_id: str, pedido_id: str,
+                            body: CancelarPedidoClienteInput, request: Request):
+    rest = sb.table("restaurants").select("id").eq("slug", slug).eq("is_active", True).single().execute()
+    if not rest.data:
+        raise HTTPException(404, "Restaurante não encontrado")
+    rid = rest.data["id"]
+    enforce_platform_control(rid, "orders")
+    enforce_modules_enabled(rid, ("mesas", "qr_code"), "mesas/QR Code")
+    return cancelar_pedido_cliente_publico(
+        rid,
+        sessao_id,
+        pedido_id,
+        mesa_id=body.mesa_id,
+        motivo=body.motivo,
+        request=request,
+    )
+
+
 # ═════════════════════════════════════════════════════════════════
 # AUTH
 # ═════════════════════════════════════════════════════════════════
@@ -2773,6 +2922,8 @@ def avancar_status(pedido_id: str, body: AtualizarStatusPedidoInput,
         raise HTTPException(409, f"Transição inválida: {status_atual} -> {body.status}")
     if body.status == "cancelado" and u.get("role") == "kitchen":
         raise HTTPException(403, "Cozinha não pode cancelar pedidos")
+    if body.status == "cancelado" and status_atual in {"em_preparo", "pronto"} and u.get("role") not in {"manager", "owner"}:
+        raise HTTPException(403, "Somente admin/gerente pode cancelar pedido em preparo ou pronto")
 
     extra = {"updated_at": utcnow()}
     if body.status == "pronto":     extra["tempo_pronto"]         = extra["updated_at"]

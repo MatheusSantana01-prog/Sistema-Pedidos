@@ -11,6 +11,7 @@ let pollingCardapio = null;
 let cardapioHash = '';
 let notaFeedback = 5;
 let categoriaAtual = null;
+let enviandoPedido = false;
 
 const FOOD_IMAGES = {
   pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=900&q=80',
@@ -422,16 +423,18 @@ function removerItem(idx) {
 
 async function enviarPedido() {
   if (!carrinho.length) return;
-  await atualizarCardapio(true);
-  if (!carrinho.length) {
-    fecharModal('modal-carrinho');
-    return;
-  }
+  if (enviandoPedido) return;
+  enviandoPedido = true;
   const btn   = document.querySelector('.btn-enviar');
-  const obsG  = document.getElementById('obs-geral').value.trim();
-  const total = carrinho.reduce((a, i) => a + i.subtotal, 0);
-  btn.disabled = true; btn.textContent = 'Enviando...';
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   try {
+    await atualizarCardapio(true);
+    if (!carrinho.length) {
+      fecharModal('modal-carrinho');
+      return;
+    }
+    const obsG  = document.getElementById('obs-geral').value.trim();
+    const total = carrinho.reduce((a, i) => a + i.subtotal, 0);
     const slug = getCurrentRestaurantSlug();
     const resp = await apiPublic('POST', `/api/public/restaurants/${slug}/orders`, {
       restaurant_id:     RESTAURANT.id,
@@ -449,7 +452,8 @@ async function enviarPedido() {
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
-    btn.disabled = false; btn.textContent = '✓ Enviar pedido';
+    enviandoPedido = false;
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Enviar pedido'; }
   }
 }
 
@@ -491,6 +495,7 @@ async function verConta() {
               <span>${it.quantidade}× ${escapeHtml(it.nome_produto)}</span>
               <span style="font-family:monospace;font-weight:600">R$ ${fmt(it.subtotal)}</span>
             </div>`).join('')}
+          ${renderPedidoCancelamentoCliente(p)}
         </div>`).join('')}
       <div class="conta-total">
         <span>Subtotal</span>
@@ -529,6 +534,27 @@ function renderBotaoPedirConta(pedidos) {
         </div>`;
 }
 
+function renderPedidoCancelamentoCliente(pedido) {
+  const status = pedido?.status || 'pendente';
+  if (status === 'pendente') {
+    return `
+      <div style="margin-top:10px;text-align:right">
+        <button class="account-btn secondary" onclick="cancelarPedidoCliente('${escapeAttr(pedido.id)}','${status}')">Cancelar pedido</button>
+      </div>`;
+  }
+  if (status === 'confirmado') {
+    const solicitado = String(pedido.motivo_cancelamento || pedido.observacao_geral || '').includes('Cancelamento solicitado');
+    return `
+      <div style="margin-top:10px;text-align:right">
+        <button class="account-btn secondary" ${solicitado ? 'disabled' : ''} onclick="cancelarPedidoCliente('${escapeAttr(pedido.id)}','${status}')">${solicitado ? 'Cancelamento solicitado' : 'Solicitar cancelamento'}</button>
+      </div>`;
+  }
+  if (status === 'em_preparo' || status === 'pronto') {
+    return '<div style="margin-top:8px;font-size:12px;color:var(--muted);text-align:right">Cancelamento somente com o atendimento.</div>';
+  }
+  return '';
+}
+
 function statusCliente(s) {
   return {pendente:'Recebido',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue',cancelado:'Cancelado'}[s] || s || 'Recebido';
 }
@@ -557,6 +583,25 @@ async function enviarChamado(tipo) {
     showToast(tipo === 'conta' ? 'Conta solicitada ao atendimento' : 'Garçom chamado', 'success');
   } catch (e) {
     showToast(e.message, 'error');
+  }
+}
+
+async function cancelarPedidoCliente(pedidoId, status) {
+  const direto = status === 'pendente';
+  const ok = confirm(direto
+    ? 'Cancelar este pedido?'
+    : 'Enviar solicitação de cancelamento para o atendimento?');
+  if (!ok) return;
+  try {
+    const slug = getCurrentRestaurantSlug();
+    await apiPublic('POST', `/api/public/restaurants/${slug}/sessions/${SESSAO_ID}/orders/${pedidoId}/cancel`, {
+      mesa_id: MESA?.id,
+      motivo: direto ? 'Cliente cancelou antes da confirmação' : 'Cliente solicitou cancelamento após confirmação',
+    });
+    showToast(direto ? 'Pedido cancelado' : 'Solicitação enviada ao atendimento', 'success');
+    await verConta();
+  } catch (e) {
+    showToast(e.message || 'Não foi possível cancelar o pedido', 'error');
   }
 }
 
