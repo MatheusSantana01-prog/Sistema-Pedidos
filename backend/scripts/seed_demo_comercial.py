@@ -58,6 +58,14 @@ DEMO_RESTAURANTS = [
             "product": "Parmegiana executivo",
             "recipe_quantity": 0.18,
         },
+        "payment_methods": [
+            ("Dinheiro", "dinheiro", "cash", True, False, 10),
+            ("Pix", "pix", "pix", False, False, 20),
+            ("Crédito", "cartao_credito", "credit_card", False, False, 30),
+            ("Débito", "cartao_debito", "debit_card", False, False, 40),
+            ("VR", "vr", "meal_voucher", False, True, 50),
+            ("Ticket", "ticket", "meal_voucher", False, True, 60),
+        ],
     },
     {
         "slug": "demo-pizzaria",
@@ -98,6 +106,14 @@ DEMO_RESTAURANTS = [
             "product": "Pizza Margherita grande",
             "recipe_quantity": 0.28,
         },
+        "payment_methods": [
+            ("Dinheiro", "dinheiro", "cash", True, False, 10),
+            ("Pix", "pix", "pix", False, False, 20),
+            ("Crédito", "cartao_credito", "credit_card", False, False, 30),
+            ("Débito", "cartao_debito", "debit_card", False, False, 40),
+            ("iFood Manual", "ifood_manual", "digital_wallet", False, True, 50),
+            ("Cortesia", "cortesia", "courtesy", False, True, 60),
+        ],
     },
     {
         "slug": "demo-padaria",
@@ -138,6 +154,14 @@ DEMO_RESTAURANTS = [
             "product": "Pao frances unidade",
             "recipe_quantity": 0.06,
         },
+        "payment_methods": [
+            ("Dinheiro", "dinheiro", "cash", True, False, 10),
+            ("Pix", "pix", "pix", False, False, 20),
+            ("Crédito", "cartao_credito", "credit_card", False, False, 30),
+            ("Débito", "cartao_debito", "debit_card", False, False, 40),
+            ("Alelo", "alelo", "food_voucher", False, True, 50),
+            ("Sodexo", "sodexo", "meal_voucher", False, True, 60),
+        ],
     },
 ]
 
@@ -408,6 +432,32 @@ def ensure_inventory_demo(sb, restaurant_id: str, demo: dict, product_ids: dict)
         return f"estoque nao preparado: {exc}"
 
 
+def ensure_payment_methods(sb, restaurant_id: str, demo: dict) -> str:
+    try:
+        existing = sb.table("restaurant_payment_methods").select("code").eq("restaurant_id", restaurant_id).execute().data or []
+        existing_codes = {row["code"] for row in existing}
+        created = 0
+        for name, code, method_type, allow_change, requires_reference, sort_order in demo.get("payment_methods", []):
+            if code in existing_codes:
+                continue
+            sb.table("restaurant_payment_methods").insert({
+                "restaurant_id": restaurant_id,
+                "name": name,
+                "code": code,
+                "type": method_type,
+                "is_active": True,
+                "is_default": code in {"dinheiro", "pix", "cartao_credito", "cartao_debito"},
+                "requires_reference": requires_reference,
+                "allow_change": allow_change,
+                "sort_order": sort_order,
+            }).execute()
+            existing_codes.add(code)
+            created += 1
+        return f"{created} forma(s) criada(s)"
+    except Exception as exc:
+        return f"formas de pagamento nao preparadas: {exc}"
+
+
 def seed_restaurant(sb, demo: dict) -> dict:
     restaurant_id = upsert_restaurant(sb, demo)
     category_ids = {}
@@ -425,7 +475,8 @@ def seed_restaurant(sb, demo: dict) -> dict:
         ensure_membership(sb, user_id, restaurant_id, role)
 
     inventory_status = ensure_inventory_demo(sb, restaurant_id, demo, product_ids)
-    return {"slug": demo["slug"], "id": restaurant_id, "inventory": inventory_status}
+    payment_status = ensure_payment_methods(sb, restaurant_id, demo)
+    return {"slug": demo["slug"], "id": restaurant_id, "inventory": inventory_status, "payment_methods": payment_status}
 
 
 def main():

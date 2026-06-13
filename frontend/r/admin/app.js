@@ -22,6 +22,12 @@ let BUSINESS_TYPE = 'restaurante';
 let VISIBLE_TABS = new Set();
 let ACTIVE_MODULES = {};
 let caixaHistoryDate = todayInputValue();
+let formasPagamento = [
+  { code: 'dinheiro', name: 'Dinheiro', type: 'cash', allow_change: true, is_active: true },
+  { code: 'pix', name: 'Pix', type: 'pix', is_active: true },
+  { code: 'cartao_credito', name: 'Cartão crédito', type: 'credit_card', is_active: true },
+  { code: 'cartao_debito', name: 'Cartão débito', type: 'debit_card', is_active: true },
+];
 const TAB_MODULE_REQUIREMENTS = {
   mesas: 'mesas',
   estoque: 'estoque',
@@ -163,8 +169,19 @@ function iniciarApp() {
   document.getElementById('fin-fim').value    = hoje;
 
   carregarMesas();
+  carregarFormasPagamento();
   carregarContadorSuporteAdmin();
   iniciarPolling();
+}
+
+async function carregarFormasPagamento(showWarning = false) {
+  try {
+    const data = await apiCall('GET', '/api/admin/payment-methods?active_only=false');
+    if ((data.methods || []).length) formasPagamento = data.methods;
+    if (data.fallback && showWarning) showToast('Formas de pagamento em modo padrão. Aplique o schema para personalizar.', 'error');
+  } catch (e) {
+    if (showWarning) showToast('Não foi possível carregar formas de pagamento; usando padrão.', 'error');
+  }
 }
 
 async function renderAtalhosRapidos() {
@@ -410,6 +427,7 @@ async function abrirConta(mesaId, sessaoId, numero, total) {
           <input class="form-input" id="split-valor" type="number" step="0.01" min="0" placeholder="Valor">
           <button class="btn btn-sm" onclick="adicionarPagamentoConta()">Adicionar</button>
         </div>
+        <input class="form-input" id="split-referencia" placeholder="Referência / NSU / autorização" style="display:none;margin-top:8px;">
         <div class="split-pay-actions">
           <button class="btn btn-sm" onclick="preencherRestantePagamento()">Usar restante</button>
           <span id="split-resumo">Restante: R$ ${fmt(tot)}</span>
@@ -418,6 +436,8 @@ async function abrirConta(mesaId, sessaoId, numero, total) {
       </div>`;
 
     document.getElementById('modal-conta-footer').style.display = 'flex';
+    document.getElementById('split-forma')?.addEventListener('change', renderReferenciaPagamentoConta);
+    renderReferenciaPagamentoConta();
     renderPagamentosConta();
   } catch (e) {
     document.getElementById('modal-conta-body').innerHTML = '<div class="tabela-empty">Erro ao carregar conta.</div>';
@@ -432,18 +452,30 @@ function selecionarPgto(btn, pgto) {
 }
 
 function formasPagamentoOptions() {
-  return [
-    ['dinheiro', 'Dinheiro'],
-    ['pix', 'Pix'],
-    ['cartao_credito', 'Cartão crédito'],
-    ['cartao_debito', 'Cartão débito'],
-  ].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  return formasPagamento
+    .filter(m => m.is_active !== false)
+    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.name).localeCompare(String(b.name)))
+    .map(m => `<option value="${escapeAttr(m.code)}">${escapeHtml(m.name)}</option>`)
+    .join('');
 }
 
 function labelPagamento(forma) {
-  return {
+  return formasPagamento.find(m => m.code === forma)?.name || {
     dinheiro:'Dinheiro', pix:'Pix', cartao_credito:'Cartão crédito', cartao_debito:'Cartão débito',
   }[forma] || forma;
+}
+
+function formaPagamentoMeta(code) {
+  return formasPagamento.find(m => m.code === code) || { code, name: labelPagamento(code), type: code === 'dinheiro' ? 'cash' : 'other', allow_change: code === 'dinheiro' };
+}
+
+function renderReferenciaPagamentoConta() {
+  const ref = document.getElementById('split-referencia');
+  const forma = document.getElementById('split-forma')?.value;
+  if (!ref || !forma) return;
+  const meta = formaPagamentoMeta(forma);
+  ref.style.display = meta.requires_reference ? '' : 'none';
+  ref.placeholder = meta.requires_reference ? `Referência obrigatória para ${meta.name}` : 'Referência / NSU / autorização';
 }
 
 function totalPagamentosConta() {
@@ -457,10 +489,22 @@ function restantePagamentoConta() {
 function adicionarPagamentoConta() {
   const forma = document.getElementById('split-forma').value;
   const valor = Number(document.getElementById('split-valor').value || 0);
+  const meta = formaPagamentoMeta(forma);
+  const referencia = document.getElementById('split-referencia')?.value.trim() || '';
   if (!valor || valor <= 0) return showToast('Informe um valor válido', 'error');
   if (valor - restantePagamentoConta() > 0.02) return showToast('Valor maior que o restante da conta', 'error');
-  pagamentosConta.push({ forma_pagamento: forma, valor: Number(valor.toFixed(2)) });
+  if (meta.requires_reference && !referencia) return showToast(`Informe a referência de ${meta.name}`, 'error');
+  pagamentosConta.push({
+    forma_pagamento: forma,
+    valor: Number(valor.toFixed(2)),
+    payment_method_id: meta.id || null,
+    payment_method_name_snapshot: meta.name,
+    payment_method_type_snapshot: meta.type || 'other',
+    ...(referencia ? { referencia } : {}),
+  });
   document.getElementById('split-valor').value = '';
+  const ref = document.getElementById('split-referencia');
+  if (ref) ref.value = '';
   renderPagamentosConta();
 }
 
@@ -484,7 +528,7 @@ function renderPagamentosConta() {
   lista.innerHTML = pagamentosConta.length ? pagamentosConta.map((p, idx) => `
     <div class="split-pay-item">
       <span>${labelPagamento(p.forma_pagamento)}</span>
-      <strong>R$ ${fmt(p.valor)}</strong>
+      <strong>R$ ${fmt(p.valor)}${p.referencia ? ` · ${escapeHtml(p.referencia)}` : ''}</strong>
       <button onclick="removerPagamentoConta(${idx})">✕</button>
     </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
   document.getElementById('btn-fechar-conta').disabled = restante > 0.02 || !pagamentosConta.length;
@@ -1337,6 +1381,101 @@ function abrirModalUsuario() {
   document.getElementById('modal-usuario').classList.add('show');
 }
 
+function paymentTypeOptions(selected = 'other') {
+  const types = [
+    ['cash', 'Dinheiro'],
+    ['pix', 'Pix'],
+    ['credit_card', 'Cartão de crédito'],
+    ['debit_card', 'Cartão de débito'],
+    ['meal_voucher', 'Vale refeição'],
+    ['food_voucher', 'Vale alimentação'],
+    ['bank_transfer', 'Transferência'],
+    ['digital_wallet', 'Carteira digital'],
+    ['courtesy', 'Cortesia'],
+    ['credit_account', 'Fiado'],
+    ['other', 'Outro'],
+  ];
+  return types.map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('');
+}
+
+function renderPaymentMethodsList() {
+  return `
+    <div class="tabela-wrap">
+      <table class="tabela">
+        <thead><tr><th>Ordem</th><th>Nome</th><th>Tipo</th><th>Referência</th><th>Troco</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody>${formasPagamento.map(m => `
+          <tr>
+            <td><input class="form-input" id="pm-order-${escapeAttr(m.id || m.code)}" type="number" value="${Number(m.sort_order || 0)}" style="width:80px"></td>
+            <td><input class="form-input" id="pm-name-${escapeAttr(m.id || m.code)}" value="${escapeAttr(m.name || '')}" ${m.is_fallback ? 'disabled' : ''}></td>
+            <td><select class="form-input" id="pm-type-${escapeAttr(m.id || m.code)}" ${m.is_fallback ? 'disabled' : ''}>${paymentTypeOptions(m.type || 'other')}</select></td>
+            <td><input type="checkbox" id="pm-ref-${escapeAttr(m.id || m.code)}" ${m.requires_reference ? 'checked' : ''} ${m.is_fallback ? 'disabled' : ''}></td>
+            <td><input type="checkbox" id="pm-change-${escapeAttr(m.id || m.code)}" ${m.allow_change ? 'checked' : ''} ${m.is_fallback ? 'disabled' : ''}></td>
+            <td>${m.is_active === false ? 'Inativa' : 'Ativa'}${m.is_fallback ? ' · padrão' : ''}</td>
+            <td>
+              <button class="btn btn-sm" onclick="salvarFormaPagamento('${escapeAttr(m.id || '')}')" ${m.is_fallback ? 'disabled' : ''}>Salvar</button>
+              ${m.is_active === false
+                ? `<button class="btn btn-sm" onclick="ativarFormaPagamento('${escapeAttr(m.id || '')}')" ${m.is_fallback ? 'disabled' : ''}>Ativar</button>`
+                : `<button class="btn btn-sm" onclick="desativarFormaPagamento('${escapeAttr(m.id || '')}')" ${m.is_fallback ? 'disabled' : ''}>Desativar</button>`}
+            </td>
+          </tr>`).join('') || '<tr><td colspan="7" class="tabela-empty">Nenhuma forma cadastrada.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function criarFormaPagamento() {
+  const payload = {
+    name: document.getElementById('pm-name')?.value.trim(),
+    code: document.getElementById('pm-code')?.value.trim() || null,
+    type: document.getElementById('pm-type')?.value || 'other',
+    sort_order: Number(document.getElementById('pm-order')?.value || 90),
+    requires_reference: document.getElementById('pm-reference')?.checked === true,
+    allow_change: document.getElementById('pm-change')?.checked === true,
+    is_active: true,
+  };
+  if (!payload.name) return showToast('Informe o nome da forma', 'error');
+  try {
+    await apiCall('POST', '/api/admin/payment-methods', payload);
+    showToast('Forma criada', 'success');
+    await carregarConfiguracoes();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function salvarFormaPagamento(id) {
+  if (!id) return;
+  const payload = {
+    name: document.getElementById(`pm-name-${id}`)?.value.trim(),
+    type: document.getElementById(`pm-type-${id}`)?.value || 'other',
+    sort_order: Number(document.getElementById(`pm-order-${id}`)?.value || 0),
+    requires_reference: document.getElementById(`pm-ref-${id}`)?.checked === true,
+    allow_change: document.getElementById(`pm-change-${id}`)?.checked === true,
+    is_active: formasPagamento.find(m => m.id === id)?.is_active !== false,
+  };
+  try {
+    await apiCall('PATCH', `/api/admin/payment-methods/${id}`, payload);
+    showToast('Forma atualizada', 'success');
+    await carregarConfiguracoes();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function desativarFormaPagamento(id) {
+  if (!id) return;
+  if (!await appConfirm('Desativar esta forma? Pagamentos antigos continuam nos relatórios.', { title: 'Forma de pagamento' })) return;
+  try {
+    await apiCall('POST', `/api/admin/payment-methods/${id}/deactivate`);
+    showToast('Forma desativada', 'success');
+    await carregarConfiguracoes();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function ativarFormaPagamento(id) {
+  if (!id) return;
+  try {
+    await apiCall('POST', `/api/admin/payment-methods/${id}/activate`);
+    showToast('Forma ativada', 'success');
+    await carregarConfiguracoes();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
 async function salvarUsuario() {
   const nome  = document.getElementById('u-nome').value.trim();
   const email = document.getElementById('u-email').value.trim();
@@ -1381,6 +1520,7 @@ async function removerUsuario(usuarioId, btn) {
 async function carregarConfiguracoes() {
   document.getElementById('config-content').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
   try {
+    await carregarFormasPagamento(true);
     const { restaurant } = await apiCall('GET', '/api/admin/restaurant');
     const rawSettings = restaurant.restaurant_settings;
     const s = Array.isArray(rawSettings) ? (rawSettings[0] || {}) : (rawSettings || {});
@@ -1441,6 +1581,24 @@ async function carregarConfiguracoes() {
             <input class="form-input" id="cfg-pix-key" value="${escapeAttr(s.pix_key||'')}" placeholder="CPF, CNPJ, e-mail ou chave aleatória">
           </div>
           <button class="btn btn-primary btn-sm" onclick="salvarSettings()">Salvar configurações</button>
+        </div>
+        <div class="config-card">
+          <div class="config-title">Formas de pagamento</div>
+          <div class="muted-line" style="margin-bottom:10px">Cadastre as formas que aparecem no caixa e no fechamento de conta.</div>
+          <div id="payment-methods-list">${renderPaymentMethodsList()}</div>
+          <div class="form-row-2" style="margin-top:12px">
+            <input class="form-input" id="pm-name" placeholder="Nome: Sodexo, VR, PicPay">
+            <select class="form-input" id="pm-type">
+              ${paymentTypeOptions()}
+            </select>
+          </div>
+          <div class="form-row-2">
+            <input class="form-input" id="pm-code" placeholder="Código opcional">
+            <input class="form-input" id="pm-order" type="number" value="90" placeholder="Ordem">
+          </div>
+          <label class="toggle-row"><input type="checkbox" id="pm-reference"> Exige referência/NSU/autorização</label>
+          <label class="toggle-row"><input type="checkbox" id="pm-change"> Permite troco</label>
+          <button class="btn btn-primary btn-sm" onclick="criarFormaPagamento()">Adicionar forma</button>
         </div>
         <div class="config-card">
           <div class="config-title">Experiência da mesa</div>

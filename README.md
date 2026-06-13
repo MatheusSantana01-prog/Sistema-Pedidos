@@ -143,4 +143,5 @@ Por padrão a senha demo é `demo123`. Para piloto real, defina `DEMO_PASSWORD` 
 ## Documentos
 
 - [DEPLOY.md](DEPLOY.md)
+- [MANUAL_FORMAS_PAGAMENTO.md](MANUAL_FORMAS_PAGAMENTO.md)
 - [SUPABASE_SCHEMA_COMERCIAL.sql](SUPABASE_SCHEMA_COMERCIAL.sql)

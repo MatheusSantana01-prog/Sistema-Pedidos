@@ -16,6 +16,12 @@ let balcaoProdutos = [];
 let balcaoCarrinho = [];
 let balcaoPagamentos = [];
 let totalBalcaoAtual = 0;
+let formasPagamento = [
+  { code: 'dinheiro', name: 'Dinheiro', type: 'cash', allow_change: true, is_active: true },
+  { code: 'pix', name: 'Pix', type: 'pix', is_active: true },
+  { code: 'cartao_credito', name: 'Cartão crédito', type: 'credit_card', is_active: true },
+  { code: 'cartao_debito', name: 'Cartão débito', type: 'debit_card', is_active: true },
+];
 
 async function init() {
   RESTAURANT = await initTenant();
@@ -62,10 +68,27 @@ function iniciarApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'flex';
   configurarModosCaixa();
+  carregarFormasPagamento();
   carregarCaixas();
   carregarMesas();
   function agendar() { polling = setTimeout(() => { carregarCaixas(false); if (modoCaixa === 'mesas') carregarMesas(); agendar(); }, 10000); }
   agendar();
+}
+
+async function carregarFormasPagamento() {
+  try {
+    const data = await apiCall('GET', '/api/admin/payment-methods?active_only=true');
+    const methods = (data.methods || []).filter(m => m.is_active !== false);
+    if (methods.length) formasPagamento = methods;
+    if (data.fallback) showToast('Usando formas de pagamento padrão. Aplique o schema para personalizar.', 'error');
+  } catch (e) {
+    showToast('Formas de pagamento em modo padrão', 'error');
+  }
+  const select = document.getElementById('split-forma');
+  if (select) {
+    select.innerHTML = formasPagamentoOptions();
+    renderReferenciaPagamento();
+  }
 }
 
 function balcaoRapidoAtivo() {
@@ -414,6 +437,7 @@ function renderBalcaoConta() {
   document.getElementById('conta-footer').style.display = 'block';
   document.getElementById('split-forma').innerHTML = formasPagamentoOptions();
   configurarEventosPagamento();
+  renderReferenciaPagamento();
   renderPagamentos();
   document.getElementById('btn-fechar').textContent = '✓ Finalizar venda balcão';
 }
@@ -468,6 +492,7 @@ function selecionarMesa(el, mesaId, sessaoId, numero, total, status) {
   totalContaAtual = Number(total || 0);
   document.getElementById('split-forma').innerHTML = formasPagamentoOptions();
   configurarEventosPagamento();
+  renderReferenciaPagamento();
   document.getElementById('btn-fechar').disabled = true;
   document.getElementById('btn-fechar').textContent = '✓ Fechar conta';
   document.getElementById('conta-mesa-num').textContent = `Mesa ${numero}`;
@@ -524,18 +549,34 @@ function selPgto(btn, pgto) {
 }
 
 function formasPagamentoOptions() {
-  return [
-    ['dinheiro', 'Dinheiro'],
-    ['pix', 'Pix'],
-    ['cartao_credito', 'Cartão crédito'],
-    ['cartao_debito', 'Cartão débito'],
-  ].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  return formasPagamento
+    .filter(m => m.is_active !== false)
+    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.name).localeCompare(String(b.name)))
+    .map(m => `<option value="${escapeAttr(m.code)}">${escapeHtml(m.name)}</option>`)
+    .join('');
 }
 
 function labelPagamento(forma) {
-  return {
+  return formasPagamento.find(m => m.code === forma)?.name || {
     dinheiro:'Dinheiro', pix:'Pix', cartao_credito:'Cartão crédito', cartao_debito:'Cartão débito',
   }[forma] || forma;
+}
+
+function formaPagamentoMeta(code = formaPagamentoDigitada()) {
+  return formasPagamento.find(m => m.code === code) || { code, name: labelPagamento(code), type: code === 'dinheiro' ? 'cash' : 'other', allow_change: code === 'dinheiro' };
+}
+
+function formaPermiteTroco(code = formaPagamentoDigitada()) {
+  const meta = formaPagamentoMeta(code);
+  return meta.allow_change === true || meta.type === 'cash' || meta.code === 'dinheiro';
+}
+
+function renderReferenciaPagamento() {
+  const ref = document.getElementById('split-referencia');
+  if (!ref) return;
+  const meta = formaPagamentoMeta();
+  ref.style.display = meta.requires_reference ? '' : 'none';
+  ref.placeholder = meta.requires_reference ? `Referência obrigatória para ${meta.name}` : 'Referência / NSU / autorização';
 }
 
 function totalPagamentos() {
@@ -563,19 +604,19 @@ function restantePagamento() {
 function restanteComPagamentoDigitado() {
   const restante = restantePagamento();
   const valor = valorPagamentoDigitado();
-  if (formaPagamentoDigitada() === 'dinheiro' && valor >= restante) return 0;
+  if (formaPermiteTroco() && valor >= restante) return 0;
   return Math.max(0, Number((restante - valor).toFixed(2)));
 }
 
 function pagamentoDigitadoValido() {
   const valor = valorPagamentoDigitado();
   const restante = restantePagamento();
-  if (formaPagamentoDigitada() === 'dinheiro') return valor > 0;
+  if (formaPermiteTroco()) return valor > 0;
   return valor > 0 && valor - restante <= 0.02;
 }
 
 function trocoPagamentoDigitado() {
-  if (formaPagamentoDigitada() !== 'dinheiro') return 0;
+  if (!formaPermiteTroco()) return 0;
   return Math.max(0, Number((valorPagamentoDigitado() - restantePagamento()).toFixed(2)));
 }
 
@@ -585,13 +626,26 @@ function criarPagamentoDigitado() {
   const restante = restantePagamento();
   if (!valorDigitado || valorDigitado <= 0) return null;
   if (restante <= 0.02) return null;
-  if (forma !== 'dinheiro' && valorDigitado - restante > 0.02) {
+  const meta = formaPagamentoMeta(forma);
+  if (!formaPermiteTroco(forma) && valorDigitado - restante > 0.02) {
     showToast('Valor maior que o restante', 'error');
     return null;
   }
-  const valorAplicado = forma === 'dinheiro' ? Math.min(valorDigitado, restante) : valorDigitado;
-  const pagamento = { forma_pagamento: forma, valor: Number(valorAplicado.toFixed(2)) };
-  if (forma === 'dinheiro' && valorDigitado > valorAplicado) {
+  const ref = document.getElementById('split-referencia')?.value.trim() || '';
+  if (meta.requires_reference && !ref) {
+    showToast(`Informe a referência de ${meta.name}`, 'error');
+    return null;
+  }
+  const valorAplicado = formaPermiteTroco(forma) ? Math.min(valorDigitado, restante) : valorDigitado;
+  const pagamento = {
+    forma_pagamento: forma,
+    valor: Number(valorAplicado.toFixed(2)),
+    payment_method_id: meta.id || null,
+    payment_method_name_snapshot: meta.name,
+    payment_method_type_snapshot: meta.type || 'other',
+  };
+  if (ref) pagamento.referencia = ref;
+  if (formaPermiteTroco(forma) && valorDigitado > valorAplicado) {
     pagamento.valor_recebido = Number(valorDigitado.toFixed(2));
     pagamento.troco = Number((valorDigitado - valorAplicado).toFixed(2));
   }
@@ -601,6 +655,7 @@ function criarPagamentoDigitado() {
 function configurarEventosPagamento() {
   const input = document.getElementById('split-valor');
   const forma = document.getElementById('split-forma');
+  const referencia = document.getElementById('split-referencia');
   if (input && !input.dataset.bound) {
     input.dataset.bound = '1';
     input.addEventListener('input', renderPagamentos);
@@ -614,7 +669,11 @@ function configurarEventosPagamento() {
   }
   if (forma && !forma.dataset.bound) {
     forma.dataset.bound = '1';
-    forma.addEventListener('change', renderPagamentos);
+    forma.addEventListener('change', () => { renderReferenciaPagamento(); renderPagamentos(); });
+  }
+  if (referencia && !referencia.dataset.bound) {
+    referencia.dataset.bound = '1';
+    referencia.addEventListener('input', renderPagamentos);
   }
 }
 
@@ -624,6 +683,8 @@ function adicionarPagamento() {
   const destino = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
   destino.push(pagamento);
   document.getElementById('split-valor').value = '';
+  const ref = document.getElementById('split-referencia');
+  if (ref) ref.value = '';
   renderPagamentos();
 }
 
@@ -654,7 +715,7 @@ function renderPagamentos() {
   lista.innerHTML = listaPagamentos.length ? listaPagamentos.map((p, idx) => `
     <div class="split-pay-item">
       <span>${labelPagamento(p.forma_pagamento)}</span>
-      <strong>R$ ${fmt(p.valor)}${p.troco ? ` · Troco R$ ${fmt(p.troco)}` : ''}</strong>
+      <strong>R$ ${fmt(p.valor)}${p.troco ? ` · Troco R$ ${fmt(p.troco)}` : ''}${p.referencia ? ` · ${escapeHtml(p.referencia)}` : ''}</strong>
       <button onclick="removerPagamento(${idx})">✕</button>
     </div>`).join('') : '<div class="split-empty">Nenhum pagamento adicionado.</div>';
   const semItensBalcao = modoCaixa === 'balcao' && !balcaoCarrinho.length;
@@ -668,6 +729,8 @@ function consolidarPagamentoDigitado() {
   const destino = modoCaixa === 'balcao' ? balcaoPagamentos : pagamentos;
   destino.push(pagamento);
   document.getElementById('split-valor').value = '';
+  const ref = document.getElementById('split-referencia');
+  if (ref) ref.value = '';
   renderPagamentos();
 }
 

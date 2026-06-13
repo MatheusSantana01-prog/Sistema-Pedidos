@@ -100,6 +100,31 @@ FORMAS_PAGAMENTO = {
     "cartao_credito",
     "cartao_debito",
 }
+PAYMENT_METHOD_TYPES = {
+    "cash",
+    "pix",
+    "credit_card",
+    "debit_card",
+    "meal_voucher",
+    "food_voucher",
+    "bank_transfer",
+    "digital_wallet",
+    "courtesy",
+    "credit_account",
+    "other",
+}
+DEFAULT_PAYMENT_METHODS = [
+    {"name": "Dinheiro", "code": "dinheiro", "type": "cash", "is_default": True, "allow_change": True, "sort_order": 10},
+    {"name": "Pix", "code": "pix", "type": "pix", "is_default": True, "requires_reference": False, "sort_order": 20},
+    {"name": "Cartão de crédito", "code": "cartao_credito", "type": "credit_card", "is_default": True, "requires_reference": False, "sort_order": 30},
+    {"name": "Cartão de débito", "code": "cartao_debito", "type": "debit_card", "is_default": True, "requires_reference": False, "sort_order": 40},
+]
+LEGACY_PAYMENT_LABELS = {
+    "dinheiro": "Dinheiro",
+    "pix": "Pix",
+    "cartao_credito": "Cartão de crédito",
+    "cartao_debito": "Cartão de débito",
+}
 
 PLAN_LIMITS = {
     "starter": {"users": 5, "tables": 10, "products": 100},
@@ -1109,6 +1134,126 @@ def caixa_resumo_dinheiro(cedulas: dict | None) -> dict:
         total += qtd * valor
     return {"denominations": normalized, "total": _money(total)}
 
+def slugify_payment_code(value: str) -> str:
+    raw = (value or "").strip().lower()
+    replacements = {
+        "á": "a", "à": "a", "ã": "a", "â": "a",
+        "é": "e", "ê": "e",
+        "í": "i",
+        "ó": "o", "ô": "o", "õ": "o",
+        "ú": "u",
+        "ç": "c",
+    }
+    for old, new in replacements.items():
+        raw = raw.replace(old, new)
+    raw = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
+    return (raw[:60] or "pagamento")
+
+def fallback_payment_methods() -> list[dict]:
+    return [
+        {
+            "id": None,
+            "restaurant_id": None,
+            "name": item["name"],
+            "code": item["code"],
+            "type": item["type"],
+            "is_active": True,
+            "is_default": True,
+            "requires_reference": item.get("requires_reference", False),
+            "allow_change": item.get("allow_change", item["type"] == "cash"),
+            "sort_order": item.get("sort_order", 0),
+            "is_fallback": True,
+        }
+        for item in DEFAULT_PAYMENT_METHODS
+    ]
+
+def payment_methods_schema_available() -> bool:
+    try:
+        sb.table("restaurant_payment_methods").select("id").limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+def listar_formas_pagamento_restaurante(restaurant_id: str, active_only: bool = False, include_fallback: bool = True) -> list[dict]:
+    try:
+        query = sb.table("restaurant_payment_methods").select(
+            "id,restaurant_id,name,code,type,is_active,is_default,requires_reference,allow_change,sort_order,created_at,updated_at"
+        ).eq("restaurant_id", restaurant_id).order("sort_order").order("name")
+        if active_only:
+            query = query.eq("is_active", True)
+        rows = _rows(query.execute())
+        if rows:
+            return rows
+        if include_fallback:
+            return fallback_payment_methods()
+        return []
+    except Exception:
+        if include_fallback:
+            return fallback_payment_methods()
+        raise HTTPException(503, "Schema de formas de pagamento não aplicado")
+
+def ensure_default_payment_methods(restaurant_id: str) -> int:
+    if not payment_methods_schema_available():
+        return 0
+    existing = listar_formas_pagamento_restaurante(restaurant_id, active_only=False, include_fallback=False)
+    existing_codes = {m.get("code") for m in existing}
+    created = 0
+    for method in DEFAULT_PAYMENT_METHODS:
+        if method["code"] in existing_codes:
+            continue
+        payload = {
+            "restaurant_id": restaurant_id,
+            "name": method["name"],
+            "code": method["code"],
+            "type": method["type"],
+            "is_active": True,
+            "is_default": True,
+            "requires_reference": method.get("requires_reference", False),
+            "allow_change": method.get("allow_change", method["type"] == "cash"),
+            "sort_order": method.get("sort_order", 0),
+        }
+        sb.table("restaurant_payment_methods").insert(payload).execute()
+        created += 1
+    return created
+
+def payment_method_by_code(restaurant_id: str, code: str) -> dict | None:
+    normalized = slugify_payment_code(code)
+    methods = listar_formas_pagamento_restaurante(restaurant_id, active_only=False, include_fallback=True)
+    return next((m for m in methods if m.get("code") == normalized), None)
+
+def payment_method_label(code: str, snapshot: str | None = None) -> str:
+    return snapshot or LEGACY_PAYMENT_LABELS.get(code, code.replace("_", " ").title())
+
+def normalize_payment_item(restaurant_id: str, item: dict) -> dict:
+    forma = slugify_payment_code(item.get("forma_pagamento") or item.get("forma") or item.get("payment_method_code") or "")
+    method = payment_method_by_code(restaurant_id, forma)
+    if not method:
+        raise HTTPException(400, f"Forma de pagamento inválida: {forma}")
+    if method.get("is_active") is False:
+        raise HTTPException(400, f"Forma de pagamento inativa: {method.get('name') or forma}")
+    valor = _money(item.get("valor"))
+    if valor <= 0:
+        raise HTTPException(400, "Valor de pagamento precisa ser maior que zero")
+    pagamento = {
+        "forma_pagamento": method["code"],
+        "valor": valor,
+        "payment_method_id": method.get("id"),
+        "payment_method_name_snapshot": method.get("name") or payment_method_label(method["code"]),
+        "payment_method_type_snapshot": method.get("type") or "other",
+    }
+    referencia = item.get("referencia") or item.get("reference") or item.get("authorization_code") or item.get("nsu")
+    if referencia:
+        pagamento["referencia"] = str(referencia).strip()[:120]
+    if method.get("requires_reference") and not pagamento.get("referencia"):
+        raise HTTPException(400, f"Informe a referência de {pagamento['payment_method_name_snapshot']}")
+    if (method.get("allow_change") or method.get("type") == "cash" or method.get("code") == "dinheiro") and item.get("valor_recebido") is not None:
+        recebido = _money(item.get("valor_recebido"))
+        if recebido + 0.02 < valor:
+            raise HTTPException(400, "Valor recebido menor que o valor pago")
+        pagamento["valor_recebido"] = recebido
+        pagamento["troco"] = _money(max(0, recebido - valor))
+    return pagamento
+
 def atualizar_turno_com_fechamento(restaurant_id: str, shift_id: str | None, fechamento: dict):
     if not shift_id:
         return None
@@ -1125,6 +1270,19 @@ def atualizar_turno_com_fechamento(restaurant_id: str, shift_id: str | None, fec
             salvar_turnos_caixa(restaurant_id, turnos)
             return turno
     raise HTTPException(409, "Abra um turno de caixa antes de fechar contas")
+
+def total_dinheiro_turno(turno: dict) -> float:
+    total = 0.0
+    closures = turno.get("account_closures") or []
+    for closure in closures:
+        for payment in closure.get("pagamentos") or []:
+            code = payment.get("forma_pagamento")
+            ptype = payment.get("payment_method_type_snapshot")
+            if code == "dinheiro" or ptype == "cash":
+                total = _money(total + _money(payment.get("valor")))
+    if total:
+        return total
+    return _money((turno.get("payments_by_method") or {}).get("dinheiro"))
 
 def registrar_fiscal_documento(restaurant_id: str, sessao_id: str, total: float, origem: str, status_doc: str = "pendente", extra: dict | None = None) -> dict:
     config = get_fiscal_config(restaurant_id)
@@ -1365,30 +1523,36 @@ def desativar_usuarios_orfaos(usuario_ids: list[str]) -> int:
         desativados += 1
     return desativados
 
-def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, dict]:
+def _normalizar_pagamentos(body: FecharContaInput, total: float, restaurant_id: str | None = None) -> tuple[str, dict]:
     total = _money(total)
     pagamentos_raw = body.pagamentos or []
     pagamentos = []
     if pagamentos_raw:
         for item in pagamentos_raw:
-            forma = item.get("forma_pagamento") or item.get("forma")
-            valor = _money(item.get("valor"))
-            if forma not in FORMAS_PAGAMENTO:
-                raise HTTPException(400, f"Forma de pagamento inválida: {forma}")
-            if valor <= 0:
-                raise HTTPException(400, "Valor de pagamento precisa ser maior que zero")
-            pagamento = {"forma_pagamento": forma, "valor": valor}
-            if forma == "dinheiro" and item.get("valor_recebido") is not None:
-                recebido = _money(item.get("valor_recebido"))
-                if recebido + 0.02 < valor:
-                    raise HTTPException(400, "Valor recebido em dinheiro menor que o valor pago")
-                pagamento["valor_recebido"] = recebido
-                pagamento["troco"] = _money(max(0, recebido - valor))
-            pagamentos.append(pagamento)
+            if restaurant_id:
+                pagamentos.append(normalize_payment_item(restaurant_id, item))
+            else:
+                forma = item.get("forma_pagamento") or item.get("forma")
+                valor = _money(item.get("valor"))
+                if forma not in FORMAS_PAGAMENTO:
+                    raise HTTPException(400, f"Forma de pagamento inválida: {forma}")
+                if valor <= 0:
+                    raise HTTPException(400, "Valor de pagamento precisa ser maior que zero")
+                pagamento = {"forma_pagamento": forma, "valor": valor}
+                if forma == "dinheiro" and item.get("valor_recebido") is not None:
+                    recebido = _money(item.get("valor_recebido"))
+                    if recebido + 0.02 < valor:
+                        raise HTTPException(400, "Valor recebido em dinheiro menor que o valor pago")
+                    pagamento["valor_recebido"] = recebido
+                    pagamento["troco"] = _money(max(0, recebido - valor))
+                pagamentos.append(pagamento)
     elif body.forma_pagamento:
-        if body.forma_pagamento not in FORMAS_PAGAMENTO:
+        if restaurant_id:
+            pagamentos.append(normalize_payment_item(restaurant_id, {"forma_pagamento": body.forma_pagamento, "valor": total}))
+        elif body.forma_pagamento not in FORMAS_PAGAMENTO:
             raise HTTPException(400, "Forma de pagamento inválida")
-        pagamentos.append({"forma_pagamento": body.forma_pagamento, "valor": total})
+        elif not restaurant_id:
+            pagamentos.append({"forma_pagamento": body.forma_pagamento, "valor": total})
     else:
         raise HTTPException(400, "Informe a forma de pagamento")
 
@@ -1397,9 +1561,12 @@ def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, d
         raise HTTPException(400, f"Soma dos pagamentos ({soma:.2f}) diferente do total ({total:.2f})")
 
     por_forma = {}
+    por_forma_nome = {}
     for p in pagamentos:
         forma = p["forma_pagamento"]
         por_forma[forma] = round(por_forma.get(forma, 0.0) + p["valor"], 2)
+        label = payment_method_label(forma, p.get("payment_method_name_snapshot"))
+        por_forma_nome[label] = round(por_forma_nome.get(label, 0.0) + p["valor"], 2)
 
     if len(por_forma) == 1:
         forma_db = next(iter(por_forma.keys()))
@@ -1407,7 +1574,7 @@ def _normalizar_pagamentos(body: FecharContaInput, total: float) -> tuple[str, d
         partes = [f"{forma}:{valor:.2f}" for forma, valor in sorted(por_forma.items())]
         forma_db = "misto|" + ";".join(partes)
 
-    return forma_db, {"total": total, "pagamentos": pagamentos, "por_forma": por_forma}
+    return forma_db, {"total": total, "pagamentos": pagamentos, "por_forma": por_forma, "por_forma_nome": por_forma_nome}
 
 def _inventory_delta(movement_type: str, quantity: float) -> float:
     quantity = _money(quantity)
@@ -2062,6 +2229,35 @@ class AtualizarStatusPedidoInput(BaseModel):
 class CancelarPedidoClienteInput(BaseModel):
     mesa_id: Optional[str] = None
     motivo: Optional[str] = None
+
+
+class PaymentMethodInput(BaseModel):
+    name: str
+    code: Optional[str] = None
+    type: str = "other"
+    is_active: bool = True
+    is_default: bool = False
+    requires_reference: bool = False
+    allow_change: bool = False
+    sort_order: int = 0
+
+    @field_validator("name")
+    @classmethod
+    def val_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError("Nome obrigatório")
+        return v.strip()[:80]
+
+    @field_validator("type")
+    @classmethod
+    def val_type(cls, v):
+        if v not in PAYMENT_METHOD_TYPES:
+            raise ValueError(f"Tipo inválido: {sorted(PAYMENT_METHOD_TYPES)}")
+        return v
+
+
+class ReorderPaymentMethodsInput(BaseModel):
+    order: list[str]
 
 
 class CriarMesaInput(BaseModel):
@@ -3119,7 +3315,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
     if count_pedidos_abertos_sessao(rid, sessao["id"]):
         raise HTTPException(409, "Não é possível fechar: ainda existem pedidos em aberto")
 
-    _, resumo_pagamento = _normalizar_pagamentos(body, sessao["total_consumido"])
+    _, resumo_pagamento = _normalizar_pagamentos(body, sessao["total_consumido"], rid)
     if u.get("role") == "cashier" and not body.cash_shift_id:
         raise HTTPException(409, "Abra um turno de caixa antes de fechar contas")
     if body.cash_shift_id:
@@ -3151,6 +3347,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
             "total": resumo_pagamento["total"],
             "pagamentos": resumo_pagamento["pagamentos"],
             "payments_by_method": resumo_pagamento["por_forma"],
+            "payments_by_method_name": resumo_pagamento.get("por_forma_nome", {}),
             "closed_by": u["sub"],
             "closed_by_name": u.get("nome") or "",
             "closed_at": utcnow(),
@@ -3922,6 +4119,125 @@ def registrar_documento_fiscal(body: FiscalDocumentInput, request: Request,
 # ADMIN — CAIXA E FINANCEIRO
 # ═════════════════════════════════════════════════════════════════
 
+@app.get("/api/admin/payment-methods", tags=["caixa"])
+def listar_formas_pagamento_admin(active_only: bool = False,
+                                  u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
+    enforce_platform_control(rid, "financeiro")
+    schema_available = payment_methods_schema_available()
+    methods = listar_formas_pagamento_restaurante(rid, active_only=active_only, include_fallback=True)
+    return {
+        "methods": methods,
+        "schema_available": schema_available,
+        "fallback": any(m.get("is_fallback") for m in methods),
+        "types": sorted(PAYMENT_METHOD_TYPES),
+    }
+
+
+@app.post("/api/admin/payment-methods", tags=["caixa"])
+def criar_forma_pagamento_admin(body: PaymentMethodInput, request: Request,
+                                u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
+    enforce_platform_control(rid, "financeiro")
+    if not payment_methods_schema_available():
+        raise HTTPException(503, "Aplique o schema de formas de pagamento antes de cadastrar novas formas")
+    code = slugify_payment_code(body.code or body.name)
+    existing = _first(_rows(sb.table("restaurant_payment_methods").select("id").eq("restaurant_id", rid).eq("code", code).limit(1).execute()))
+    if existing:
+        raise HTTPException(409, "Já existe uma forma de pagamento com este código")
+    payload = {
+        "restaurant_id": rid,
+        "name": body.name,
+        "code": code,
+        "type": body.type,
+        "is_active": body.is_active,
+        "is_default": body.is_default,
+        "requires_reference": body.requires_reference,
+        "allow_change": body.allow_change or body.type == "cash",
+        "sort_order": body.sort_order,
+    }
+    created = _first(_rows(sb.table("restaurant_payment_methods").insert(payload).select("*").execute()))
+    log_acao(u, "criar_forma_pagamento", "restaurant_payment_methods", (created or {}).get("id"), None, created, request)
+    return {"method": created}
+
+
+@app.patch("/api/admin/payment-methods/{method_id}", tags=["caixa"])
+def atualizar_forma_pagamento_admin(method_id: str, body: PaymentMethodInput, request: Request,
+                                    u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
+    enforce_platform_control(rid, "financeiro")
+    current = _first(_rows(sb.table("restaurant_payment_methods").select("*").eq("id", method_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not current:
+        raise HTTPException(404, "Forma de pagamento não encontrada")
+    code = slugify_payment_code(body.code or current.get("code") or body.name)
+    duplicate = _first(_rows(sb.table("restaurant_payment_methods").select("id").eq("restaurant_id", rid).eq("code", code).limit(1).execute()))
+    if duplicate and duplicate.get("id") != method_id:
+        raise HTTPException(409, "Já existe uma forma de pagamento com este código")
+    payload = {
+        "name": body.name,
+        "code": code,
+        "type": body.type,
+        "is_active": body.is_active,
+        "is_default": body.is_default,
+        "requires_reference": body.requires_reference,
+        "allow_change": body.allow_change or body.type == "cash",
+        "sort_order": body.sort_order,
+        "updated_at": utcnow(),
+    }
+    sb.table("restaurant_payment_methods").update(payload).eq("id", method_id).eq("restaurant_id", rid).execute()
+    updated = _first(_rows(sb.table("restaurant_payment_methods").select("*").eq("id", method_id).eq("restaurant_id", rid).limit(1).execute()))
+    log_acao(u, "atualizar_forma_pagamento", "restaurant_payment_methods", method_id, current, updated, request)
+    return {"method": updated}
+
+
+def set_payment_method_active(method_id: str, active: bool, request: Request, u: dict) -> dict:
+    rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
+    enforce_platform_control(rid, "financeiro")
+    current = _first(_rows(sb.table("restaurant_payment_methods").select("*").eq("id", method_id).eq("restaurant_id", rid).limit(1).execute()))
+    if not current:
+        raise HTTPException(404, "Forma de pagamento não encontrada")
+    if not active:
+        active_count = sb.table("restaurant_payment_methods").select("id", count="exact").eq("restaurant_id", rid).eq("is_active", True).execute().count or 0
+        if current.get("is_active") is not False and active_count <= 1:
+            raise HTTPException(409, "Não é permitido desativar todas as formas de pagamento")
+    sb.table("restaurant_payment_methods").update({"is_active": active, "updated_at": utcnow()}).eq("id", method_id).eq("restaurant_id", rid).execute()
+    updated = _first(_rows(sb.table("restaurant_payment_methods").select("*").eq("id", method_id).eq("restaurant_id", rid).limit(1).execute()))
+    log_acao(u, "ativar_forma_pagamento" if active else "desativar_forma_pagamento", "restaurant_payment_methods", method_id, current, updated, request)
+    return {"method": updated}
+
+
+@app.post("/api/admin/payment-methods/{method_id}/deactivate", tags=["caixa"])
+def desativar_forma_pagamento_admin(method_id: str, request: Request,
+                                    u: dict = Depends(authorize(["manager", "owner"]))):
+    return set_payment_method_active(method_id, False, request, u)
+
+
+@app.post("/api/admin/payment-methods/{method_id}/activate", tags=["caixa"])
+def ativar_forma_pagamento_admin(method_id: str, request: Request,
+                                 u: dict = Depends(authorize(["manager", "owner"]))):
+    return set_payment_method_active(method_id, True, request, u)
+
+
+@app.post("/api/admin/payment-methods/reorder", tags=["caixa"])
+def reordenar_formas_pagamento_admin(body: ReorderPaymentMethodsInput, request: Request,
+                                     u: dict = Depends(authorize(["manager", "owner"]))):
+    rid = get_restaurant_id_from_token(u)
+    enforce_module_enabled(rid, "caixa", "caixa")
+    enforce_platform_control(rid, "financeiro")
+    updated = []
+    for index, method_id in enumerate(body.order):
+        sb.table("restaurant_payment_methods").update({"sort_order": (index + 1) * 10, "updated_at": utcnow()}).eq("id", method_id).eq("restaurant_id", rid).execute()
+        row = _first(_rows(sb.table("restaurant_payment_methods").select("*").eq("id", method_id).eq("restaurant_id", rid).limit(1).execute()))
+        if row:
+            updated.append(row)
+    log_acao(u, "reordenar_formas_pagamento", "restaurant_payment_methods", rid, None, {"order": body.order}, request)
+    return {"methods": updated}
+
+
 @app.post("/api/admin/cash-register/close", tags=["caixa"])
 def fechar_caixa(data: Optional[str] = None, request: Request = None,
                  u: dict = Depends(authorize(["cashier", "manager", "owner"]))):
@@ -4071,7 +4387,7 @@ def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Requ
         raise HTTPException(403, "Somente quem abriu o turno pode fechá-lo")
     dinheiro = caixa_resumo_dinheiro(body.denominations)
     fechamento_informado = body.closing_amount if body.closing_amount is not None else dinheiro["total"]
-    esperado = _money(float(turno.get("opening_amount") or 0) + float(turno.get("payments_by_method", {}).get("dinheiro") or 0))
+    esperado = _money(float(turno.get("opening_amount") or 0) + total_dinheiro_turno(turno))
     fechamento = _money(fechamento_informado)
     turno.update({
         "status": "closed",
@@ -4148,6 +4464,7 @@ def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
     _, resumo_pagamento = _normalizar_pagamentos(
         FecharContaInput(pagamentos=body.pagamentos),
         subtotal,
+        rid,
     )
     pedido_id = str(uuid4())
     now = utcnow()
@@ -4181,6 +4498,7 @@ def criar_venda_balcao_rapido(body: BalcaoRapidoInput, request: Request,
         "total": resumo_pagamento["total"],
         "pagamentos": resumo_pagamento["pagamentos"],
         "payments_by_method": resumo_pagamento["por_forma"],
+        "payments_by_method_name": resumo_pagamento.get("por_forma_nome", {}),
         "closed_by": u["sub"],
         "closed_by_name": u.get("nome") or "",
         "closed_at": now,
@@ -4333,6 +4651,7 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
             "accept_card": True,
             "accept_cash": True,
         }).execute()
+        ensure_default_payment_methods(rest["id"])
 
         if body.initial_table_count:
             criadas = ensure_active_tables_count(rest["id"], body.initial_table_count)
@@ -4348,7 +4667,10 @@ def criar_restaurante(body: CriarRestauranteInput, request: Request,
 
 def apagar_restaurante_dados(restaurant_id: str):
     def delete_restaurant_rows(table: str):
-        sb.table(table).delete().eq("restaurant_id", restaurant_id).execute()
+        try:
+            sb.table(table).delete().eq("restaurant_id", restaurant_id).execute()
+        except Exception as exc:
+            logger.debug("Ignorando limpeza opcional de %s: %s", table, exc)
 
     membros = _rows(sb.table("restaurant_memberships").select("usuario_id").eq("restaurant_id", restaurant_id).execute())
     usuario_ids = [m["usuario_id"] for m in membros if m.get("usuario_id")]
@@ -4394,6 +4716,7 @@ def apagar_restaurante_dados(restaurant_id: str):
         "categorias",
         "mesas",
         "restaurant_settings",
+        "restaurant_payment_methods",
         "restaurant_memberships",
     ):
         delete_restaurant_rows(table)
