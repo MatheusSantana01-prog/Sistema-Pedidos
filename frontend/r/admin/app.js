@@ -1100,7 +1100,7 @@ async function carregarFinanceiro() {
       <div id="financeiro-caixas" style="margin-top:16px"><div class="loading"><div class="spinner"></div></div></div>`;
     carregarCaixasFinanceiro();
   } catch (e) {
-    document.getElementById('financeiro-content').innerHTML = '<div class="tabela-empty">Erro: ' + e.message + '</div>';
+    document.getElementById('financeiro-content').innerHTML = '<div class="tabela-empty">Erro: ' + escapeHtml(e.message) + '</div>';
   }
 }
 

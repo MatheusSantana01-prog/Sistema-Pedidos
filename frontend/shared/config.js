@@ -18,5 +18,5 @@ window.SAAS_CONFIG = {
 
   // Link do WhatsApp oficial de suporte. Preencher no formato:
   // https://wa.me/5511999999999
-  SUPPORT_WHATSAPP_URL: 'https://wa.me/55119876293903',
+  SUPPORT_WHATSAPP_URL: 'https://wa.me/5511987629303',
 };

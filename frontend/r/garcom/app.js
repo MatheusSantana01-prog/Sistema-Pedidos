@@ -257,7 +257,7 @@ async function abrirMesa(mesaId, sessaoId, numero) {
       ${renderPagamentoGarcom(mesaAtual)}
     ` : '<div class="empty">Esta mesa ainda não tem pedidos.</div>';
   } catch (e) {
-    document.getElementById('modal-body').innerHTML = `<div class="empty">${e.message}</div>`;
+    document.getElementById('modal-body').innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
   }
 }
 

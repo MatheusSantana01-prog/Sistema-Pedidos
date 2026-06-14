@@ -296,7 +296,7 @@ async function carregarRestaurantes() {
           </div>
         </div>`).join('');
   } catch(e) {
-    document.getElementById('restaurantes-lista').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro: ' + e.message + '</div>';
+    document.getElementById('restaurantes-lista').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
@@ -1699,7 +1699,7 @@ async function carregarMetricas() {
         <div class="stat-card"><div class="stat-label">Total pedidos</div><div class="stat-val">${m.total_orders}</div></div>
       </div>`;
   } catch(e) {
-    document.getElementById('metricas-content').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro: ' + e.message + '</div>';
+    document.getElementById('metricas-content').innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted)">Erro: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
