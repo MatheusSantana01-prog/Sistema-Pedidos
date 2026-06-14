@@ -1819,13 +1819,33 @@ def _somar_pagamento_dashboard(por_pagamento: dict, forma_pagamento: str, total:
         return
     por_pagamento[forma_pagamento] = round(por_pagamento.get(forma_pagamento, 0.0) + total, 2)
 
+def legacy_payment_code_for_db(code: str | None, payment_type: str | None = None) -> str:
+    code = slugify_payment_code(code or "")
+    if code in FORMAS_PAGAMENTO:
+        return code
+    if payment_type == "cash":
+        return "dinheiro"
+    if payment_type == "pix":
+        return "pix"
+    if payment_type == "credit_card":
+        return "cartao_credito"
+    if payment_type in {"debit_card", "meal_voucher", "food_voucher", "digital_wallet", "bank_transfer", "credit_account", "courtesy", "other"}:
+        return "cartao_debito"
+    return "pix"
+
 def _forma_pagamento_pedido(resumo_pagamento: dict, total_pedido: float) -> str:
+    pagamentos = resumo_pagamento.get("pagamentos") or []
+    if pagamentos:
+        principal = max(pagamentos, key=lambda p: _money(p.get("valor")))
+        return legacy_payment_code_for_db(
+            principal.get("forma_pagamento"),
+            principal.get("payment_method_type_snapshot"),
+        )
     por_forma = resumo_pagamento.get("por_forma") or {}
-    if len(por_forma) == 1:
-        return next(iter(por_forma.keys()))
-    # O banco atual valida forma_pagamento contra valores fixos e não aceita
-    # composição mista. O detalhamento fica no retorno e no audit_log.
-    return next(iter(sorted(por_forma.keys())), "pix")
+    if por_forma:
+        code = max(por_forma.items(), key=lambda item: _money(item[1]))[0]
+        return legacy_payment_code_for_db(code)
+    return "pix"
 
 def utcnow() -> str:
     return datetime.utcnow().isoformat()

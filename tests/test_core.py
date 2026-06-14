@@ -236,6 +236,32 @@ def test_cash_payment_keeps_sale_value_and_registers_change():
     assert resumo["pagamentos"][0]["troco"] == 192.10
 
 
+def test_custom_payment_method_uses_legacy_db_code_for_pedido():
+    resumo = {
+        "pagamentos": [
+            {
+                "forma_pagamento": "vr",
+                "valor": 50,
+                "payment_method_name_snapshot": "VR",
+                "payment_method_type_snapshot": "meal_voucher",
+            }
+        ],
+        "por_forma": {"vr": 50},
+    }
+
+    assert main._forma_pagamento_pedido(resumo, 50) == "cartao_debito"
+
+    resumo_misto = {
+        "pagamentos": [
+            {"forma_pagamento": "pix", "valor": 20, "payment_method_type_snapshot": "pix"},
+            {"forma_pagamento": "sodexo", "valor": 80, "payment_method_type_snapshot": "meal_voucher"},
+        ],
+        "por_forma": {"pix": 20, "sodexo": 80},
+    }
+
+    assert main._forma_pagamento_pedido(resumo_misto, 100) == "cartao_debito"
+
+
 def test_restaurant_business_type_allows_quick_counter_sale():
     assert main.business_type_modules("restaurante")["balcao_rapido"] is True
 
