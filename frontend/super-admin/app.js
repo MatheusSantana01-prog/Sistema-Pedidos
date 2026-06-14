@@ -4,6 +4,15 @@ let DETALHE_ATUAL = null;
 let FINANCEIRO_ITEMS = [];
 let SUPORTE_ITEMS = [];
 let suportePollingHandle = null;
+const PLATFORM_THEME_STORAGE_KEY = 'brickkode-platform-theme';
+const PLATFORM_THEME_DEFAULTS = {
+  bg: '#020617',
+  primary: '#2563EB',
+  accent: '#22D3EE',
+  secondary: '#7C3AED',
+  text: '#FFFFFF',
+  muted: '#CBD5E1',
+};
 
 const PLANOS = {
   starter: {
@@ -131,6 +140,7 @@ function iniciarApp(u) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'flex';
   document.getElementById('user-email').textContent = u.email;
+  carregarTemaPlataforma();
   carregarRestaurantes();
   iniciarPollingSuporteSuper();
 }
@@ -140,6 +150,7 @@ if (isLoggedIn() && getUsuario()?.is_super_admin) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  carregarTemaPlataforma();
   const savedLogin = localStorage.getItem('super_admin_saved_login') || '';
   if (savedLogin) {
     const email = document.getElementById('l-email');
@@ -167,8 +178,82 @@ function irPara(pagina, tabEl) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + pagina).classList.add('active');
   tabEl.classList.add('active');
-  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, financeiro: carregarFinanceiroPlataforma, suporte: carregarSuportePlataforma, metricas: carregarMetricas, operacao: carregarOperacao, auditoria: carregarAuditoria, validacao: () => {} };
+  const loaders = { restaurantes: carregarRestaurantes, usuarios: carregarUsuarios, financeiro: carregarFinanceiroPlataforma, suporte: carregarSuportePlataforma, metricas: carregarMetricas, operacao: carregarOperacao, tema: carregarTemaPlataforma, auditoria: carregarAuditoria, validacao: () => {} };
   if (loaders[pagina]) loaders[pagina]();
+}
+
+function lerTemaPlataforma() {
+  try {
+    return { ...PLATFORM_THEME_DEFAULTS, ...(JSON.parse(localStorage.getItem(PLATFORM_THEME_STORAGE_KEY) || '{}') || {}) };
+  } catch (_) {
+    return { ...PLATFORM_THEME_DEFAULTS };
+  }
+}
+
+function aplicarTemaPlataforma(theme = lerTemaPlataforma()) {
+  const root = document.documentElement;
+  root.style.setProperty('--bg', theme.bg);
+  root.style.setProperty('--panel', '#0f172a');
+  root.style.setProperty('--text', theme.text);
+  root.style.setProperty('--muted', theme.muted);
+  root.style.setProperty('--primary', theme.primary);
+  root.style.setProperty('--accent', theme.accent);
+  root.style.setProperty('--secondary', theme.secondary);
+  root.style.setProperty('--color-bg', theme.bg);
+  root.style.setProperty('--color-primary', theme.primary);
+  root.style.setProperty('--color-accent', theme.accent);
+  root.style.setProperty('--color-secondary', theme.secondary);
+  root.style.setProperty('--color-text', theme.text);
+}
+
+function preencherCamposTema(theme) {
+  const map = {
+    'theme-bg': theme.bg,
+    'theme-primary': theme.primary,
+    'theme-accent': theme.accent,
+    'theme-secondary': theme.secondary,
+    'theme-text': theme.text,
+    'theme-muted': theme.muted,
+  };
+  Object.entries(map).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+}
+
+function carregarTemaPlataforma() {
+  const theme = lerTemaPlataforma();
+  aplicarTemaPlataforma(theme);
+  preencherCamposTema(theme);
+}
+
+function temaPlataformaDosCampos() {
+  return {
+    bg: document.getElementById('theme-bg')?.value || PLATFORM_THEME_DEFAULTS.bg,
+    primary: document.getElementById('theme-primary')?.value || PLATFORM_THEME_DEFAULTS.primary,
+    accent: document.getElementById('theme-accent')?.value || PLATFORM_THEME_DEFAULTS.accent,
+    secondary: document.getElementById('theme-secondary')?.value || PLATFORM_THEME_DEFAULTS.secondary,
+    text: document.getElementById('theme-text')?.value || PLATFORM_THEME_DEFAULTS.text,
+    muted: document.getElementById('theme-muted')?.value || PLATFORM_THEME_DEFAULTS.muted,
+  };
+}
+
+function previewTemaPlataforma() {
+  aplicarTemaPlataforma(temaPlataformaDosCampos());
+}
+
+function salvarTemaPlataforma() {
+  const theme = temaPlataformaDosCampos();
+  localStorage.setItem(PLATFORM_THEME_STORAGE_KEY, JSON.stringify(theme));
+  aplicarTemaPlataforma(theme);
+  showToast('Tema da plataforma atualizado', 'success');
+}
+
+function restaurarTemaPlataforma() {
+  localStorage.removeItem(PLATFORM_THEME_STORAGE_KEY);
+  preencherCamposTema(PLATFORM_THEME_DEFAULTS);
+  aplicarTemaPlataforma(PLATFORM_THEME_DEFAULTS);
+  showToast('Tema BrickKode restaurado', 'success');
 }
 
 /* ── RESTAURANTES ───────────────────────────────────── */

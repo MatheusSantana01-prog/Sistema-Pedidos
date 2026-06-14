@@ -1,6 +1,6 @@
 /**
  * shared/tenant.js
- * Resolve o restaurante atual pela URL e aplica o tema visual.
+ * Resolve o restaurante atual pela URL e aplica identidade visual quando apropriado.
  *
  * Padrão de URL: /r/{slug}/admin | /r/{slug}/cozinha | /r/{slug}/mesa/{token}
  * Também suporta subdomínio futuro: slug.meusaas.com.br
@@ -8,6 +8,15 @@
 
 const TENANT_API_URL = window.SAAS_CONFIG.API_URL || "";
 const TENANT_CACHE_TTL_MS = 60000;
+const PLATFORM_THEME_STORAGE_KEY = 'brickkode-platform-theme';
+const PLATFORM_THEME_DEFAULTS = {
+  bg: '#020617',
+  primary: '#2563EB',
+  accent: '#22D3EE',
+  secondary: '#7C3AED',
+  text: '#FFFFFF',
+  muted: '#CBD5E1',
+};
 
 /**
  * Extrai o slug do restaurante a partir da URL atual.
@@ -57,9 +66,68 @@ async function fetchRestaurantConfig(slug) {
   return config;
 }
 
+function readPlatformTheme() {
+  try {
+    return { ...PLATFORM_THEME_DEFAULTS, ...(JSON.parse(localStorage.getItem(PLATFORM_THEME_STORAGE_KEY) || '{}') || {}) };
+  } catch (_) {
+    return { ...PLATFORM_THEME_DEFAULTS };
+  }
+}
+
+function applyPlatformTheme(theme = readPlatformTheme()) {
+  const root = document.documentElement;
+  root.style.setProperty('--bg', theme.bg || PLATFORM_THEME_DEFAULTS.bg);
+  root.style.setProperty('--text', theme.text || PLATFORM_THEME_DEFAULTS.text);
+  root.style.setProperty('--primary', theme.primary || PLATFORM_THEME_DEFAULTS.primary);
+  root.style.setProperty('--secondary', theme.secondary || PLATFORM_THEME_DEFAULTS.secondary);
+  root.style.setProperty('--accent', theme.accent || PLATFORM_THEME_DEFAULTS.accent);
+  root.style.setProperty('--color-bg', theme.bg || PLATFORM_THEME_DEFAULTS.bg);
+  root.style.setProperty('--color-primary', theme.primary || PLATFORM_THEME_DEFAULTS.primary);
+  root.style.setProperty('--color-accent', theme.accent || PLATFORM_THEME_DEFAULTS.accent);
+  root.style.setProperty('--color-secondary', theme.secondary || PLATFORM_THEME_DEFAULTS.secondary);
+  root.style.setProperty('--color-text', theme.text || PLATFORM_THEME_DEFAULTS.text);
+  root.style.setProperty('--muted', theme.muted || PLATFORM_THEME_DEFAULTS.muted);
+}
+
+function shouldApplyRestaurantTheme() {
+  return /^\/r\/[^/]+\/mesa(?:\/|$)/.test(window.location.pathname);
+}
+
+function applyRestaurantIdentity(config, { updateFavicon = false } = {}) {
+  if (!config) return;
+
+  const logoEls = document.querySelectorAll('.restaurant-logo');
+  logoEls.forEach(el => {
+    if (config.logo_url) {
+      el.src = config.logo_url;
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+
+  const nameEls = document.querySelectorAll('.restaurant-name');
+  nameEls.forEach(el => { el.textContent = config.name || ''; });
+
+  if (updateFavicon && config.logo_url) {
+    let favicon = document.querySelector("link[rel='icon']");
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.rel = 'icon';
+      document.head.appendChild(favicon);
+    }
+    favicon.href = config.logo_url;
+  }
+
+  if (config.name) {
+    const suffix = document.title.includes('—') ? document.title.split('—')[1].trim() : document.title;
+    document.title = `${config.name} — ${suffix}`;
+  }
+}
+
 /**
  * Aplica tema visual do restaurante (cores, fonte, logo) via CSS variables.
- * Chame após fetchRestaurantConfig.
+ * Use somente nas páginas públicas do cliente final.
  */
 function applyRestaurantTheme(config) {
   if (!config) return;
@@ -71,37 +139,7 @@ function applyRestaurantTheme(config) {
   root.style.setProperty('--color-bg',         config.background_color || '#0a0a0a');
   root.style.setProperty('--color-text',       config.text_color       || '#f2f0eb');
 
-  // Logo
-  const logoEls = document.querySelectorAll('.restaurant-logo');
-  logoEls.forEach(el => {
-    if (config.logo_url) {
-      el.src = config.logo_url;
-      el.style.display = 'block';
-    } else {
-      el.style.display = 'none';
-    }
-  });
-
-  // Nome do restaurante
-  const nameEls = document.querySelectorAll('.restaurant-name');
-  nameEls.forEach(el => { el.textContent = config.name || ''; });
-
-  // Favicon dinâmico (opcional)
-  if (config.logo_url) {
-    let favicon = document.querySelector("link[rel='icon']");
-    if (!favicon) {
-      favicon = document.createElement('link');
-      favicon.rel = 'icon';
-      document.head.appendChild(favicon);
-    }
-    favicon.href = config.logo_url;
-  }
-
-  // Título da página
-  if (config.name) {
-    const suffix = document.title.includes('—') ? document.title.split('—')[1].trim() : document.title;
-    document.title = `${config.name} — ${suffix}`;
-  }
+  applyRestaurantIdentity(config, { updateFavicon: true });
 }
 
 /**
@@ -117,7 +155,12 @@ async function initTenant() {
 
   try {
     const config = await fetchRestaurantConfig(slug);
-    applyRestaurantTheme(config);
+    if (shouldApplyRestaurantTheme()) {
+      applyRestaurantTheme(config);
+    } else {
+      applyPlatformTheme();
+      applyRestaurantIdentity(config);
+    }
     window.__RESTAURANT__ = config;
     return config;
   } catch (e) {
@@ -139,4 +182,7 @@ async function initTenant() {
 window.getCurrentRestaurantSlug = getCurrentRestaurantSlug;
 window.fetchRestaurantConfig    = fetchRestaurantConfig;
 window.applyRestaurantTheme     = applyRestaurantTheme;
+window.applyRestaurantIdentity  = applyRestaurantIdentity;
+window.applyPlatformTheme       = applyPlatformTheme;
+window.readPlatformTheme        = readPlatformTheme;
 window.initTenant               = initTenant;

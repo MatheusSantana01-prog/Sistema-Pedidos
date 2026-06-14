@@ -1537,34 +1537,30 @@ async function carregarConfiguracoes() {
             <input class="form-input" id="cfg-logo-file" type="file" accept="image/png,image/jpeg,image/webp" onchange="carregarLogoRestaurante(this)"></div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor primária</label>
-            <input type="color" class="color-swatch" id="cfg-primary" value="${restaurant.primary_color||'#ff4d1c'}"
-                   oninput="document.documentElement.style.setProperty('--color-primary',this.value)">
+            <input type="color" class="color-swatch" id="cfg-primary" value="${restaurant.primary_color||'#ff4d1c'}">
             <input class="form-input" id="cfg-primary-txt" value="${restaurant.primary_color||'#ff4d1c'}" style="width:110px">
           </div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor de destaque</label>
-            <input type="color" class="color-swatch" id="cfg-accent" value="${restaurant.accent_color||'#ff6b3d'}"
-                   oninput="document.documentElement.style.setProperty('--color-accent',this.value)">
+            <input type="color" class="color-swatch" id="cfg-accent" value="${restaurant.accent_color||'#ff6b3d'}">
             <input class="form-input" id="cfg-accent-txt" value="${restaurant.accent_color||'#ff6b3d'}" style="width:110px">
           </div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor secundária</label>
-            <input type="color" class="color-swatch" id="cfg-secondary" value="${restaurant.secondary_color||'#1a1a1a'}"
-                   oninput="document.documentElement.style.setProperty('--color-secondary',this.value)">
+            <input type="color" class="color-swatch" id="cfg-secondary" value="${restaurant.secondary_color||'#1a1a1a'}">
             <input class="form-input" id="cfg-secondary-txt" value="${restaurant.secondary_color||'#1a1a1a'}" style="width:110px">
           </div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor de fundo</label>
-            <input type="color" class="color-swatch" id="cfg-bg" value="${restaurant.background_color||'#0a0a0a'}"
-                   oninput="document.documentElement.style.setProperty('--color-bg',this.value)">
+            <input type="color" class="color-swatch" id="cfg-bg" value="${restaurant.background_color||'#0a0a0a'}">
             <input class="form-input" id="cfg-bg-txt" value="${restaurant.background_color||'#0a0a0a'}" style="width:110px">
           </div>
           <div class="color-picker-row">
             <label class="form-label" style="min-width:140px">Cor do texto</label>
-            <input type="color" class="color-swatch" id="cfg-text" value="${restaurant.text_color||'#f2f0eb'}"
-                   oninput="document.documentElement.style.setProperty('--color-text',this.value)">
+            <input type="color" class="color-swatch" id="cfg-text" value="${restaurant.text_color||'#f2f0eb'}">
             <input class="form-input" id="cfg-text-txt" value="${restaurant.text_color||'#f2f0eb'}" style="width:110px">
           </div>
+          <div class="muted-line" style="margin-top:8px">Essas cores afetam apenas o cardápio público do cliente no QR Code.</div>
           <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="salvarConfiguracoes()">Salvar visual</button>
         </div>
         <div class="config-card">
@@ -1672,13 +1668,18 @@ async function salvarConfiguracoes() {
       text_color:       document.getElementById('cfg-text-txt').value,
     });
     showToast('Visual atualizado', 'success');
-    applyRestaurantTheme({ ...window.__RESTAURANT__,
+    const updatedRestaurant = { ...window.__RESTAURANT__,
+      name: document.getElementById('cfg-nome').value.trim(),
+      logo_url: document.getElementById('cfg-logo').value.trim() || null,
       primary_color: document.getElementById('cfg-primary-txt').value,
       secondary_color: document.getElementById('cfg-secondary-txt').value,
       accent_color: document.getElementById('cfg-accent-txt').value,
       background_color: document.getElementById('cfg-bg-txt').value,
       text_color: document.getElementById('cfg-text-txt').value,
-    });
+    };
+    window.__RESTAURANT__ = updatedRestaurant;
+    RESTAURANT = updatedRestaurant;
+    if (window.applyRestaurantIdentity) applyRestaurantIdentity(updatedRestaurant);
   } catch (e) { showToast(e.message, 'error'); }
 }
 
