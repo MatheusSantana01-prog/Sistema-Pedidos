@@ -396,12 +396,13 @@ async function abrirConta(mesaId, sessaoId, numero, total) {
     const slug = getCurrentRestaurantSlug();
     const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${sessaoId}/bill`);
     const pedidos = data.pedidos || [];
-    const tot = pedidos.reduce((a, p) => a + Number(p.total), 0);
+    const tot = Number(data.total_consumido ?? pedidos.filter(p => p.status !== 'cancelado').reduce((a, p) => a + Number(p.total || 0), 0));
     mesaAberta.total = tot;
+    const cancelados = pedidos.filter(p => p.status === 'cancelado').length;
 
     document.getElementById('modal-conta-body').innerHTML = `
       <div style="font-family:var(--mono);font-size:32px;font-weight:600;color:var(--color-primary)">Mesa ${numero}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${pedidos.length} pedido(s)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${pedidos.length} pedido(s)${cancelados ? ` · ${cancelados} cancelado(s) fora do total` : ''}</div>
       ${pedidos.map(p => `
         <div style="background:var(--color-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden;">
           <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);">

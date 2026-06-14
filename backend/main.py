@@ -1326,12 +1326,15 @@ def count_pedidos_abertos_sessao(restaurant_id: str, sessao_id: str) -> int:
 def listar_pedidos_fechamento(restaurant_id: str, sessao_id: str) -> list[dict]:
     return _rows(
         sb.table("pedidos")
-        .select("id,total")
+        .select("id,total,status")
         .eq("sessao_mesa_id", sessao_id)
         .eq("restaurant_id", restaurant_id)
         .neq("status", "cancelado")
         .execute()
     )
+
+def total_pedidos_fechamento(restaurant_id: str, sessao_id: str) -> float:
+    return _money(sum(_money(p.get("total")) for p in listar_pedidos_fechamento(restaurant_id, sessao_id)))
 
 def aplicar_limites_plano(control: dict, plan: str, force: bool = False) -> dict:
     plan = normalize_plan(plan)
@@ -2889,17 +2892,20 @@ def get_conta_public(slug: str, sessao_id: str):
     ).eq("restaurant_id", rid).execute().data) or {}
     settings.update(get_restaurant_feature_flags(rid))
     pedidos = sb.rpc("get_pedidos_sessao", {"p_sessao_id": sessao_id, "p_restaurant_id": rid}).execute()
-    total_consumido = float(sessao.data["total_consumido"] or 0)
+    pedidos_data = pedidos.data or []
+    total_consumido = _money(sum(_money(p.get("total")) for p in pedidos_data if p.get("status") != "cancelado"))
+    total_cancelado = _money(sum(_money(p.get("total")) for p in pedidos_data if p.get("status") == "cancelado"))
     taxa_percent = float(settings.get("service_fee_percent") or 0) if settings.get("service_fee_enabled") else 0
     taxa_servico = round(total_consumido * taxa_percent / 100, 2)
     return {
         "sessao_status":     sessao.data["status"],
         "total_consumido":   total_consumido,
+        "total_cancelado":   total_cancelado,
         "taxa_servico":      taxa_servico,
         "total_com_taxa":    round(total_consumido + taxa_servico, 2),
         "settings":          settings,
         "sessao_fechada_em": sessao.data["fechada_em"],
-        "pedidos":           pedidos.data or [],
+        "pedidos":           pedidos_data,
     }
 
 
@@ -3190,6 +3196,7 @@ def listar_mesas(u: dict = Depends(authorize(["waiter", "cashier", "manager", "o
                 "sessao_mesa_id", sessao_ativa["id"]
             ).eq("restaurant_id", rid).neq("status", "cancelado").execute()
             sessao_ativa["pedidos_count"] = pedidos_count.count or 0
+            sessao_ativa["total_consumido"] = total_pedidos_fechamento(rid, sessao_ativa["id"])
             if sessao_ativa["pedidos_count"] == 0:
                 m["estado_operacional"] = "ocupada_sem_pedido"
             else:
@@ -3298,7 +3305,7 @@ def liberar_mesa_sem_consumo(mesa_id: str, body: LiberarMesaInput, request: Requ
     pedidos = sb.table("pedidos").select("id", count="exact").eq(
         "sessao_mesa_id", sessao["id"]
     ).eq("restaurant_id", rid).neq("status", "cancelado").execute()
-    if (pedidos.count or 0) > 0 or float(sessao.get("total_consumido") or 0) > 0:
+    if (pedidos.count or 0) > 0 or total_pedidos_fechamento(rid, sessao["id"]) > 0.02:
         raise HTTPException(409, "Esta mesa tem consumo. Feche a conta pelo caixa/admin.")
 
     observacao = (sessao.get("observacao") or "").strip()
@@ -3335,7 +3342,12 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
     if count_pedidos_abertos_sessao(rid, sessao["id"]):
         raise HTTPException(409, "Não é possível fechar: ainda existem pedidos em aberto")
 
-    _, resumo_pagamento = _normalizar_pagamentos(body, sessao["total_consumido"], rid)
+    pedidos_fechamento = listar_pedidos_fechamento(rid, sessao["id"])
+    total_fechamento = _money(sum(_money(p.get("total")) for p in pedidos_fechamento))
+    if total_fechamento <= 0.02:
+        resumo_pagamento = {"total": 0.0, "pagamentos": [], "por_forma": {}, "por_forma_nome": {}}
+    else:
+        _, resumo_pagamento = _normalizar_pagamentos(body, total_fechamento, rid)
     if u.get("role") == "cashier" and not body.cash_shift_id:
         raise HTTPException(409, "Abra um turno de caixa antes de fechar contas")
     if body.cash_shift_id:
@@ -3344,9 +3356,8 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
             raise HTTPException(409, "Turno de caixa não está aberto")
         if u.get("role") == "cashier" and turno.get("opened_by") != u["sub"]:
             raise HTTPException(403, "Este turno pertence a outro caixa")
-    pedidos_fechamento = listar_pedidos_fechamento(rid, sessao["id"])
-
     sb.rpc("fechar_sessao_mesa", {"p_sessao_id": sessao["id"], "p_restaurant_id": rid}).execute()
+    sb.table("sessao_mesa").update({"total_consumido": total_fechamento, "updated_at": utcnow()}).eq("id", sessao["id"]).eq("restaurant_id", rid).execute()
     sb.table("mesas").update({"status": "livre", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
     for pedido in pedidos_fechamento:
         sb.table("pedidos").update({
@@ -3356,7 +3367,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
         }).eq("id", pedido["id"]).eq("restaurant_id", rid).execute()
 
     log_acao(u, "fechar_conta_mesa", "sessao_mesa", sessao["id"], None,
-             {"pagamento": resumo_pagamento, "total": sessao["total_consumido"]}, request)
+             {"pagamento": resumo_pagamento, "total": total_fechamento}, request)
     turno_atualizado = None
     if body.cash_shift_id:
         turno_atualizado = atualizar_turno_com_fechamento(rid, body.cash_shift_id, {
@@ -3379,7 +3390,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
         fiscal_doc = registrar_fiscal_documento(
             rid,
             sessao["id"],
-            sessao["total_consumido"],
+            total_fechamento,
             origem="fechamento_conta",
             status_doc=status_doc,
             extra={"forma_pagamento": resumo_pagamento.get("por_forma")},
@@ -3387,8 +3398,8 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
         log_acao(u, "fiscal_documento_pendente", "configuracoes", sessao["id"], None, fiscal_doc, request)
     return {
         "mensagem": "Mesa fechada",
-        "total": sessao["total_consumido"],
-        "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, sessao["total_consumido"]),
+        "total": total_fechamento,
+        "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, total_fechamento),
         "pagamentos": resumo_pagamento["pagamentos"],
         "cash_shift": turno_atualizado,
         "fiscal_document": fiscal_doc,

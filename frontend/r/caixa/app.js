@@ -511,12 +511,13 @@ async function carregarConta(numero, sessaoId) {
     const slug = getCurrentRestaurantSlug();
     const data = await apiPublic('GET', `/api/public/restaurants/${slug}/sessions/${sessaoId}/bill`);
     const pedidos = data.pedidos || [];
-    const total   = pedidos.reduce((a, p) => a + Number(p.total || 0), 0);
+    const total   = Number(data.total_consumido ?? pedidos.filter(p => p.status !== 'cancelado').reduce((a, p) => a + Number(p.total || 0), 0));
     totalContaAtual = total;
     if (modoCaixa !== 'mesas') return;
 
     document.getElementById('conta-total').textContent = 'R$ ' + fmt(total);
-    document.getElementById('conta-mesa-info').textContent = `${pedidos.length} pedido(s) · R$ ${fmt(total)}`;
+    const cancelados = pedidos.filter(p => p.status === 'cancelado').length;
+    document.getElementById('conta-mesa-info').textContent = `${pedidos.length} pedido(s)${cancelados ? ` · ${cancelados} cancelado(s)` : ''} · R$ ${fmt(total)}`;
 
     if (!pedidos.length) {
       document.getElementById('conta-body').innerHTML = '<div class="conta-vazia"><span>Nenhum pedido ainda</span></div>';
@@ -527,7 +528,7 @@ async function carregarConta(numero, sessaoId) {
       <div class="pedido-bloco">
         <div class="pedido-head">
           <span class="pedido-num">#${escapeHtml(p.numero)}</span>
-          <span class="pedido-status ${escapeAttr(p.status)}">${escapeHtml({pendente:'Aguardando',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue'}[p.status]||p.status)}</span>
+          <span class="pedido-status ${escapeAttr(p.status)}">${escapeHtml({pendente:'Aguardando',confirmado:'Confirmado',em_preparo:'Em preparo',pronto:'Pronto',entregue:'Entregue',cancelado:'Cancelado'}[p.status]||p.status)}</span>
         </div>
         ${(p.itens||[]).map(it => `
           <div class="pedido-item">
