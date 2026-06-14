@@ -3,6 +3,7 @@
 body{background:radial-gradient(circle at 12% 0%,rgba(34,211,238,.10),transparent 28rem),radial-gradient(circle at 88% 8%,rgba(124,58,237,.12),transparent 30rem),var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;}
 .login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;}
 .login-card{background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:36px;width:360px;}
+.bk-login-logo{display:block;width:min(100%,210px);height:auto;max-height:78px;object-fit:contain;margin:0 auto 18px;border-radius:8px;}
 .login-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.15);border:1px solid var(--primary);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;color:var(--primary);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px;}
 .login-title{font-size:20px;font-weight:600;margin-bottom:4px;}
 .login-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
@@ -19,7 +20,8 @@ body{background:radial-gradient(circle at 12% 0%,rgba(34,211,238,.10),transparen
 .login-remember{margin:0 0 14px;color:var(--muted);}
 /* TOPBAR */
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:50px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
-.topbar-brand{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:8px;}
+.topbar-brand{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.5px;display:flex;align-items:center;gap:10px;min-width:0;}
+.bk-topbar-logo{width:112px;height:30px;object-fit:contain;border-radius:6px;display:block;background:rgba(255,255,255,.03);}
 .sa-dot{width:8px;height:8px;border-radius:50%;background:var(--primary);}
 .btn-logout{background:none;border:1px solid var(--border2);border-radius:4px;color:var(--muted);padding:4px 10px;font-size:11px;cursor:pointer;}
 .btn-logout:hover{color:var(--red);border-color:var(--red);}
