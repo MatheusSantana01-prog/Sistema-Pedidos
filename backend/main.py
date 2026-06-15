@@ -770,18 +770,24 @@ def _parse_date(value):
     except (TypeError, ValueError):
         return None
 
+def utc_now_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def utc_today() -> date:
+    return datetime.now(timezone.utc).date()
+
 def calcular_status_financeiro(control: dict) -> dict:
     control = dict(control or {})
     if control.get("billing_status") == "teste_gratis":
         trial = _parse_date(control.get("trial_until"))
-        if trial and datetime.utcnow().date() <= trial:
+        if trial and utc_today() <= trial:
             control["billing_computed_status"] = "teste_gratis"
             control["billing_days_overdue"] = 0
             control["billing_notice"] = f"Teste grátis até {trial.isoformat()}"
             return control
 
     due = _parse_date(control.get("due_date"))
-    today = datetime.utcnow().date()
+    today = utc_today()
     days = (today - due).days if due else 0
     paid_after_due = False
     last_payment = _parse_date(control.get("last_payment_date"))
@@ -1102,7 +1108,7 @@ def turno_aberto_por_id(restaurant_id: str, turno_id: str) -> dict | None:
 
 def parse_cash_history_date(value: str | None) -> date:
     if not value:
-        return datetime.utcnow().date()
+        return utc_today()
     try:
         return datetime.fromisoformat(value[:10]).date()
     except Exception as exc:
@@ -1851,7 +1857,7 @@ def _forma_pagamento_pedido(resumo_pagamento: dict, total_pedido: float) -> str:
     return "pix"
 
 def utcnow() -> str:
-    return datetime.utcnow().isoformat()
+    return utc_now_naive().isoformat()
 
 
 def parse_datetime(value: str | None) -> Optional[datetime]:
@@ -1872,7 +1878,7 @@ def pedido_visivel_na_fila(pedido: dict) -> bool:
     pronto_em = parse_datetime(referencia)
     if not pronto_em:
         return True
-    return datetime.utcnow() - pronto_em < timedelta(minutes=KITCHEN_READY_VISIBLE_MINUTES)
+    return utc_now_naive() - pronto_em < timedelta(minutes=KITCHEN_READY_VISIBLE_MINUTES)
 
 
 def pedido_entregue_visivel_na_cozinha(pedido: dict) -> bool:
@@ -1880,7 +1886,7 @@ def pedido_entregue_visivel_na_cozinha(pedido: dict) -> bool:
     entregue_em = parse_datetime(referencia)
     if not entregue_em:
         return True
-    return datetime.utcnow() - entregue_em < timedelta(minutes=KITCHEN_READY_VISIBLE_MINUTES)
+    return utc_now_naive() - entregue_em < timedelta(minutes=KITCHEN_READY_VISIBLE_MINUTES)
 
 
 def carregar_pedidos_fila_cozinha(rid: str, limite: int = 80) -> list[dict]:
@@ -4275,7 +4281,7 @@ def fechar_caixa(data: Optional[str] = None, request: Request = None,
     rid = get_restaurant_id_from_token(u)
     enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
-    data_ref = data or datetime.utcnow().date().isoformat()
+    data_ref = data or utc_today().isoformat()
     resp = sb.rpc("gerar_fechamento_caixa", {
         "p_restaurant_id": rid,
         "p_data":          data_ref,
@@ -4929,7 +4935,7 @@ def detalhes_restaurante_plataforma(restaurant_id: str, u: dict = Depends(requir
     produtos = sb.table("produtos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
     categorias = sb.table("categorias").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
     pedidos = sb.table("pedidos").select("id", count="exact").eq("restaurant_id", restaurant_id).execute()
-    since = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    since = (utc_now_naive() - timedelta(days=30)).isoformat()
     pedidos_30 = _rows(sb.table("pedidos").select("id,total,status,created_at").eq("restaurant_id", restaurant_id).gte("created_at", since).execute())
     pedidos_abertos = sb.table("pedidos").select("id", count="exact").eq("restaurant_id", restaurant_id).in_("status", list(OPEN_ORDER_STATUSES)).execute()
     mesas_ocupadas = sb.table("mesas").select("id", count="exact").eq("restaurant_id", restaurant_id).eq("ativa", True).neq("status", "livre").execute()
@@ -5019,7 +5025,7 @@ def atualizar_controle_restaurante(restaurant_id: str, body: dict, request: Requ
     if body.get("register_payment"):
         payment = body.get("payment") if isinstance(body.get("payment"), dict) else {}
         amount = _money(payment.get("amount") or body.get("last_payment_amount") or control.get("monthly_amount"))
-        paid_at = (payment.get("paid_at") or datetime.utcnow().date().isoformat())[:10]
+        paid_at = (payment.get("paid_at") or utc_today().isoformat())[:10]
         reference = str(payment.get("reference") or body.get("last_payment_reference") or "").strip()
         control["last_payment_date"] = paid_at
         control["last_payment_amount"] = amount
@@ -5171,7 +5177,7 @@ def exportar_restaurante(restaurant_id: str, u: dict = Depends(require_super_adm
 
 @app.get("/api/super-admin/operations", tags=["super-admin"])
 def operacao_plataforma(u: dict = Depends(require_super_admin)):
-    now = datetime.utcnow()
+    now = utc_now_naive()
     since_24h = (now - timedelta(hours=24)).isoformat()
     since_7d = (now - timedelta(days=7)).isoformat()
     stale_cutoff = (now - timedelta(minutes=45)).isoformat()

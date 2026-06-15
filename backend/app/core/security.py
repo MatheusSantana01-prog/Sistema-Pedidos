@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
 import jwt as pyjwt
@@ -29,6 +29,7 @@ def criar_token(
     role: str | None = None,
     expires_hours: int = settings.jwt_exp_hours,
 ) -> str:
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": str(usuario["id"]),
         "email": usuario["email"],
@@ -37,8 +38,8 @@ def criar_token(
         "restaurant_id": restaurant_id,
         "role": role,
         "is_super_admin": usuario.get("is_super_admin", False),
-        "exp": datetime.utcnow() + timedelta(hours=expires_hours),
-        "iat": datetime.utcnow(),
+        "exp": now + timedelta(hours=expires_hours),
+        "iat": now,
     }
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
