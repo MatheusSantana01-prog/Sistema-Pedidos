@@ -65,6 +65,8 @@ Antes de usar em ambiente publicado, aplique o schema em [backend/supabase_inven
 
 O contrato modular por tipo de negocio pode ser preparado com [backend/supabase_business_type_schema.sql](backend/supabase_business_type_schema.sql), que adiciona `business_type` e `modules_config` em `restaurants` quando a migracao for aplicada.
 
+Depois de aplicar os schemas funcionais, aplique [backend/supabase_security_hardening.sql](backend/supabase_security_hardening.sql). O sistema nao usa o Data API diretamente no navegador; essa migration bloqueia tabelas e funcoes para `anon/authenticated` e preserva o acesso exclusivo do backend por `service_role`.
+
 Rotas principais:
 
 - `GET/POST/PATCH /api/admin/inventory/items`

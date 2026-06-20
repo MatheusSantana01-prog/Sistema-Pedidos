@@ -39,6 +39,7 @@ create index if not exists idx_restaurant_payment_methods_restaurant_active
 create or replace function public.set_restaurant_payment_methods_updated_at()
 returns trigger
 language plpgsql
+set search_path = pg_catalog, public
 as $$
 begin
   new.updated_at = now();
@@ -55,8 +56,6 @@ execute function public.set_restaurant_payment_methods_updated_at();
 alter table public.restaurant_payment_methods enable row level security;
 
 drop policy if exists restaurant_payment_methods_service_role_all on public.restaurant_payment_methods;
-create policy restaurant_payment_methods_service_role_all
-on public.restaurant_payment_methods
-for all
-using (auth.role() = 'service_role')
-with check (auth.role() = 'service_role');
+
+revoke all privileges on public.restaurant_payment_methods from anon, authenticated;
+grant all privileges on public.restaurant_payment_methods to service_role;

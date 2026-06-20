@@ -98,3 +98,16 @@ Tambem validar no Supabase:
 ## Conclusao
 
 O codigo esta em condicao adequada para piloto controlado, com correcoes pontuais de seguranca aplicadas. Para venda controlada, recomenda-se validar o Supabase publicado e manter fluxo de QA antes de cada deploy. Para nivel enterprise, ainda faltam endurecimento de autenticacao, reducao de `unsafe-inline`, modularizacao do backend e monitoramento operacional mais completo.
+
+## Verificacao publicada de 2026-06-20
+
+- Render `/health`: `status=ok`, versao `bc1a47b282a4`.
+- Backend: 76 testes passaram.
+- Frontend: 13 arquivos JavaScript passaram em `node --check`.
+- Playwright publicado: 14 testes passaram em desktop/mobile, incluindo mesa via QR.
+- Supabase `Restaurante`: ativo e com RLS habilitado nas tabelas verificadas.
+- O advisor do Supabase encontrou funcoes `SECURITY DEFINER` executaveis pelo Data API.
+- Foi criada e aplicada a protecao `backend/supabase_security_hardening.sql`, restringindo tabelas, sequencias e funcoes a `service_role`.
+- Validacao posterior confirmou `anon_users_select=false`, `authenticated_orders_select=false`, `anon_create_restaurant=false` e `service_role_create_restaurant=true`.
+- Depois do hardening, o advisor de seguranca ficou sem avisos `WARN`; restaram apenas informacoes de tabelas com RLS sem policy, que permanecem bloqueadas por padrao.
+- Pendencia nao critica: o advisor de performance ainda lista indices duplicados e chaves estrangeiras sem indice. Revisar com dados de uso antes de remover ou criar indices em producao.

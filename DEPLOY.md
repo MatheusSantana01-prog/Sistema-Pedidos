@@ -47,7 +47,14 @@ Rotas que precisam responder:
 
 O backend usa service role. Essa chave nunca deve aparecer no frontend. A anon key, se usada no futuro, só pode ser usada para operações públicas controladas por RLS.
 
-Para a branch `produto-comercial-restaurantes`, aplicar primeiro `backend/supabase_inventory_schema.sql` antes de habilitar o modulo de estoque. O arquivo `SUPABASE_SCHEMA_COMERCIAL.sql` fica como referencia complementar para delivery/fiscal e nao deve ser aplicado em producao sem revisao.
+Para a branch `produto-comercial-restaurantes`, aplicar os schemas nesta ordem:
+
+1. `backend/supabase_inventory_schema.sql`
+2. `backend/supabase_business_type_schema.sql`
+3. `backend/supabase_payment_methods_schema.sql`
+4. `backend/supabase_security_hardening.sql`
+
+O hardening deve ser o ultimo passo porque remove acesso direto de `anon/authenticated` ao Data API e preserva apenas o backend com `service_role`. O arquivo `SUPABASE_SCHEMA_COMERCIAL.sql` fica como referencia complementar para delivery/fiscal e nao deve ser aplicado em producao sem revisao.
 
 Antes de piloto:
 
@@ -57,6 +64,8 @@ Antes de piloto:
 - Confirmar restaurante demo separado de clientes reais.
 - Confirmar tabelas `inventory_items`, `inventory_movements`, `suppliers`, `product_recipes`, `product_recipe_items`, `inventory_counts` e `inventory_count_items`.
 - Confirmar colunas fiscais em `produtos` apenas quando a etapa fiscal for habilitada.
+- Confirmar que `anon` nao possui `SELECT` em `usuarios/pedidos`.
+- Confirmar que funcoes `SECURITY DEFINER` nao podem ser executadas por `anon/authenticated`.
 
 ## Critério para deploy comercial
 
