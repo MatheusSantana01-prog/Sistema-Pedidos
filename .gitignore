@@ -21,6 +21,7 @@ desktop.ini
 node_modules/
 test-results/
 playwright-report/
+HANDOFF_PARA_IA.md
 
 # Legacy standalone pages. The active frontend lives in /frontend with
 # separate HTML, CSS and JS files.
