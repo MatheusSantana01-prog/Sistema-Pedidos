@@ -670,7 +670,7 @@ async function redefinirSenhaSuper(usuarioId) {
   if (!usuarioId) return;
   const senha = await appPrompt('Nova senha para este usuário.', '', { title: 'Redefinir senha', type: 'password', confirmText: 'Atualizar senha' });
   if (senha === null) return;
-  if (senha.length < 6) return showToast('Senha precisa ter no mínimo 6 caracteres', 'error');
+  if (senha.length < 12) return showToast('Senha precisa ter no mínimo 12 caracteres', 'error');
   try {
     await apiCall('PATCH', `/api/super-admin/users/${usuarioId}/password`, { senha });
     showToast('Senha atualizada', 'success');
@@ -884,7 +884,7 @@ async function criarUsuario() {
   const senha  = document.getElementById('u-senha').value;
   const role   = document.getElementById('u-role').value;
   if (!nome || !email || !senha) return showToast('Preencha todos os campos', 'error');
-  if (senha.length < 6) return showToast('Senha precisa ter no mínimo 6 caracteres', 'error');
+  if (senha.length < 12) return showToast('Senha precisa ter no mínimo 12 caracteres', 'error');
   try {
     await apiCall('POST', `/api/super-admin/restaurants/${restId}/users`, { nome, username: email, email, senha, role });
     showToast('Usuário criado com sucesso', 'success');

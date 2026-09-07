@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "melhorias-saas-piloto", "produto-comercial-restaurantes"]
+    branches: ["main", "melhorias-saas-piloto", "produto-comercial-restaurantes", "codex/prontidao-operacional"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "produto-comercial-restaurantes"]
 
 jobs:
   backend:
@@ -43,3 +43,18 @@ jobs:
         run: |
           find frontend -type f -name '*.js' -print0 |
             xargs -0 -n1 node --check
+
+      - name: Install browser tests
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Test local screens and required password change
+        env:
+          E2E_LOCAL: "1"
+        run: npx playwright test e2e/readiness.spec.js --workers=1
+
+      - name: Keep browser test evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: test-results/

@@ -162,6 +162,7 @@ tbody tr:hover {
   padding: 20px;
   background: rgba(0, 0, 0, .72);
   backdrop-filter: blur(14px);
+  overflow-y: auto;
 }
 
 .auth-password-overlay.show {
@@ -170,7 +171,9 @@ tbody tr:hover {
 
 .auth-password-card {
   width: min(100%, 440px);
-  overflow: hidden;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.012)), var(--panel);

@@ -50,7 +50,14 @@ def test_rate_limit_bucket_classifies_sensitive_routes():
     assert main.rate_limit_bucket(Request(scope))[0] == "api_default"
 
 
-def test_token_keeps_restaurant_context():
+def test_token_keeps_restaurant_context(monkeypatch):
+    from backend.app.core import security
+    from tests.test_inventory_smoke import FakeSupabase
+    monkeypatch.setattr(security, "sb", FakeSupabase({
+        "usuarios": [{"id": "user-1", "email": "owner@example.com", "nome": "Owner", "ativo": True}],
+        "restaurants": [{"id": "restaurant-a", "is_active": True}],
+        "restaurant_memberships": [{"usuario_id": "user-1", "restaurant_id": "restaurant-a", "is_active": True, "role": "owner"}],
+    }))
     token = main.criar_token(
         {"id": "user-1", "email": "owner@example.com", "nome": "Owner"},
         restaurant_id="restaurant-a",
@@ -304,7 +311,7 @@ def test_cash_shift_updates_when_account_is_closed(monkeypatch):
             "payments_by_method": {"dinheiro": 50},
         }],
     )
-    monkeypatch.setattr(main, "salvar_turnos_caixa", lambda restaurant_id, turnos: saved.update({"turnos": turnos}))
+    monkeypatch.setattr(main, "salvar_turnos_caixa", lambda restaurant_id, turnos, expected: saved.update({"turnos": turnos, "expected": expected}))
 
     turno = main.atualizar_turno_com_fechamento("restaurant-a", shift_id, {
         "total": 100,

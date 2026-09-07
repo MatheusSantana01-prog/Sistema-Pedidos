@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Super Admin — BrickKode</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/super-admin/styles.css">
-<link rel="stylesheet" href="/shared/chic.css">
+<link rel="stylesheet" href="/super-admin/styles.css?v=20260906">
+<link rel="stylesheet" href="/shared/chic.css?v=20260906">
 </head>
 <body>
 
@@ -209,7 +209,7 @@
         <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;">Dono (opcional)</div>
         <div class="form-row"><label class="form-label">Nome do dono</label><input class="form-input" id="r-owner-nome" placeholder="João Silva"></div>
         <div class="form-row"><label class="form-label">E-mail do dono</label><input class="form-input" id="r-owner-email" type="email" placeholder="dono@restaurante.com"></div>
-        <div class="form-row"><label class="form-label">Senha do dono</label><input class="form-input" id="r-owner-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+        <div class="form-row"><label class="form-label">Senha do dono</label><input class="form-input" id="r-owner-senha" type="password" placeholder="Mínimo 12 caracteres"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -230,7 +230,7 @@
       <div class="form-row"><label class="form-label">Restaurante</label><select class="form-input" id="u-restaurant"></select></div>
       <div class="form-row"><label class="form-label">Nome</label><input class="form-input" id="u-nome" placeholder="Nome completo"></div>
       <div class="form-row"><label class="form-label">Usuário ou e-mail</label><input class="form-input" id="u-email" type="text" placeholder="garcom, caixa, tv ou dono@email.com"></div>
-      <div class="form-row"><label class="form-label">Senha</label><input class="form-input" id="u-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-row"><label class="form-label">Senha</label><input class="form-input" id="u-senha" type="password" placeholder="Mínimo 12 caracteres"></div>
       <div class="form-row"><label class="form-label">Role</label>
         <select class="form-input" id="u-role">
           <option value="owner">Owner (Dono)</option>
@@ -281,8 +281,8 @@
 <div class="toast" id="toast"></div>
 
 <script src="/shared/config.js"></script>
-<script src="/shared/auth.js"></script>
-<script src="/super-admin/app.js"></script>
+<script src="/shared/auth.js?v=20260906"></script>
+<script src="/super-admin/app.js?v=20260906"></script>
 </body>
 </html>
 

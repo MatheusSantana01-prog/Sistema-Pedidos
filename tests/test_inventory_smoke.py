@@ -271,7 +271,7 @@ def test_quick_sale_creates_paid_order_updates_shift_and_stock(monkeypatch):
         "payments_by_method": {},
     }]
     monkeypatch.setattr(main, "listar_turnos_caixa", lambda restaurant_id: shifts)
-    monkeypatch.setattr(main, "salvar_turnos_caixa", lambda restaurant_id, turnos: shifts.__setitem__(slice(None), turnos))
+    monkeypatch.setattr(main, "salvar_turnos_caixa", lambda restaurant_id, turnos, expected: shifts.__setitem__(slice(None), turnos))
 
     user = {"sub": "cashier-1", "nome": "Caixa QA", "role": "cashier", "restaurant_id": "rest-a"}
     main.registrar_inventory_movement("rest-a", {

@@ -14,9 +14,12 @@ import json
 import logging
 import time
 import re
+import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID, uuid4
+from copy import deepcopy
+from postgrest.exceptions import APIError
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +37,7 @@ try:
         hash_senha,
         verificar_senha,
         verificar_token,
+        validate_new_password,
     )
 except ModuleNotFoundError:
     from backend.app.core.config import settings
@@ -46,6 +50,7 @@ except ModuleNotFoundError:
         hash_senha,
         verificar_senha,
         verificar_token,
+        validate_new_password,
     )
 
 # ── CONFIG ────────────────────────────────────────────────────────
@@ -660,7 +665,10 @@ def _first(data):
 
 def _money(value) -> float:
     try:
-        return round(float(value or 0), 2)
+        amount = float(value or 0)
+        if not math.isfinite(amount):
+            raise HTTPException(400, "Valor monetario invalido")
+        return round(amount, 2)
     except (TypeError, ValueError):
         return 0.0
 
@@ -1086,8 +1094,19 @@ def listar_turnos_caixa(restaurant_id: str) -> list[dict]:
     turnos = _config_value(restaurant_id, "cash_shifts", [])
     return turnos if isinstance(turnos, list) else []
 
-def salvar_turnos_caixa(restaurant_id: str, turnos: list[dict]):
-    _save_config_value(restaurant_id, "cash_shifts", turnos[-500:], "Aberturas e fechamentos de caixa")
+def financial_rpc(name: str, params: dict):
+    try:
+        return sb.rpc(name, params).execute().data
+    except APIError as exc:
+        if exc.code in {"P0001", "40001", "40P01"}:
+            raise HTTPException(409, "Operacao concorrente ou conta alterada. Atualize a tela e confira o caixa antes de tentar novamente") from exc
+        raise HTTPException(503, "Nao foi possivel confirmar a operacao. Atualize a tela e confira o caixa") from exc
+
+
+def salvar_turnos_caixa(restaurant_id: str, turnos: list[dict], expected: list[dict]):
+    financial_rpc("save_cash_shifts_checked", {
+        "p_restaurant_id": restaurant_id, "p_expected": expected, "p_shifts": turnos,
+    })
 
 def limite_caixas_restaurante(restaurant_id: str) -> int:
     rest = _first(_rows(sb.table("restaurants").select("plan").eq("id", restaurant_id).limit(1).execute()))
@@ -1264,6 +1283,7 @@ def atualizar_turno_com_fechamento(restaurant_id: str, shift_id: str | None, fec
     if not shift_id:
         return None
     turnos = listar_turnos_caixa(restaurant_id)
+    expected = deepcopy(turnos)
     for turno in turnos:
         if turno.get("id") == shift_id and turno.get("status") == "open":
             turno.setdefault("account_closures", []).append(fechamento)
@@ -1273,7 +1293,7 @@ def atualizar_turno_com_fechamento(restaurant_id: str, shift_id: str | None, fec
             for forma, valor in (fechamento.get("payments_by_method") or {}).items():
                 por_forma[forma] = _money(float(por_forma.get(forma) or 0) + float(valor or 0))
             turno["updated_at"] = utcnow()
-            salvar_turnos_caixa(restaurant_id, turnos)
+            salvar_turnos_caixa(restaurant_id, turnos, expected)
             return turno
     raise HTTPException(409, "Abra um turno de caixa antes de fechar contas")
 
@@ -1566,7 +1586,7 @@ def _normalizar_pagamentos(body: FecharContaInput, total: float, restaurant_id: 
         raise HTTPException(400, "Informe a forma de pagamento")
 
     soma = round(sum(p["valor"] for p in pagamentos), 2)
-    if abs(soma - total) > 0.02:
+    if soma != total:
         raise HTTPException(400, f"Soma dos pagamentos ({soma:.2f}) diferente do total ({total:.2f})")
 
     por_forma = {}
@@ -1841,6 +1861,27 @@ def legacy_payment_code_for_db(code: str | None, payment_type: str | None = None
     if payment_type in {"debit_card", "meal_voucher", "food_voucher", "digital_wallet", "bank_transfer", "credit_account", "courtesy", "other"}:
         return "cartao_debito"
     return "pix"
+
+def alocar_pagamentos_pedidos(pedidos: list[dict], resumo: dict) -> list[dict]:
+    # Allocate integer cents so both order totals and payment-method totals reconcile.
+    available = [[dict(p), int(round(_money(p["valor"]) * 100))] for p in resumo.get("pagamentos", [])]
+    result = []
+    for pedido in pedidos:
+        remaining = int(round(_money(pedido.get("total")) * 100))
+        payments = []
+        for bucket in available:
+            used = min(remaining, bucket[1])
+            if used > 0:
+                payments.append({**bucket[0], "valor": used / 100})
+                remaining -= used
+                bucket[1] -= used
+        if remaining:
+            raise HTTPException(400, "Pagamentos nao conferem com os pedidos")
+        result.append({"id": pedido["id"], "forma_pagamento": _forma_pagamento_pedido({"pagamentos": payments}, pedido.get("total")), "payments": payments})
+    if any(cents for _, cents in available):
+        raise HTTPException(400, "Pagamentos excedem os pedidos")
+    return result
+
 
 def _forma_pagamento_pedido(resumo_pagamento: dict, total_pedido: float) -> str:
     pagamentos = resumo_pagamento.get("pagamentos") or []
@@ -2199,14 +2240,12 @@ class CriarUsuarioInput(BaseModel):
     @field_validator("senha")
     @classmethod
     def val_senha(cls, v):
-        if len(v) < 6:
-            raise ValueError("Senha mínimo 6 caracteres")
-        return v
+        return validate_new_password(v)
 
     @field_validator("role")
     @classmethod
     def val_role(cls, v):
-        if v not in ROLE_LEVEL:
+        if v not in ROLE_LEVEL or v == "super_admin":
             raise ValueError(f"Role inválida: {list(ROLE_LEVEL.keys())}")
         return v
 
@@ -2217,9 +2256,7 @@ class ResetSenhaInput(BaseModel):
     @field_validator("senha")
     @classmethod
     def val_senha(cls, v):
-        if len(v) < 6:
-            raise ValueError("Senha mínimo 6 caracteres")
-        return v
+        return validate_new_password(v)
 
 
 class AlterarMinhaSenhaInput(BaseModel):
@@ -2236,9 +2273,7 @@ class AlterarMinhaSenhaInput(BaseModel):
     @field_validator("nova_senha")
     @classmethod
     def val_nova_senha(cls, v):
-        if len(v) < 6:
-            raise ValueError("Nova senha mínimo 6 caracteres")
-        return v
+        return validate_new_password(v)
 
 
 class AtualizarStatusPedidoInput(BaseModel):
@@ -2804,6 +2839,8 @@ def criar_pedido_public(slug: str, body: dict):
         raise HTTPException(400, "mesa_id e sessao_mesa_id são obrigatórios")
     if not isinstance(itens, list) or not itens:
         raise HTTPException(400, "Pedido precisa ter ao menos um item")
+    if len(itens) > 100 or any(not isinstance(item, dict) for item in itens):
+        raise HTTPException(400, "Itens do pedido invalidos")
 
     sessao = sb.table("sessao_mesa").select("id,mesa_id,status").eq("id", sessao_id).eq("mesa_id", mesa_id).eq("restaurant_id", rid).single().execute()
     if not sessao.data or sessao.data["status"] != "aberta":
@@ -2833,8 +2870,11 @@ def criar_pedido_public(slug: str, body: dict):
         produto_id = str(item.get("produto_id"))
         produto = produtos_por_id[produto_id]
         try:
-            quantidade = int(item.get("quantidade", 1))
-        except (TypeError, ValueError):
+            raw_quantity = item.get("quantidade", 1)
+            quantidade = int(raw_quantity)
+            if isinstance(raw_quantity, bool) or float(raw_quantity) != quantidade:
+                raise ValueError("Quantidade deve ser inteira")
+        except (TypeError, ValueError, OverflowError):
             raise HTTPException(400, "Quantidade inválida")
         if quantidade < 1 or quantidade > 50:
             raise HTTPException(400, "Quantidade precisa ficar entre 1 e 50")
@@ -2847,6 +2887,8 @@ def criar_pedido_public(slug: str, body: dict):
             raise HTTPException(400, "Adicionais/ingredientes inválidos")
         ingredientes_sanitizados = []
         for ing in ingredientes:
+            if not isinstance(ing, dict):
+                raise HTTPException(400, "Adicional/ingrediente invalido")
             nome_ing = str((ing or {}).get("nome_ingrediente") or "").strip()
             acao_ing = str((ing or {}).get("acao") or "remover").strip()
             if not nome_ing or len(nome_ing) > 80 or acao_ing not in {"remover", "adicionar"}:
@@ -2956,6 +2998,11 @@ def login(body: LoginInput, request: Request):
 
     if not verificar_senha(body.senha.strip(), u.get("senha_hash", "")):
         raise HTTPException(401, "Credenciais inválidas")
+    try:
+        validate_new_password(body.senha)
+        u["password_change_required"] = False
+    except ValueError:
+        u["password_change_required"] = True
 
     # Verificar se é super_admin da plataforma
     is_super_admin = sb.table("platform_admins").select("id").eq("usuario_id", u["id"]).execute()
@@ -2995,6 +3042,8 @@ def login(body: LoginInput, request: Request):
 
     if u["is_super_admin"]:
         role = "super_admin"
+    elif not restaurant_info or not restaurant_info.get("is_active"):
+        raise HTTPException(403, "Restaurante desativado")
 
     # Atualizar último acesso
     sb.table("usuarios").update({"ultimo_acesso": utcnow()}).eq("id", u["id"]).execute()
@@ -3011,6 +3060,7 @@ def login(body: LoginInput, request: Request):
             "email":         u["email"],
             "role":          role,
             "is_super_admin": u["is_super_admin"],
+            "password_change_required": u["password_change_required"],
             "restaurant_id": restaurant_id,
             "restaurant":    restaurant_info,
         },
@@ -3052,6 +3102,8 @@ def alterar_minha_senha(body: AlterarMinhaSenhaInput, request: Request, u: dict 
 @app.post("/api/auth/switch-restaurant", tags=["auth"])
 def switch_restaurant(body: dict, u: dict = Depends(verificar_token)):
     """Troca o restaurante ativo do usuário (para quem tem múltiplos)."""
+    if u.get("password_change_required"):
+        raise HTTPException(403, "Altere sua senha para continuar")
     target_slug = body.get("restaurant_slug")
     if not target_slug:
         raise HTTPException(400, "restaurant_slug obrigatório")
@@ -3071,7 +3123,8 @@ def switch_restaurant(body: dict, u: dict = Depends(verificar_token)):
     else:
         role = "super_admin"
 
-    usuario_data = sb.table("usuarios").select("id,nome,email,perfil").eq("id", u["sub"]).single().execute()
+    usuario_data = sb.table("usuarios").select("id,nome,email,perfil,senha_hash").eq("id", u["sub"]).single().execute()
+    usuario_data.data["is_super_admin"] = u.get("is_super_admin", False)
     token = criar_token(usuario_data.data, rid, role)
 
     return {"token": token, "restaurant": rest.data, "role": role}
@@ -3320,13 +3373,12 @@ def liberar_mesa_sem_consumo(mesa_id: str, body: LiberarMesaInput, request: Requ
         fechamento += f" | {body.observacao.strip()[:240]}"
     observacao = f"{observacao} || {fechamento}" if observacao else fechamento
 
-    sb.table("sessao_mesa").update({
-        "status": "fechada",
-        "fechada_em": utcnow(),
-        "updated_at": utcnow(),
-        "observacao": observacao,
-    }).eq("id", sessao["id"]).eq("restaurant_id", rid).execute()
-    sb.table("mesas").update({"status": "livre", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
+    financial_rpc("checkout_table_atomic", {
+        "p_restaurant_id": rid, "p_session_id": sessao["id"],
+        "p_expected_total": 0, "p_payments": [], "p_order_payments": [],
+        "p_closure": {"observacao": observacao},
+        "p_shift_id": None, "p_cashier_id": None,
+    })
     log_acao(u, "liberar_mesa_sem_consumo", "sessao_mesa", sessao["id"], None,
              {"mesa_id": mesa_id, "mesa_numero": mesa.data.get("numero"), "motivo": body.motivo, "observacao": body.observacao}, request)
     return {"mensagem": "Mesa liberada sem consumo"}
@@ -3350,7 +3402,7 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
 
     pedidos_fechamento = listar_pedidos_fechamento(rid, sessao["id"])
     total_fechamento = _money(sum(_money(p.get("total")) for p in pedidos_fechamento))
-    if total_fechamento <= 0.02:
+    if total_fechamento == 0:
         resumo_pagamento = {"total": 0.0, "pagamentos": [], "por_forma": {}, "por_forma_nome": {}}
     else:
         _, resumo_pagamento = _normalizar_pagamentos(body, total_fechamento, rid)
@@ -3362,33 +3414,29 @@ def fechar_conta_mesa(mesa_id: str, body: FecharContaInput, request: Request,
             raise HTTPException(409, "Turno de caixa não está aberto")
         if u.get("role") == "cashier" and turno.get("opened_by") != u["sub"]:
             raise HTTPException(403, "Este turno pertence a outro caixa")
-    sb.rpc("fechar_sessao_mesa", {"p_sessao_id": sessao["id"], "p_restaurant_id": rid}).execute()
-    sb.table("sessao_mesa").update({"total_consumido": total_fechamento, "updated_at": utcnow()}).eq("id", sessao["id"]).eq("restaurant_id", rid).execute()
-    sb.table("mesas").update({"status": "livre", "updated_at": utcnow()}).eq("id", mesa_id).eq("restaurant_id", rid).execute()
-    for pedido in pedidos_fechamento:
-        sb.table("pedidos").update({
-            "forma_pagamento": _forma_pagamento_pedido(resumo_pagamento, pedido.get("total")),
-            "status_pagamento": "aprovado",
-            "updated_at": utcnow(),
-        }).eq("id", pedido["id"]).eq("restaurant_id", rid).execute()
-
+    fechamento = {
+        "id": str(uuid4()),
+        "sessao_id": sessao["id"],
+        "mesa_id": mesa_id,
+        "mesa_numero": mesa.get("numero"),
+        "total": resumo_pagamento["total"],
+        "pagamentos": resumo_pagamento["pagamentos"],
+        "payments_by_method": resumo_pagamento["por_forma"],
+        "payments_by_method_name": resumo_pagamento.get("por_forma_nome", {}),
+        "closed_by": u["sub"],
+        "closed_by_name": u.get("nome") or "",
+        "closed_at": utcnow(),
+    }
+    resultado = financial_rpc("checkout_table_atomic", {
+        "p_restaurant_id": rid, "p_session_id": sessao["id"],
+        "p_expected_total": total_fechamento, "p_payments": resumo_pagamento["pagamentos"],
+        "p_order_payments": alocar_pagamentos_pedidos(pedidos_fechamento, resumo_pagamento),
+        "p_closure": fechamento, "p_shift_id": body.cash_shift_id,
+        "p_cashier_id": u["sub"] if u.get("role") == "cashier" else None,
+    })
+    turno_atualizado = resultado.get("cash_shift")
     log_acao(u, "fechar_conta_mesa", "sessao_mesa", sessao["id"], None,
              {"pagamento": resumo_pagamento, "total": total_fechamento}, request)
-    turno_atualizado = None
-    if body.cash_shift_id:
-        turno_atualizado = atualizar_turno_com_fechamento(rid, body.cash_shift_id, {
-            "id": str(uuid4()),
-            "sessao_id": sessao["id"],
-            "mesa_id": mesa_id,
-            "mesa_numero": mesa.get("numero"),
-            "total": resumo_pagamento["total"],
-            "pagamentos": resumo_pagamento["pagamentos"],
-            "payments_by_method": resumo_pagamento["por_forma"],
-            "payments_by_method_name": resumo_pagamento.get("por_forma_nome", {}),
-            "closed_by": u["sub"],
-            "closed_by_name": u.get("nome") or "",
-            "closed_at": utcnow(),
-        })
     fiscal_doc = None
     fiscal_config = get_fiscal_config(rid)
     if fiscal_config.get("enabled") and fiscal_config.get("auto_after_close"):
@@ -3875,6 +3923,17 @@ def listar_usuarios(u: dict = Depends(authorize(["manager", "owner"]))):
     return {"usuarios": enrich_membership_logins(usuarios, slug)}
 
 
+def validar_gestao_conta_restaurante(restaurant_id: str, usuario_id: str):
+    admins = sb.table("platform_admins").select("id").eq("usuario_id", usuario_id).limit(1).execute()
+    if admins.data:
+        raise HTTPException(403, "Conta da plataforma deve ser gerenciada pelo super administrador")
+    memberships = _rows(sb.table("restaurant_memberships").select("restaurant_id,is_active").eq("usuario_id", usuario_id).execute())
+    if not any(m["restaurant_id"] == restaurant_id for m in memberships):
+        raise HTTPException(409, "Login ja cadastrado. Use um login exclusivo para este restaurante")
+    if any(m["restaurant_id"] != restaurant_id for m in memberships):
+        raise HTTPException(403, "Conta compartilhada deve ser gerenciada pelo super administrador")
+
+
 @app.post("/api/admin/users", tags=["usuários"])
 def criar_usuario(body: CriarUsuarioInput, request: Request,
                   u: dict = Depends(authorize(["owner"]))):
@@ -3889,8 +3948,8 @@ def criar_usuario(body: CriarUsuarioInput, request: Request,
     # Verificar email duplicado
     existe = sb.table("usuarios").select("id,ativo").eq("email", login_id).execute()
     if existe.data:
-        # Usuário já existe — apenas adicionar membership
         uid = existe.data[0]["id"]
+        validar_gestao_conta_restaurante(rid, uid)
         if existe.data[0].get("ativo") is False:
             sb.table("usuarios").update({
                 "nome": body.nome,
@@ -3925,6 +3984,7 @@ def redefinir_senha_usuario(usuario_id: str, body: ResetSenhaInput, request: Req
     membership = _first(_rows(sb.table("restaurant_memberships").select("id,is_active").eq("usuario_id", usuario_id).eq("restaurant_id", rid).limit(1).execute()))
     if not membership or membership.get("is_active") is False:
         raise HTTPException(404, "Usuário não encontrado neste restaurante")
+    validar_gestao_conta_restaurante(rid, usuario_id)
     sb.table("usuarios").update({"senha_hash": hash_senha(body.senha), "ativo": True}).eq("id", usuario_id).execute()
     log_acao(u, "redefinir_senha_usuario", "usuarios", usuario_id, None, {"alterada": True}, request)
     return {"mensagem": "Senha atualizada"}
@@ -3936,7 +3996,7 @@ def alterar_role(usuario_id: str, body: dict, request: Request,
     rid = get_restaurant_id_from_token(u)
     enforce_platform_control(rid, "users")
     nova_role = body.get("role")
-    if nova_role not in ROLE_LEVEL:
+    if nova_role not in ROLE_LEVEL or nova_role == "super_admin":
         raise HTTPException(400, f"Role inválida: {list(ROLE_LEVEL.keys())}")
     validar_role_no_plano(rid, nova_role)
 
@@ -3944,6 +4004,8 @@ def alterar_role(usuario_id: str, body: dict, request: Request,
     m = sb.table("restaurant_memberships").select("role").eq("usuario_id", usuario_id).eq("restaurant_id", rid).eq("is_active", True).single().execute()
     if not m.data:
         raise HTTPException(404, "Usuário não encontrado neste restaurante")
+    if usuario_id == u["sub"] and nova_role != "owner":
+        raise HTTPException(400, "Nao pode remover sua propria permissao de proprietario")
     if m.data["role"] != "cashier":
         enforce_cashier_user_limit(rid, nova_role)
 
@@ -4404,8 +4466,9 @@ def abrir_turno_caixa(caixa_id: str, body: AbrirTurnoCaixaInput, request: Reques
         "updated_at": utcnow(),
     }
     turnos = listar_turnos_caixa(rid)
+    expected = deepcopy(turnos)
     turnos.append(turno)
-    salvar_turnos_caixa(rid, turnos)
+    salvar_turnos_caixa(rid, turnos, expected)
     log_acao(u, "abrir_turno_caixa", "configuracoes", turno["id"], None, turno, request)
     return {"shift": turno}
 
@@ -4417,6 +4480,7 @@ def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Requ
     enforce_module_enabled(rid, "caixa", "caixa")
     enforce_platform_control(rid, "financeiro")
     turnos = listar_turnos_caixa(rid)
+    expected = deepcopy(turnos)
     turno = next((t for t in turnos if t.get("id") == turno_id), None)
     if not turno or turno.get("status") != "open":
         raise HTTPException(404, "Turno aberto não encontrado")
@@ -4440,7 +4504,7 @@ def fechar_turno_caixa(turno_id: str, body: FecharTurnoCaixaInput, request: Requ
         "closing_notes": (body.notes or "")[:500],
         "updated_at": utcnow(),
     })
-    salvar_turnos_caixa(rid, turnos)
+    salvar_turnos_caixa(rid, turnos, expected)
     log_acao(u, "fechar_turno_caixa", "configuracoes", turno_id, None, turno, request)
     return {"shift": turno}
 
@@ -4569,7 +4633,7 @@ def dashboard(data_inicio: str, data_fim: str,
     fim_iso = f"{fim.isoformat()}T23:59:59.999999"
     pedidos = _rows(
         sb.table("pedidos")
-        .select("id,status,total,subtotal,desconto,forma_pagamento,status_pagamento,created_at,pedido_itens(nome_produto,quantidade,subtotal)")
+        .select("id,status,total,subtotal,desconto,forma_pagamento,payment_breakdown,status_pagamento,created_at,pedido_itens(nome_produto,quantidade,subtotal)")
         .eq("restaurant_id", rid)
         .gte("created_at", inicio_iso)
         .lte("created_at", fim_iso)
@@ -4582,7 +4646,11 @@ def dashboard(data_inicio: str, data_fim: str,
     total_liquido = sum(_money(p.get("total")) for p in pedidos)
     por_pagamento = {}
     for pedido in pedidos:
-        _somar_pagamento_dashboard(por_pagamento, pedido.get("forma_pagamento"), pedido.get("total"))
+        if pedido.get("payment_breakdown"):
+            for payment in pedido["payment_breakdown"]:
+                _somar_pagamento_dashboard(por_pagamento, payment["forma_pagamento"], payment["valor"])
+        else:
+            _somar_pagamento_dashboard(por_pagamento, pedido.get("forma_pagamento"), pedido.get("total"))
     produtos = {}
     for pedido in pedidos:
         for item in pedido.get("pedido_itens") or []:
@@ -4637,6 +4705,8 @@ def get_audit(acao: Optional[str] = None, limite: int = 100,
 # ═════════════════════════════════════════════════════════════════
 
 def require_super_admin(u: dict = Depends(verificar_token)) -> dict:
+    if u.get("password_change_required"):
+        raise HTTPException(403, "Altere sua senha para continuar")
     if not u.get("is_super_admin"):
         raise HTTPException(403, "Acesso restrito a super administradores da plataforma")
     return u
@@ -5084,6 +5154,8 @@ def impersonar_restaurante(restaurant_id: str, request: Request,
         "perfil": "super_admin",
         "is_super_admin": True,
     }
+    account = sb.table("usuarios").select("senha_hash").eq("id", u["sub"]).single().execute()
+    usuario["senha_hash"] = account.data["senha_hash"]
     token = criar_token(usuario, restaurant_id, "owner")
     log_acao(u, "super_impersonar_restaurante", "restaurants", restaurant_id, None, {"slug": rest.data["slug"]}, request)
     return {

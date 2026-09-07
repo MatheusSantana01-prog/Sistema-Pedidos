@@ -141,6 +141,7 @@ async function login(email, senha, restaurantSlug = null, options = {}) {
   _usuario = data.usuario;
   localStorage.setItem('saas_token', _token);
   localStorage.setItem('saas_user',  JSON.stringify(_usuario));
+  if (_usuario.password_change_required) setTimeout(abrirModalAlterarSenha, 0);
   return data;
 }
 
@@ -148,7 +149,7 @@ async function login(email, senha, restaurantSlug = null, options = {}) {
 async function switchRestaurant(slug) {
   const resp = await apiCall('POST', '/api/auth/switch-restaurant', { restaurant_slug: slug });
   _token   = resp.token;
-  _usuario = { ..._usuario, ...resp };
+  _usuario = { ..._usuario, restaurant: resp.restaurant, restaurant_id: resp.restaurant.id, role: resp.role };
   localStorage.setItem('saas_token', _token);
   localStorage.setItem('saas_user',  JSON.stringify(_usuario));
   return resp;
@@ -164,6 +165,10 @@ function logout() {
 // ── Chamada autenticada à API ────────────────────────────────────
 async function apiCall(method, path, body = null, opts = {}) {
   if (!_token) throw new Error('Não autenticado');
+  if (_usuario?.password_change_required && !path.startsWith('/api/auth/me')) {
+    if (!document.getElementById('auth-password-modal')) abrirModalAlterarSenha();
+    throw new Error('Altere sua senha para continuar');
+  }
 
   const resp = await fetch(`${AUTH_API_URL}${path}`, {
     method,
@@ -214,7 +219,7 @@ function showAuthToast(msg, tipo = 'success') {
 }
 
 function abrirModalAlterarSenha() {
-  fecharModalAlterarSenha();
+  document.getElementById('auth-password-modal')?.remove();
 
   const wrap = document.createElement('div');
   wrap.className = 'auth-password-overlay show';
@@ -233,14 +238,14 @@ function abrirModalAlterarSenha() {
         <input class="auth-password-input" id="auth-senha-atual" type="password" autocomplete="current-password" required>
 
         <label class="auth-password-label" for="auth-nova-senha">Nova senha</label>
-        <input class="auth-password-input" id="auth-nova-senha" type="password" autocomplete="new-password" minlength="6" required>
+        <input class="auth-password-input" id="auth-nova-senha" type="password" autocomplete="new-password" minlength="12" required>
 
         <label class="auth-password-label" for="auth-confirmar-senha">Confirmar nova senha</label>
-        <input class="auth-password-input" id="auth-confirmar-senha" type="password" autocomplete="new-password" minlength="6" required>
+        <input class="auth-password-input" id="auth-confirmar-senha" type="password" autocomplete="new-password" minlength="12" required>
 
         <div class="auth-password-error" id="auth-password-error"></div>
         <div class="auth-password-actions">
-          <button class="btn auth-password-cancel" type="button" onclick="fecharModalAlterarSenha()">Cancelar</button>
+          <button class="btn auth-password-cancel" type="button" onclick="fecharModalAlterarSenha()">${_usuario?.password_change_required ? 'Sair' : 'Cancelar'}</button>
           <button class="btn btn-primary auth-password-submit" id="auth-password-submit" type="submit">Salvar senha</button>
         </div>
       </form>
@@ -259,6 +264,11 @@ function fecharSenhaComEscape(event) {
 }
 
 function fecharModalAlterarSenha() {
+  if (_usuario?.password_change_required) {
+    logout();
+    window.location.reload();
+    return;
+  }
   const modal = document.getElementById('auth-password-modal');
   if (modal) modal.remove();
   document.removeEventListener('keydown', fecharSenhaComEscape);
@@ -279,8 +289,8 @@ async function enviarAlteracaoSenha(event) {
   const btn = document.getElementById('auth-password-submit');
 
   setSenhaErro('');
-  if (novaSenha.length < 6) {
-    setSenhaErro('A nova senha precisa ter no mínimo 6 caracteres.');
+  if (novaSenha.trim().length < 12) {
+    setSenhaErro('A nova senha precisa ter no mínimo 12 caracteres.');
     return false;
   }
   if (novaSenha !== confirmarSenha) {
@@ -302,8 +312,10 @@ async function enviarAlteracaoSenha(event) {
       senha_atual: senhaAtual,
       nova_senha: novaSenha,
     });
+    _usuario.password_change_required = false;
     fecharModalAlterarSenha();
-    notifyAuth('Senha atualizada', 'success');
+    logout();
+    window.location.reload();
   } catch (e) {
     setSenhaErro(e.message || 'Não foi possível alterar a senha.');
   } finally {
